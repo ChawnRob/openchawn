@@ -153,10 +153,9 @@ def generate_response(user_input: str, qei: dict) -> str:
         f"{closing}"
     )
 
-    def generate_response(...):
+    def generate_response():
 
         response = (
-            ...
         )
 
        return response
