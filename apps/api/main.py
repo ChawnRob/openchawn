@@ -160,8 +160,6 @@ def ask(q: str):
     qei = analyze_qei(q)
     answer = generate_response(q, qei)
     
-    save-interaction(q, qei, answer)
-
     return {
         "question": q,
         "qei": qei,
