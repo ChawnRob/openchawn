@@ -1,7 +1,18 @@
+import json
 from fastapi import FastAPI
-
+from datetime import datetime
 app = FastAPI(title="OpenChawn API")
 
+def save_interaction(question: str, qei: dict, answer: str):
+    record = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "question": question,
+        "qei": qei,
+        "answer": answer
+    }
+
+    with open("openchawn_data.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 @app.get("/")
 def root():
@@ -148,9 +159,27 @@ def generate_response(user_input: str, qei: dict) -> str:
 def ask(q: str):
     qei = analyze_qei(q)
     answer = generate_response(q, qei)
+    
+    save-interaction(q, qei, answer)
 
     return {
         "question": q,
         "qei": qei,
         "answer": answer
+    }
+
+@app.get("/data")
+def get_data():
+    records = []
+
+    try:
+        with open("openchawn_data.jsonl", "r", encoding="utf-8") as f:
+            for line in f:
+                records.append(json.loads(line))
+    except FileNotFoundError:
+        return {"count": 0, "records": []}
+
+    return {
+        "count": len(records),
+        "records": records[-20:]
     }
