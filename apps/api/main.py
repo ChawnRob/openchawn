@@ -23,8 +23,8 @@ def ask(q: str):
 
     Niveau QEI: {qei_score}
 
-    Si émotion basse -> emathique
-    Si QEI élevé -> direct et statégigique
+    Si émotion basse -> empathique
+    Si QEI élevé -> être direct et statégigique
 
     Question : {q}
     response = client.responses.create(
