@@ -16,34 +16,36 @@ def root():
 
 @app.get("/ask")
 def ask(q: str):
+    qei_score = qei_algo(q)
+
+    prompt = f"""
+    Tu es OpenChawn
+
+    Niveau QEI: {qei_score}
+
+    Si émotion basse -> emathique
+    Si QEI élevé -> direct et statégigique
+
+    Question : {q}
     response = client.responses.create(
         model="gpt-4.1-mini",
-        input=q
+        input=prompt
     )
 
     return {
         "question": q,
+        "qei_score": qei_score,
         "answer": response.output_text
     }
-def qei_algo(input_data, context="default"):
-    qi_score = analyze_cognitive_signal(input_data)
-    qe_profile = analyze_emotional_signal(input_data)
+def qei_algo(input_data):
+    qi_score = len(input_data) * 0.05
 
-    weights = get_contextual_weights(context)
-    qei_score = fuse_signals(
-        qi=qi_score,
-        qe=qe_profile["global_score"],
-        qi_weight=weights["qi"],
-        qe_weight=weights["qe"]
-    )
+    qe_score = 0.5
+    if "déçu" in input_data.lower():
+        qe_score = 0.2
+    elif "merci" in input_data.lower():
+        qe_score = 0.8
 
-    response_style = select_response_style(qei_score, qe_profile, context)
-    response = generate_response(input_data, style=response_style)
+    qei = (qi_score * 0.6 + qe_score * 0.4)
 
-    return {
-        "response": response,
-        "qei_score": qei_score,
-        "qi_score": qi_score,
-        "qe_profile": qe_profile,
-        "style": response_style
-    }
+    return qei
