@@ -159,7 +159,6 @@ def generate_response(user_input: str, qei: dict) -> str:
 @app.get("/ask")
 def ask(q: str):
     qei = analyze_qei(q)
-       
     answer = generate_response(q, qei)
 
     try:
