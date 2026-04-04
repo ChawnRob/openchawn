@@ -159,12 +159,18 @@ def generate_response(user_input: str, qei: dict) -> str:
 def ask(q: str):
     qei = analyze_qei(q)
     answer = generate_response(q, qei)
-    
-    return {
+
+     try:
+        save_interaction(q, qei, answer)
+    except Exception as e:
+        print("error saving:", e)   
+        
+        return {
         "question": q,
         "qei": qei,
         "answer": answer
     }
+   
 
 @app.get("/data")
 def get_data():
