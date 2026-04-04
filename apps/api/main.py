@@ -153,20 +153,21 @@ def generate_response(user_input: str, qei: dict) -> str:
         f"{closing}"
     )
 
-    return response
+     return response
 
 
 @app.get("/ask")
 def ask(q: str):
     qei = analyze_qei(q)
+       
     answer = generate_response(q, qei)
 
-     try:
+    try:
         save_interaction(q, qei, answer)
     except Exception as e:
         print("error saving:", e)   
         
-        return {
+    return {
         "question": q,
         "qei": qei,
         "answer": answer
@@ -174,7 +175,7 @@ def ask(q: str):
    
 
 @app.get("/data")
-def get_data():
+    def get_data():
     records = []
 
     try:
