@@ -1,11 +1,6 @@
 from fastapi import FastAPI
-from openai import OpenAI
-import os
-import json
 
 app = FastAPI(title="OpenChawn API")
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 @app.get("/")
@@ -16,118 +11,143 @@ def root():
     }
 
 
-def analyze_qei(input_data: str):
-    analysis_prompt = f"""
-Analyse ce message utilisateur et retourne uniquement un JSON valide.
+def analyze_qei(input_data: str) -> dict:
+    text = input_data.lower().strip()
 
-Message :
-{input_data}
+    qi_score = 0.5
+    qe_score = 0.5
+    emotion_label = "neutral"
+    emotion_intensity = 0.4
+    urgency = 0.3
+    recommended_tone = "clear"
 
-Retourne exactement ce format :
-{{
-  "qi_score": 0.0,
-  "qe_score": 0.0,
-  "emotion_label": "neutral",
-  "emotion_intensity": 0.0,
-  "urgency": 0.0,
-  "recommended_tone": "clear"
-}}
+    word_count = len(text.split())
 
-Règles :
-- qi_score = niveau de structure / clarté / logique perçue, entre 0 et 1
-- qe_score = charge émotionnelle globale, entre 0 et 1
-- emotion_label = une valeur parmi: joy, frustration, anger, sadness, fear, neutral, excitement
-- emotion_intensity = intensité émotionnelle entre 0 et 1
-- urgency = urgence perçue entre 0 et 1
-- recommended_tone = un parmi: empathetic, calm, strategic, direct, reassuring
-
-Ne retourne rien d'autre que le JSON.
-"""
-
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=analysis_prompt
-    )
-
-    raw_text = ""
-    if hasattr(response, "output_text") and response.output_text:
-        raw_text = response.output_text.strip()
+    # QI: plus le message est structuré/long, plus on monte légèrement
+    if word_count >= 12:
+        qi_score = 0.8
+    elif word_count >= 6:
+        qi_score = 0.65
     else:
-        try:
-            raw_text = response.output[0].content[0].text.strip()
-        except Exception:
-            raw_text = ""
+        qi_score = 0.45
 
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError:
-        data = {
-            "qi_score": 0.5,
-            "qe_score": 0.5,
-            "emotion_label": "neutral",
-            "emotion_intensity": 0.5,
-            "urgency": 0.5,
-            "recommended_tone": "clear"
-        }
+    # QE: détection émotionnelle simple
+    negative_words = [
+        "déçu", "frustré", "colère", "énervé", "perdu",
+        "stressé", "angoissé", "marche pas", "bloqué", "problème",
+        "mauvais", "nul", "catastrophe", "urgent", "help"
+    ]
+    positive_words = [
+        "merci", "super", "content", "heureux", "génial",
+        "top", "excellent", "parfait", "cool", "bravo"
+    ]
+    urgency_words = [
+        "urgent", "vite", "rapidement", "immédiat",
+        "maintenant", "asap", "tout de suite"
+    ]
+    strategic_words = [
+        "stratégie", "scaler", "croissance", "business",
+        "conversion", "clients", "offre", "positionnement", "marché"
+    ]
 
-    qi_score = float(data.get("qi_score", 0.5))
-    qe_score = float(data.get("qe_score", 0.5))
+    negative_hits = sum(1 for w in negative_words if w in text)
+    positive_hits = sum(1 for w in positive_words if w in text)
+    urgency_hits = sum(1 for w in urgency_words if w in text)
+    strategic_hits = sum(1 for w in strategic_words if w in text)
+
+    if negative_hits > 0:
+        emotion_label = "frustration"
+        qe_score = min(0.9, 0.45 + negative_hits * 0.12)
+        emotion_intensity = min(0.95, 0.5 + negative_hits * 0.1)
+        recommended_tone = "empathetic"
+
+    if positive_hits > 0 and positive_hits >= negative_hits:
+        emotion_label = "joy"
+        qe_score = min(0.85, 0.45 + positive_hits * 0.1)
+        emotion_intensity = min(0.9, 0.45 + positive_hits * 0.08)
+        recommended_tone = "strategic"
+
+    if urgency_hits > 0:
+        urgency = min(1.0, 0.5 + urgency_hits * 0.15)
+        recommended_tone = "direct"
+
+    if strategic_hits > 0 and urgency_hits == 0 and negative_hits == 0:
+        recommended_tone = "strategic"
+
+    if emotion_label == "neutral" and urgency < 0.5 and strategic_hits == 0:
+        recommended_tone = "clear"
 
     qei_score = round((qi_score * 0.6) + (qe_score * 0.4), 3)
 
     return {
-        "qi_score": qi_score,
-        "qe_score": qe_score,
+        "qi_score": round(qi_score, 3),
+        "qe_score": round(qe_score, 3),
         "qei_score": qei_score,
-        "emotion_label": data.get("emotion_label", "neutral"),
-        "emotion_intensity": float(data.get("emotion_intensity", 0.5)),
-        "urgency": float(data.get("urgency", 0.5)),
-        "recommended_tone": data.get("recommended_tone", "clear")
+        "emotion_label": emotion_label,
+        "emotion_intensity": round(emotion_intensity, 3),
+        "urgency": round(urgency, 3),
+        "recommended_tone": recommended_tone
     }
+
+
+def generate_response(user_input: str, qei: dict) -> str:
+    tone = qei["recommended_tone"]
+    emotion = qei["emotion_label"]
+    urgency = qei["urgency"]
+    qi_score = qei["qi_score"]
+
+    text = user_input.strip()
+
+    if tone == "empathetic":
+        intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
+    elif tone == "direct":
+        intro = "On va aller droit au point."
+    elif tone == "strategic":
+        intro = "Ton message appelle une lecture stratégique."
+    elif tone == "reassuring":
+        intro = "On peut clarifier ça calmement."
+    else:
+        intro = "Je vais te répondre clairement."
+
+    actions = []
+
+    if "restaurant" in text.lower() or "clients" in text.lower() or "business" in text.lower():
+        actions.append("Regarde d’abord où tu perds la conversion : visibilité, réputation ou offre.")
+        actions.append("Isole un problème principal au lieu de corriger 10 choses à la fois.")
+        actions.append("Teste une action terrain immédiate sur 7 jours avant de tout reconstruire.")
+    else:
+        actions.append("Clarifie le vrai problème en une phrase.")
+        actions.append("Sépare ce qui est émotionnel de ce qui est opérationnel.")
+        actions.append("Choisis une seule prochaine action mesurable.")
+
+    if urgency >= 0.7:
+        actions.insert(0, "Traite d’abord l’urgence immédiate avant toute optimisation secondaire.")
+
+    if qi_score >= 0.7:
+        closing = "Si tu veux, la prochaine étape logique est de transformer ça en plan structuré."
+    else:
+        closing = "La clé maintenant, c’est de simplifier et agir tout de suite."
+
+    response = (
+        f"{intro}\n\n"
+        f"Lecture rapide:\n"
+        f"- émotion détectée: {emotion}\n"
+        f"- niveau d’urgence: {urgency}\n"
+        f"- ton conseillé: {tone}\n\n"
+        f"Réponse:\n"
+        f"1. {actions[0]}\n"
+        f"2. {actions[1]}\n"
+        f"3. {actions[2]}\n\n"
+        f"{closing}"
+    )
+
+    return response
 
 
 @app.get("/ask")
 def ask(q: str):
     qei = analyze_qei(q)
-
-    response_prompt = f"""
-Tu es OpenChawn, une IA business premium, lucide, utile et stratégique.
-
-Profil QEI détecté :
-- qi_score: {qei["qi_score"]}
-- qe_score: {qei["qe_score"]}
-- qei_score: {qei["qei_score"]}
-- emotion_label: {qei["emotion_label"]}
-- emotion_intensity: {qei["emotion_intensity"]}
-- urgency: {qei["urgency"]}
-- recommended_tone: {qei["recommended_tone"]}
-
-Règles :
-- adapte ton ton selon recommended_tone
-- si émotion négative, commence par reconnaître brièvement l'état émotionnel
-- si urgence élevée, sois plus direct et priorise l'action
-- si qi_score élevé, réponds de manière plus stratégique et structurée
-- reste clair, humain, utile
-- ne flatte pas inutilement
-- donne une réponse exploitable
-
-Message utilisateur :
-{q}
-"""
-
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=response_prompt
-    )
-
-    answer = ""
-    if hasattr(response, "output_text") and response.output_text:
-        answer = response.output_text
-    else:
-        try:
-            answer = response.output[0].content[0].text
-        except Exception:
-            answer = str(response)
+    answer = generate_response(q, qei)
 
     return {
         "question": q,
