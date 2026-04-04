@@ -153,7 +153,13 @@ def generate_response(user_input: str, qei: dict) -> str:
         f"{closing}"
     )
 
-     return response
+    def generate_response(...):
+
+        response = (
+            ...
+        )
+
+       return response
 
 
 @app.get("/ask")
