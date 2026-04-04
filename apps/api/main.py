@@ -1,6 +1,7 @@
-import json
 from fastapi import FastAPI
 from datetime import datetime
+import json
+
 app = FastAPI(title="OpenChawn API")
 
 def save_interaction(question: str, qei: dict, answer: str):
