@@ -127,23 +127,23 @@ def analyze_qei(input_data: str) -> dict:
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
     def generate_response(user_input: str, qei: dict) -> dict:
-    tone = qei["recommended_tone"]
-    emotion = qei["emotion_label"]
-    urgency = qei["urgency"]
-    qi_score = qei["qi_score"]
+        tone = qei["recommended_tone"]
+        emotion = qei["emotion_label"]
+        urgency = qei["urgency"]
+        qi_score = qei["qi_score"]
 
-    text = user_input.strip()
+        text = user_input.strip()
 
-    if tone == "empathetic":
-        intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
-    elif tone == "direct":
-        intro = "On va aller droit au point."
-    elif tone == "strategic":
-        intro = "Ton message appelle une lecture stratégique."
-    elif tone == "reassuring":
-        intro = "On peut clarifier ça calmement."
-    else:
-        prompt = f"""
+        if tone == "empathetic":
+           intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
+        elif tone == "direct":
+           intro = "On va aller droit au point."
+        elif tone == "strategic":
+           intro = "Ton message appelle une lecture stratégique."
+        elif tone == "reassuring":
+           intro = "On peut clarifier ça calmement."
+        else:
+            prompt = f"""
 Question: {user_input}
 
 Emotion: {emotion}
