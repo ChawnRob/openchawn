@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from datetime import datetime
+from fastapi.response import HTMLResponse
 import json
 
 app = FastAPI(title="OpenChawn API")
@@ -174,5 +175,163 @@ def ask(q: str):
         "qei": qei,
         "answer": response
     }
-   
+   @app.get("/demo", response_class=HTMLResponse)
+def demo():
+    return """
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <title>OpenChawn Demo</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background: #0b1020;
+                color: #f5f7ff;
+                margin: 0;
+                padding: 40px;
+            }
+            .wrap {
+                max-width: 900px;
+                margin: 0 auto;
+            }
+            h1 {
+                margin-bottom: 10px;
+            }
+            p {
+                color: #b8c0ff;
+            }
+            textarea {
+                width: 100%;
+                min-height: 120px;
+                border-radius: 12px;
+                border: 1px solid #2a3566;
+                background: #111833;
+                color: white;
+                padding: 16px;
+                font-size: 16px;
+                box-sizing: border-box;
+            }
+            button {
+                margin-top: 14px;
+                background: #5b7cff;
+                color: white;
+                border: 0;
+                border-radius: 10px;
+                padding: 12px 18px;
+                font-size: 16px;
+                cursor: pointer;
+            }
+            button:hover {
+                opacity: 0.92;
+            }
+            .card {
+                margin-top: 24px;
+                background: #111833;
+                border: 1px solid #24305c;
+                border-radius: 16px;
+                padding: 20px;
+            }
+            .label {
+                color: #8ea0ff;
+                font-size: 14px;
+                margin-bottom: 6px;
+            }
+            .value {
+                font-size: 18px;
+                margin-bottom: 16px;
+            }
+            ul {
+                padding-left: 20px;
+            }
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                margin-top: 18px;
+            }
+            .mini {
+                background: #0d1430;
+                border: 1px solid #24305c;
+                border-radius: 12px;
+                padding: 14px;
+            }
+            .muted {
+                color: #b8c0ff;
+                font-size: 14px;
+            }
+            @media (max-width: 700px) {
+                .grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <h1>OpenChawn Demo</h1>
+            <p>Analyse QEI et réponse structurée en direct.</p>
 
+            <textarea id="q" placeholder="Écris ton message ici..."></textarea>
+            <br>
+            <button onclick="sendAsk()">Analyser</button>
+
+            <div id="result" class="card" style="display:none;">
+                <div class="label">Intro</div>
+                <div class="value" id="intro"></div>
+
+                <div class="grid">
+                    <div class="mini">
+                        <div class="label">Émotion</div>
+                        <div id="emotion"></div>
+                    </div>
+                    <div class="mini">
+                        <div class="label">Urgence</div>
+                        <div id="urgency"></div>
+                    </div>
+                    <div class="mini">
+                        <div class="label">Ton</div>
+                        <div id="tone"></div>
+                    </div>
+                </div>
+
+                <div style="margin-top:20px;" class="label">Actions</div>
+                <ul id="actions"></ul>
+
+                <div style="margin-top:20px;" class="label">Closing</div>
+                <div class="value" id="closing"></div>
+
+                <div style="margin-top:24px;" class="label">QEI brut</div>
+                <pre id="raw" class="muted" style="white-space:pre-wrap;"></pre>
+            </div>
+        </div>
+
+        <script>
+            async function sendAsk() {
+                const q = document.getElementById("q").value.trim();
+                if (!q) return;
+
+                const res = await fetch(`/ask?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+
+                document.getElementById("result").style.display = "block";
+                document.getElementById("intro").textContent = data.response.intro;
+                document.getElementById("emotion").textContent = data.response.summary.emotion;
+                document.getElementById("urgency").textContent = data.response.summary.urgency;
+                document.getElementById("tone").textContent = data.response.summary.tone;
+                document.getElementById("closing").textContent = data.response.closing;
+
+                const actions = document.getElementById("actions");
+                actions.innerHTML = "";
+                data.response.actions.forEach(item => {
+                    const li = document.createElement("li");
+                    li.textContent = item;
+                    actions.appendChild(li);
+                });
+
+                document.getElementById("raw").textContent = JSON.stringify(data.qei, null, 2);
+            }
+        </script>
+    </body>
+    </html>
+    """
