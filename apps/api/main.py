@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+import os
+import requests
 from datetime import datetime
 from fastapi.responses import HTMLResponse
 import json
@@ -102,8 +104,27 @@ def analyze_qei(input_data: str) -> dict:
         "recommended_tone": recommended_tone
     }
 
+    def call_mistral(prompt: str) -> str:
+    api_key = os.getenv("MISTRAL_API_KEY")
 
-def generate_response(user_input: str, qei: dict) -> str:
+    url = "https://api.mistral.ai/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "mistral-small",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    return response.json()["choices"][0]["message"]["content"]
+    
+    def generate_response(user_input: str, qei: dict) -> str:
     tone = qei["recommended_tone"]
     emotion = qei["emotion_label"]
     urgency = qei["urgency"]
@@ -120,7 +141,15 @@ def generate_response(user_input: str, qei: dict) -> str:
     elif tone == "reassuring":
         intro = "On peut clarifier ça calmement."
     else:
-        intro = "Je vais te répondre clairement."
+        prompt = f"""
+        question: {user_input}
+
+        emotion: {emotion}
+        urgence: {urgency}
+        Donne une réponse rationel, claire et actionnable.
+        """
+        intro = call_mistral(prompt)
+        # intro = "Je vais te répondre clairement."
 
     actions = []
 
