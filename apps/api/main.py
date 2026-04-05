@@ -179,7 +179,7 @@ def ask(q: str):
         "qei": qei,
         "response": response
     }
-   @app.get("/demo", response_class=HTMLResponse)
+@app.get("/demo", response_class=HTMLResponse)
 def demo():
     return """
     <!DOCTYPE html>
