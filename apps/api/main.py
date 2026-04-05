@@ -136,25 +136,27 @@ def analyze_qei(input_data: str) -> dict:
     text = user_input.strip()
 
     if tone == "empathetic":
-        intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
-    elif tone == "direct":
-        intro = "On va aller droit au point."
-    elif tone == "strategic":
-        intro = "Ton message appelle une lecture stratégique."
-    elif tone == "reassuring":
-        intro = "On peut clarifier ça calmement."
-    else:
-        prompt = f"""
-        question: {user_input}
+    intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
+elif tone == "direct":
+    intro = "On va aller droit au point."
+elif tone == "strategic":
+    intro = "Ton message appelle une lecture stratégique."
+elif tone == "reassuring":
+    intro = "On peut clarifier ça calmement."
+else:
+    prompt = f"""Question: {user_input}
 
-        emotion: {emotion}
-        urgence: {urgency}
-        Donne une réponse rationel, claire et actionnable.
-        """
-        intro = call_mistral(prompt)
-        # intro = "Je vais te répondre clairement."
+Emotion: {emotion}
+Urgence: {urgency}
+Ton: {tone}
 
-    actions = []
+Donne une réponse courte, claire,rationnel et actionnable en français.
+"""
+    intro = call_mistral(prompt)
+    
+ # intro = "Je vais te répondre clairement."
+
+ actions = []
 
     if "restaurant" in text.lower() or "clients" in text.lower() or "business" in text.lower():
         actions.append("Regarde d’abord où tu perds la conversion : visibilité, réputation ou offre.")
