@@ -144,15 +144,16 @@ elif tone == "strategic":
 elif tone == "reassuring":
     intro = "On peut clarifier ça calmement."
 else:
-    prompt = f"""Question: {user_input}
+    prompt = f"""
+    Question: {user_input}
+    
+    Emotion: {emotion}
+    Urgence: {urgency}
+    Ton: {tone}
 
-Emotion: {emotion}
-Urgence: {urgency}
-Ton: {tone}
-
-Donne une réponse courte, claire,rationnel et actionnable en français.
-"""
-    intro = call_mistral(prompt)
+    Donne une réponse courte, claire,rationnel et actionnable en français.
+    """
+         intro = call_mistral(prompt)
     
  # intro = "Je vais te répondre clairement."
 
