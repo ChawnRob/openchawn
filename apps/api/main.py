@@ -145,14 +145,14 @@ def analyze_qei(input_data: str) -> dict:
          intro = "On peut clarifier ça calmement."
      else:
          prompt = f"""
-         Question: {user_input}
+     Question: {user_input}
     
-         Emotion: {emotion}
-         Urgence: {urgency}
-         Ton: {tone}
+     Emotion: {emotion}
+     Urgence: {urgency}
+     Ton: {tone}
 
-        Donne une réponse courte, claire,rationnel et actionnable en français.
-        """
+     Donne une réponse courte, claire,rationnel et actionnable en français.
+     """
          intro = call_mistral(prompt)
     
  # intro = "Je vais te répondre clairement."
