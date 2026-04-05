@@ -106,8 +106,8 @@ def analyze_qei(input_data: str) -> dict:
         "urgency": round(urgency, 3),
         "recommended_tone": recommended_tone
     }
-
-    def call_mistral(prompt: str) -> str:
+    
+def call_mistral(prompt: str) -> str:
         api_key = os.getenv("MISTRAL_API_KEY")
 
         url = "https://api.mistral.ai/v1/chat/completions"
@@ -126,7 +126,8 @@ def analyze_qei(input_data: str) -> dict:
 
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
-    def generate_response(user_input: str, qei: dict) -> dict:
+    
+def generate_response(user_input: str, qei: dict) -> dict:
         tone = qei["recommended_tone"]
         emotion = qei["emotion_label"]
         urgency = qei["urgency"]
