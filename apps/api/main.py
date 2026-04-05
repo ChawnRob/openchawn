@@ -128,31 +128,31 @@ def analyze_qei(input_data: str) -> dict:
     return response.json()["choices"][0]["message"]["content"]
     
     def generate_response(user_input: str, qei: dict) -> str:
-    tone = qei["recommended_tone"]
-    emotion = qei["emotion_label"]
-    urgency = qei["urgency"]
-    qi_score = qei["qi_score"]
+        tone = qei["recommended_tone"]
+        emotion = qei["emotion_label"]
+        urgency = qei["urgency"]
+        qi_score = qei["qi_score"]
 
-    text = user_input.strip()
+     text = user_input.strip()
 
-    if tone == "empathetic":
-    intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
-elif tone == "direct":
-    intro = "On va aller droit au point."
-elif tone == "strategic":
-    intro = "Ton message appelle une lecture stratégique."
-elif tone == "reassuring":
-    intro = "On peut clarifier ça calmement."
-else:
-    prompt = f"""
-    Question: {user_input}
+     if tone == "empathetic":
+         intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
+     elif tone == "direct":
+         intro = "On va aller droit au point."
+     elif tone == "strategic":
+         intro = "Ton message appelle une lecture stratégique."
+     elif tone == "reassuring":
+         intro = "On peut clarifier ça calmement."
+     else:
+         prompt = f"""
+         Question: {user_input}
     
-    Emotion: {emotion}
-    Urgence: {urgency}
-    Ton: {tone}
+         Emotion: {emotion}
+         Urgence: {urgency}
+         Ton: {tone}
 
-    Donne une réponse courte, claire,rationnel et actionnable en français.
-    """
+        Donne une réponse courte, claire,rationnel et actionnable en français.
+        """
          intro = call_mistral(prompt)
     
  # intro = "Je vais te répondre clairement."
