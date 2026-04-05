@@ -27,8 +27,6 @@ def root():
 
 
 
-
-
 def analyze_qei(input_data: str) -> dict:
     text = input_data.lower().strip()
 
@@ -126,26 +124,25 @@ def call_mistral(prompt: str) -> str:
 
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
-    
-def generate_response(user_input: str, qei: dict) -> dict:
-        tone = qei["recommended_tone"]
-        emotion = qei["emotion_label"]
-        urgency = qei["urgency"]
-        qi_score = qei["qi_score"]
 
-        text = user_input.strip()
+    def generate_response(user_input: str, qei: dict) -> dict:
+    tone = qei["recommended_tone"]
+    emotion = qei["emotion_label"]
+    urgency = qei["urgency"]
+    qi_score = qei["qi_score"]
 
-        if tone == "empathetic":
-           intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
-        elif tone == "direct":
-           intro = "On va aller droit au point."
-        elif tone == "strategic":
-           intro = "Ton message appelle une lecture stratégique."
-        elif tone == "reassuring":
-           intro = "On peut clarifier ça calmement."
-        else:
-            prompt = f"""
-Question: {user_input}
+    text = user_input.strip()
+
+    if tone == "empathetic":
+        intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
+    elif tone == "direct":
+        intro = "On va aller droit au point."
+    elif tone == "strategic":
+        intro = "Ton message appelle une lecture stratégique."
+    elif tone == "reassuring":
+        intro = "On peut clarifier ça calmement."
+    else:
+        prompt = f"""Question: {user_input}
 
 Emotion: {emotion}
 Urgence: {urgency}
@@ -178,7 +175,9 @@ Donne une réponse courte, claire, rationnelle et actionnable en français.
         "tone": tone,
         "actions": actions,
         "closing": closing
-    }
+    }    
+
+  
     if "restaurant" in text.lower() or "clients" in text.lower() or "business" in text.lower():
         actions.append("Regarde d’abord où tu perds la conversion : visibilité, réputation ou offre.")
         actions.append("Isole un problème principal au lieu de corriger 10 choses à la fois.")
