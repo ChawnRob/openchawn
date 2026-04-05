@@ -160,11 +160,7 @@ def ask(q: str):
     qei = analyze_qei(q)
     answer = generate_response(q, qei)
 
-    try:
-        save_interaction(q, qei, answer)
-    except Exception as e:
-        print("error saving:", e)   
-        
+ 
     return {
         "question": q,
         "qei": qei,
@@ -172,18 +168,3 @@ def ask(q: str):
     }
    
 
-@app.get("/data")
-    def get_data():
-    records = []
-
-    try:
-        with open("openchawn_data.jsonl", "r", encoding="utf-8") as f:
-            for line in f:
-                records.append(json.loads(line))
-    except FileNotFoundError:
-        return {"count": 0, "records": []}
-
-    return {
-        "count": len(records),
-        "records": records[-20:]
-    }
