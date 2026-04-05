@@ -1,24 +1,64 @@
-from fastapi.responses import HTMLResponse
-from fastapi import FastAPI
-import requests
 import json
+import os
+from typing import Any, Dict
 
-app = FastAPI()
+import requests
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+app = FastAPI(title="OpenChawn API")
+
+
+# =========================
+# CORS
+# =========================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =========================
+# CONFIG
+# =========================
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
+MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+MISTRAL_MODEL = "mistral-small"
+
+
+# =========================
+# REQUEST MODEL
+# =========================
+class ChatRequest(BaseModel):
+    message: str
+
 
 # =========================
 # HEALTH CHECK
 # =========================
 @app.get("/")
-def root():
+def root() -> Dict[str, str]:
     return {
         "status": "online",
         "message": "OpenChawn is alive"
     }
 
+
+@app.get("/health")
+def health() -> Dict[str, str]:
+    return {
+        "status": "ok"
+    }
+
+
 # =========================
 # QEI ANALYSIS
 # =========================
-def analyze_qei(input_data: str) -> dict:
+def analyze_qei(input_data: str) -> Dict[str, Any]:
     text = input_data.lower().strip()
 
     qi_score = 0.5
@@ -28,24 +68,55 @@ def analyze_qei(input_data: str) -> dict:
     urgency = 0.3
     recommended_tone = "clear"
 
+    negative_words = [
+        "déçu", "frustré", "colère", "énervé", "stresse", "stressé",
+        "angoissé", "marche pas", "mauvais", "nul", "catastrophe",
+        "bug", "problème", "erreur", "crash", "bloqué"
+    ]
+
+    positive_words = [
+        "merci", "super", "content", "heureux", "top", "excellent",
+        "parfait", "cool", "génial"
+    ]
+
+    urgency_words = [
+        "urgent", "vite", "rapidement", "immédiat", "immédiatement",
+        "maintenant", "asap", "tout de suite"
+    ]
+
+    strategic_words = [
+        "stratégie", "vision", "structure", "architecture", "plan",
+        "système", "optimisation", "business"
+    ]
+
     word_count = len(text.split())
 
-    if word_count > 12:
+    if word_count >= 12:
         qi_score = 0.8
-    elif word_count > 6:
+    elif word_count >= 6:
         qi_score = 0.65
 
-    if "urgent" in text or "vite" in text:
+    if any(word in text for word in urgency_words):
         urgency = 0.9
+        recommended_tone = "direct"
 
-    if "merci" in text or "super" in text:
-        emotion_label = "positive"
-        emotion_intensity = 0.7
-
-    if "problème" in text or "bug" in text:
+    if any(word in text for word in negative_words):
         emotion_label = "negative"
         emotion_intensity = 0.8
-        recommended_tone = "direct"
+        qe_score = 0.7
+        if recommended_tone == "clear":
+            recommended_tone = "empathetic"
+
+    if any(word in text for word in positive_words):
+        emotion_label = "positive"
+        emotion_intensity = 0.7
+        qe_score = 0.7
+        if recommended_tone == "clear":
+            recommended_tone = "reassuring"
+
+    if any(word in text for word in strategic_words):
+        qi_score = max(qi_score, 0.8)
+        recommended_tone = "strategic"
 
     return {
         "qi_score": qi_score,
@@ -56,46 +127,87 @@ def analyze_qei(input_data: str) -> dict:
         "recommended_tone": recommended_tone
     }
 
+
 # =========================
-# AI CALL (MISTRAL)
+# MISTRAL CALL
 # =========================
 def call_mistral(prompt: str) -> str:
-    url = "https://api.mistral.ai/v1/chat/completions"
+    if not MISTRAL_API_KEY:
+        return "La clé API Mistral est absente. Ajoute MISTRAL_API_KEY dans Railway Variables."
+
     headers = {
-        "Authorization": "Bearer YOUR_API_KEY",
+        "Authorization": f"Bearer {MISTRAL_API_KEY}",
         "Content-Type": "application/json"
     }
 
-    data = {
-        "model": "mistral-small",
+    payload = {
+        "model": MISTRAL_MODEL,
         "messages": [
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": (
+                    "Tu es OpenChawn, une IA claire, stratégique et utile. "
+                    "Réponds en français, avec précision, calme et structure."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
         ]
     }
 
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        response = requests.post(
+            MISTRAL_URL,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+    except requests.exceptions.RequestException as e:
+        return f"Erreur lors de l'appel API Mistral : {str(e)}"
+    except (KeyError, IndexError, ValueError) as e:
+        return f"Réponse Mistral invalide : {str(e)}"
+
 
 # =========================
 # RESPONSE GENERATION
 # =========================
-def generate_response(user_input: str, qei: dict) -> dict:
+def generate_response(user_input: str, qei: Dict[str, Any]) -> Dict[str, str]:
     tone = qei["recommended_tone"]
     emotion = qei["emotion_label"]
+    urgency = qei["urgency"]
+    qi_score = qei["qi_score"]
 
     if tone == "empathetic":
-        intro = "Je comprends qu'il y a une tension dans ce que tu dis."
+        intro = "Je vois qu'il y a une tension réelle dans ce que tu dis."
     elif tone == "direct":
         intro = "On va aller droit au point."
     elif tone == "strategic":
-        intro = "Ton message demande une approche stratégique."
+        intro = "Ton message appelle une lecture stratégique."
+    elif tone == "reassuring":
+        intro = "On peut clarifier ça calmement."
     else:
-        intro = "Analysons ça calmement."
+        intro = "Analysons ça proprement."
 
     prompt = f"""
-Utilisateur: {user_input}
-Emotion: {emotion}
-Réponds de manière {tone}.
+Question utilisateur : {user_input}
+
+Contexte QEI :
+- émotion : {emotion}
+- urgence : {urgency}
+- score logique : {qi_score}
+- ton recommandé : {tone}
+
+Consigne :
+Réponds en français.
+Sois utile, clair, structuré et concret.
+Ne fais pas de phrases vagues.
 """
 
     ai_response = call_mistral(prompt)
@@ -105,28 +217,41 @@ Réponds de manière {tone}.
         "response": ai_response
     }
 
+
 # =========================
-# MAIN ENDPOINT
+# FILE LOGGING
+# =========================
+def save_record(record: Dict[str, Any]) -> None:
+    try:
+        with open("openchawn_data.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# =========================
+# CHAT ENDPOINT
 # =========================
 @app.post("/chat")
-def chat(input_data: dict):
-    user_input = input_data.get("message", "")
+def chat(input_data: ChatRequest) -> Dict[str, Any]:
+    user_input = input_data.message.strip()
+
+    if not user_input:
+        raise HTTPException(status_code=400, detail="Le message est vide.")
 
     qei = analyze_qei(user_input)
-    result = generate_response(user_input, qei)
+    answer = generate_response(user_input, qei)
 
     record = {
         "input": user_input,
         "qei": qei,
-        "response": result
+        "answer": answer
     }
-
-    with open("openchawn_data.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    save_record(record)
 
     return {
         "qei": qei,
-        "answer": result
+        "answer": answer
     }
 @app.get("/demo", response_class=HTMLResponse)
 def demo():
