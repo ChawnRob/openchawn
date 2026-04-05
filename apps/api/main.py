@@ -183,52 +183,50 @@ def demo():
     <head>
     <meta charset="UTF-8">
     <title>OpenChawn</title>
-
     <style>
     body {
-    font-family: Arial;
-    background: #0b1020;
-    color: #f5f7ff;
-    margin: 0;
-    padding: 40px;
+    font-family: Arial, sans-serif;
+    background: radial-gradient(circle at top, #0f172a, #020617);
+    color: #e2e8f0;
 }
 
-.wrap {
-    max-width: 900px;
-    margin: auto;
-}
-
-input, button {
-    padding: 12px;
-    border-radius: 8px;
-    border: none;
-    margin-top: 10px;
+h1 {
+    font-size: 32px;
+    background: linear-gradient(90deg, #38bdf8, #6366f1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 input {
-    width: 70%;
+    width: 100%;
+    padding: 18px;
+    border-radius: 12px;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    background: #0f172a;
+    color: white;
+    box-shadow: 0 0 0 1px #1e293b;
 }
 
 button {
-    background: #4f46e5;
+    margin-top: 10px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(90deg, #38bdf8, #6366f1);
     color: white;
     cursor: pointer;
 }
 
 .card {
-    background: #111735;
-    padding: 20px;
-    border-radius: 12px;
     margin-top: 20px;
+    padding: 20px;
+    border-radius: 14px;
+    background: #020617;
+    box-shadow: 0 0 0 1px #1e293b;
 }
 
-h1 {
-    color: #8c9eff;
-}
-
-ul {
-    padding-left: 20px;
-}
 </style>
 </head>
 
