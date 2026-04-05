@@ -26,6 +26,9 @@ def root():
     }
 
 
+
+
+
 def analyze_qei(input_data: str) -> dict:
     text = input_data.lower().strip()
 
@@ -105,16 +108,16 @@ def analyze_qei(input_data: str) -> dict:
     }
 
     def call_mistral(prompt: str) -> str:
-    api_key = os.getenv("MISTRAL_API_KEY")
+        api_key = os.getenv("MISTRAL_API_KEY")
 
-    url = "https://api.mistral.ai/v1/chat/completions"
+        url = "https://api.mistral.ai/v1/chat/completions"
 
-    headers = {
+        headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
 
-    data = {
+        data = {
         "model": "mistral-small",
         "messages": [
             {"role": "user", "content": prompt}
