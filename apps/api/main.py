@@ -253,8 +253,6 @@ def chat(input_data: ChatRequest) -> Dict[str, Any]:
         "qei": qei,
         "answer": answer
     }
-@app.get("/demo", response_class=HTMLResponse)
-def demo():
 
     return """
     <!DOCTYPE html>
