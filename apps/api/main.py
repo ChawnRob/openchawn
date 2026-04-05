@@ -162,12 +162,11 @@ def generate_response(user_input: str, qei: dict) -> str:
         "actions": actions,
         "closing": closing     
     }
-  @app.get("/ask")
-   def ask(q: str):
+
+@app.get("/ask")
+def ask(q: str):
     qei = analyze_qei(q)
-
-
-  response = generate_response(q, qei)
+    response = generate_response(q, qei)
 
     return {
         "question": q,
