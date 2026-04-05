@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from datetime import datetime
-from fastapi.response import HTMLResponse
+from fastapi.responses import HTMLResponse
 import json
 
 app = FastAPI(title="OpenChawn API")
