@@ -126,39 +126,58 @@ def analyze_qei(input_data: str) -> dict:
 
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
-    
-    def generate_response(user_input: str, qei: dict) -> str:
-        tone = qei["recommended_tone"]
-        emotion = qei["emotion_label"]
-        urgency = qei["urgency"]
-        qi_score = qei["qi_score"]
+    def generate_response(user_input: str, qei: dict) -> dict:
+    tone = qei["recommended_tone"]
+    emotion = qei["emotion_label"]
+    urgency = qei["urgency"]
+    qi_score = qei["qi_score"]
 
-     text = user_input.strip()
+    text = user_input.strip()
 
-     if tone == "empathetic":
-         intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
-     elif tone == "direct":
-         intro = "On va aller droit au point."
-     elif tone == "strategic":
-         intro = "Ton message appelle une lecture stratégique."
-     elif tone == "reassuring":
-         intro = "On peut clarifier ça calmement."
-     else:
-         prompt = f"""
-     Question: {user_input}
-    
-     Emotion: {emotion}
-     Urgence: {urgency}
-     Ton: {tone}
+    if tone == "empathetic":
+        intro = "Je vois qu’il y a une tension réelle dans ce que tu dis."
+    elif tone == "direct":
+        intro = "On va aller droit au point."
+    elif tone == "strategic":
+        intro = "Ton message appelle une lecture stratégique."
+    elif tone == "reassuring":
+        intro = "On peut clarifier ça calmement."
+    else:
+        prompt = f"""
+Question: {user_input}
 
-     Donne une réponse courte, claire,rationnel et actionnable en français.
-     """
-         intro = call_mistral(prompt)
-    
- # intro = "Je vais te répondre clairement."
+Emotion: {emotion}
+Urgence: {urgency}
+Ton: {tone}
 
- actions = []
+Donne une réponse courte, claire, rationnelle et actionnable en français.
+"""
+        intro = call_mistral(prompt)
 
+    actions = []
+
+    if "restaurant" in text.lower() or "clients" in text.lower() or "business" in text.lower():
+        actions.append("Regarde d’abord où tu perds la conversion : visibilité, réputation ou offre.")
+        actions.append("Isole un problème principal au lieu de corriger 10 choses à la fois.")
+        actions.append("Teste une action terrain immédiate sur 7 jours avant de tout reconstruire.")
+    else:
+        actions.append("Clarifie le vrai problème en une phrase.")
+        actions.append("Sépare ce qui est émotionnel de ce qui est opérationnel.")
+        actions.append("Choisis une seule prochaine action mesurable.")
+
+    if qi_score >= 0.7:
+        closing = "Si tu veux, la prochaine étape logique est de transformer ça en plan structuré."
+    else:
+        closing = "La clé maintenant, c’est de simplifier et agir tout de suite."
+
+    return {
+        "intro": intro,
+        "emotion": emotion,
+        "urgency": urgency,
+        "tone": tone,
+        "actions": actions,
+        "closing": closing
+    }
     if "restaurant" in text.lower() or "clients" in text.lower() or "business" in text.lower():
         actions.append("Regarde d’abord où tu perds la conversion : visibilité, réputation ou offre.")
         actions.append("Isole un problème principal au lieu de corriger 10 choses à la fois.")
