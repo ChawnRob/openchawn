@@ -153,18 +153,26 @@ def generate_response(user_input: str, qei: dict) -> str:
         f"{closing}"
     )
 
-    return response 
- 
+    return {
+        "intro": intro,
+        "summary": {
+            "emotion": emotion,
+            "urgency": urgency,
+            "tone": tone
+       },
+        "actions": actions,
+        "closing": closing     
+    }
 @app.get("/ask")
 def ask(q: str):
     qei = analyze_qei(q)
-    answer = generate_response(q, qei)
+    response = generate_response(q, qei)
 
  
     return {
         "question": q,
         "qei": qei,
-        "answer": answer
+        "answer": response
     }
    
 
