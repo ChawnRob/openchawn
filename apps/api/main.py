@@ -108,21 +108,21 @@ def analyze_qei(input_data: str) -> dict:
     }
     
 def call_mistral(prompt: str) -> str:
-        api_key = os.getenv("MISTRAL_API_KEY")
+    api_key = os.getenv("MISTRAL_API_KEY")
 
-        url = "https://api.mistral.ai/v1/chat/completions"
+    url = "https://api.mistral.ai/v1/chat/completions"
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
 
-        data = {
-            "model": "mistral-small",
-            "messages": [
-               {"role": "user", "content": prompt}
-             ]
-        }
+    data = {
+        "model": "mistral-small",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
 
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
