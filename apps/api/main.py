@@ -169,11 +169,15 @@ def ask(q: str):
     qei = analyze_qei(q)
     response = generate_response(q, qei)
 
- 
+    try:
+        save_interaction(q, qei, response)
+    except Exception as e:
+        print("error saving:", e)
+        
     return {
         "question": q,
         "qei": qei,
-        "answer": response
+        "response": response
     }
    @app.get("/demo", response_class=HTMLResponse)
 def demo():
