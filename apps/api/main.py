@@ -113,16 +113,16 @@ def call_mistral(prompt: str) -> str:
         url = "https://api.mistral.ai/v1/chat/completions"
 
         headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
 
         data = {
-        "model": "mistral-small",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }
+            "model": "mistral-small",
+            "messages": [
+               {"role": "user", "content": prompt}
+             ]
+        }
 
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
@@ -227,7 +227,7 @@ def ask(q: str):
         "question": q,
         "qei": qei,
         "answer": response
-   }
+     }
 
 @app.get("/demo", response_class=HTMLResponse)
 def demo():
@@ -243,14 +243,14 @@ def demo():
     font-family: Arial, sans-serif;
     background: radial-gradient(circle at top, #0f172a, #020617);
     color: #e2e8f0;
-}
+   }
 
 h1 {
     font-size: 32px;
     background: linear-gradient(90deg, #38bdf8, #6366f1);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-}
+   }
 
 input {
     width: 100%;
@@ -262,7 +262,7 @@ input {
     background: #0f172a;
     color: white;
     box-shadow: 0 0 0 1px #1e293b;
-}
+   }
 
 button {
     margin-top: 10px;
@@ -272,7 +272,7 @@ button {
     background: linear-gradient(90deg, #38bdf8, #6366f1);
     color: white;
     cursor: pointer;
-}
+   }
 
 .card {
     margin-top: 20px;
@@ -280,8 +280,8 @@ button {
     border-radius: 14px;
     background: #020617;
     box-shadow: 0 0 0 1px #1e293b;
-}
-
+   }
+  
 </style>
 </head>
 
