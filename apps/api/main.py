@@ -212,8 +212,9 @@ def chat(input_data: dict):
    
     return {
          "qei": qei,
-         "answer": result
-     }
+         "intro": result["intro"],
+        "answer": result["response"]
+    }
     
 Contexte QEI :
 - émotion : {emotion}
