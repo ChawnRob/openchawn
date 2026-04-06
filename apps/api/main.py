@@ -183,9 +183,8 @@ def generate_response(user_input: str, qei: Dict[str, Any]):
     emotion = qei["emotion_label"]
     urgency = qei["urgency"]
     qi_score = qei["qi_score"]
-
     if tone == "empathetic":
-        intro = "Je vois qu'il y a une tension réelle dans ce que tu dis."
+        intro = "Je vois qu'il y a une tension réelle dans ce message."
     elif tone == "direct":
         intro = "On va aller droit au point."
     elif tone == "strategic":
@@ -194,22 +193,19 @@ def generate_response(user_input: str, qei: Dict[str, Any]):
         intro = "On peut clarifier ça calmement."
     else:
         intro = "Analysons ça proprement."
-
-      
-     return {
-         "intro": intro,
-         "response": f"Tu as écrit : {user_input}"
-     }
-     
-
+    return {
+        "intro": intro,
+        "response": f"Tu as écrit : {user_input}"
+    }
 
 
 @app.post("/chat")
 def chat(input_data: dict):
     user_input = input_data.get("message", "")
-
     qei = analyze_qei(user_input)
     result = generate_response(user_input, qei)
+    return result
+
    
     return {
          "qei": qei,
