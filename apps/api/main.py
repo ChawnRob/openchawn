@@ -178,7 +178,7 @@ def call_mistral(prompt: str) -> str:
 # =========================
 # RESPONSE GENERATION
 # =========================
-def generate_response(user_input: str, qei: Dict[str, Any]) -> Dict[str, str]:
+def generate_response(user_input: str, qei: Dict[str, Any]):
     tone = qei["recommended_tone"]
     emotion = qei["emotion_label"]
     urgency = qei["urgency"]
@@ -201,7 +201,7 @@ def generate_response(user_input: str, qei: Dict[str, Any]) -> Dict[str, str]:
          "response": f"Tu as écrit : {user_input}"
      }
      
-    
+
 
 
 @app.post("/chat")
