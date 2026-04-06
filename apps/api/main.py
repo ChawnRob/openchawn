@@ -178,11 +178,12 @@ def call_mistral(prompt: str) -> str:
 # =========================
 # RESPONSE GENERATION
 # =========================
-def generate_response(user_input: str, qei: Dict[str, Any]):
+def generate_response(user_input: str, qei: Dict[str, Any]) -> str:
     tone = qei["recommended_tone"]
     emotion = qei["emotion_label"]
     urgency = qei["urgency"]
     qi_score = qei["qi_score"]
+
     if tone == "empathetic":
         intro = "Je vois qu'il y a une tension réelle dans ce message."
     elif tone == "direct":
@@ -193,26 +194,11 @@ def generate_response(user_input: str, qei: Dict[str, Any]):
         intro = "On peut clarifier ça calmement."
     else:
         intro = "Analysons ça proprement."
-    return {
-        "intro": intro,
-        "response": f"Tu as écrit : {user_input}"
-    }
 
+    prompt = f"""{intro}
 
-@app.post("/chat")
-def chat(input_data: dict):
-    user_input = input_data.get("message", "")
-    qei = analyze_qei(user_input)
-    result = generate_response(user_input, qei)
-    return result
+Message reçu : {user_input}
 
-   
-    return {
-         "qei": qei,
-         "intro": result["intro"],
-        "answer": result["response"]
-    }
-    
 Contexte QEI :
 - émotion : {emotion}
 - urgence : {urgency}
@@ -225,12 +211,7 @@ Sois utile, clair, structuré et concret.
 Ne fais pas de phrases vagues.
 """
 
-    ai_response = call_mistral(prompt)
-
-    return {
-        "intro": intro,
-        "response": ai_response
-    }
+    return call_mistral(prompt)
 
 
 # =========================
@@ -269,125 +250,3 @@ def chat(input_data: ChatRequest) -> Dict[str, Any]:
         "answer": answer
     }
 
-    return """
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-    <meta charset="UTF-8">
-    <title>OpenChawn</title>
-    <style>
-    body {
-    font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #0f172a, #020617);
-    color: #e2e8f0;
-   }
-
-h1 {
-    font-size: 32px;
-    background: linear-gradient(90deg, #38bdf8, #6366f1);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-   }
-
-input {
-    width: 100%;
-    padding: 18px;
-    border-radius: 12px;
-    border: none;
-    outline: none;
-    font-size: 16px;
-    background: #0f172a;
-    color: white;
-    box-shadow: 0 0 0 1px #1e293b;
-   }
-
-button {
-    margin-top: 10px;
-    padding: 12px 20px;
-    border-radius: 10px;
-    border: none;
-    background: linear-gradient(90deg, #38bdf8, #6366f1);
-    color: white;
-    cursor: pointer;
-   }
-
-.card {
-    margin-top: 20px;
-    padding: 20px;
-    border-radius: 14px;
-    background: #020617;
-    box-shadow: 0 0 0 1px #1e293b;
-   }
-  
-</style>
-</head>
-
-<body>
-
-<div class="wrap">
-    <h1>OpenChawn AI</h1>
-
-    <input id="q" placeholder="Pose ta question...">
-    <button onclick="sendAsk()">Analyser</button>
-
-    <div id="result" style="display:none">
-
-        <div class="card">
-            <h3>Intro</h3>
-            <p id="intro"></p>
-        </div>
-
-        <div class="card">
-            <h3>Analyse</h3>
-            <p><b>Emotion :</b> <span id="emotion"></span></p>
-            <p><b>Urgence :</b> <span id="urgency"></span></p>
-            <p><b>Ton :</b> <span id="tone"></span></p>
-        </div>
-
-        <div class="card">
-            <h3>Actions</h3>
-            <ul id="actions"></ul>
-        </div>
-
-        <div class="card">
-            <h3>Conclusion</h3>
-            <p id="closing"></p>
-        </div>
-
-    </div>
-</div>
-
-<script>
-async function sendAsk() {
-
-    const q = document.getElementById("q").value.trim();
-    if (!q) return;
-
-    const res = await fetch("/ask?q=" + encodeURIComponent(q));
-    const data = await res.json();
-
-    const r = data.answer;
-
-    document.getElementById("result").style.display = "block";
-
-    document.getElementById("intro").textContent = r.intro;
-    document.getElementById("emotion").textContent = r.emotion;
-    document.getElementById("urgency").textContent = r.urgency;
-    document.getElementById("tone").textContent = r.tone;
-    document.getElementById("closing").textContent = r.closing;
-
-    const ul = document.getElementById("actions");
-    ul.innerHTML = "";
-
-    r.actions.forEach(a => {
-        const li = document.createElement("li");
-        li.textContent = a;
-        ul.appendChild(li);
-    });
-}
-</script>
-
-</body>
-</html>
-"""    
- 
