@@ -195,8 +195,22 @@ def generate_response(user_input: str, qei: Dict[str, Any]) -> Dict[str, str]:
     else:
         intro = "Analysons ça proprement."
 
-    prompt = f"""
-Question utilisateur : {user_input}
+
+
+    
+@app.post("/chat")
+def chat(input_data: dict):
+    user_input = input_data.get("message", "")
+
+    qei = analyze_qei(user_input)
+    result = generate_response(user_input, qei)
+     
+     return {
+         "qei": qei,
+         "answer": result
+     }
+    
+   
 
 Contexte QEI :
 - émotion : {emotion}
