@@ -199,6 +199,7 @@ def generate_response(user_input: str, qei: Dict[str, Any]) -> Dict[str, str]:
      return {
          "intro": intro,
          "response": f"Tu as écrit : {user_input}"
+     }
      
     
 
