@@ -1,0 +1,22 @@
+[
+  {
+    "role": "user",
+    "content": "hello how are you today ?",
+    "timestamp": "2026-04-15T11:23:18.273805"
+  },
+  {
+    "role": "assistant",
+    "content": "Hello! I'm fine, thank you. How can I assist you today?",
+    "timestamp": "2026-04-15T11:23:18.281358"
+  },
+  {
+    "role": "user",
+    "content": "identifie toi",
+    "timestamp": "2026-04-15T11:23:47.706800"
+  },
+  {
+    "role": "assistant",
+    "content": "Je suis OpenChawn, votre assistant IA prêt à vous aider. Comment puis-je vous assister aujourd'hui ?",
+    "timestamp": "2026-04-15T11:23:47.708108"
+  }
+]

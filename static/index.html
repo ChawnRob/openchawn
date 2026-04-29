@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenChawn</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep: #060a10;
+  --bg-panel: rgba(10, 18, 30, 0.85);
+  --bg-glass: rgba(15, 25, 40, 0.55);
+  --border-dim: rgba(56, 189, 248, 0.08);
+  --border-glow: rgba(56, 189, 248, 0.2);
+  --border-active: rgba(56, 189, 248, 0.4);
+  --cyan: #38bdf8;
+  --cyan-dim: rgba(56, 189, 248, 0.5);
+  --cyan-ghost: rgba(56, 189, 248, 0.07);
+  --steel: #94a3b8;
+  --text: #e2e8f0;
+  --text-muted: #64748b;
+  --text-bright: #f1f5f9;
+  --user-bg: rgba(56, 189, 248, 0.08);
+  --user-border: rgba(56, 189, 248, 0.15);
+  --assistant-bg: rgba(15, 23, 42, 0.6);
+  --assistant-border: rgba(56, 189, 248, 0.06);
+  --error: #f87171;
+  --success: #34d399;
+  --radius: 8px;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', -apple-system, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--bg-deep);
+  color: var(--text);
+  overflow: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(rgba(56, 189, 248, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.015) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(56, 189, 248, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── App layout ────────────────────────────────────────── */
+
+.app {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+
+.hidden { display: none !important; }
+
+/* ── Auth screen ─────────────────────────────────────── */
+
+.auth-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 24px;
+  padding: 40px;
+}
+
+.auth-box {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 12px;
+  padding: 32px 28px;
+  backdrop-filter: blur(12px);
+}
+
+.auth-box h2 {
+  font-size: 14px;
+  font-family: var(--font-mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-field {
+  margin-bottom: 14px;
+}
+
+.auth-field label {
+  display: block;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.auth-field input, .auth-field select {
+  width: 100%;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text-bright);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.auth-field input:focus, .auth-field select:focus {
+  border-color: var(--border-active);
+}
+
+.auth-field select option { background: #0a121e; }
+
+.auth-btn {
+  width: 100%;
+  padding: 11px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(56, 189, 248, 0.08));
+  border: 1px solid var(--border-glow);
+  border-radius: 6px;
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.3), rgba(56, 189, 248, 0.12));
+  border-color: var(--border-active);
+}
+
+.auth-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.auth-toggle {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 16px;
+}
+
+.auth-toggle a {
+  color: var(--cyan);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.auth-toggle a:hover { text-decoration: underline; }
+
+.auth-error {
+  color: var(--error);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-align: center;
+  margin-top: 10px;
+  min-height: 16px;
+}
+
+/* ── Header ────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 6px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(56, 189, 248, 0.05));
+  border: 1px solid var(--border-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cyan);
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.header-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+
+.header-sub {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-top: 1px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+  animation: pulse-dot 3s ease-in-out infinite;
+}
+
+.status-dot.offline {
+  background: var(--error);
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+  animation: none;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.logout-btn {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  color: var(--error);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* ── System bar ────────────────────────────────────────── */
+
+.sys-bar {
+  display: flex;
+  gap: 20px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+
+.sys-bar .tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sys-bar .tag-label {
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+}
+
+.sys-bar .tag-value {
+  color: var(--steel);
+}
+
+/* ── Messages ──────────────────────────────────────────── */
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-behavior: smooth;
+}
+
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-track { background: transparent; }
+.messages::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 2px; }
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  text-align: center;
+  padding: 40px;
+}
+
+.welcome-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(56, 189, 248, 0.03));
+  border: 1px solid var(--border-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+}
+
+.welcome h2 {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+
+.welcome p {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+.welcome-line {
+  width: 60px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+}
+
+/* ── Message bubbles ───────────────────────────────────── */
+
+.msg {
+  max-width: 82%;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  line-height: 1.7;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  position: relative;
+  animation: msg-in 0.25s ease-out;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: var(--user-bg);
+  border: 1px solid var(--user-border);
+  color: var(--text-bright);
+  backdrop-filter: blur(6px);
+}
+
+.msg.assistant {
+  align-self: flex-start;
+  background: var(--assistant-bg);
+  border: 1px solid var(--assistant-border);
+  color: var(--text);
+  backdrop-filter: blur(6px);
+}
+
+.msg.error {
+  align-self: center;
+  background: rgba(248, 113, 113, 0.05);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  color: var(--error);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  max-width: 90%;
+}
+
+.msg-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.msg-meta span {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: rgba(56, 189, 248, 0.04);
+  border: 1px solid var(--border-dim);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+/* ── Typing indicator ──────────────────────────────────── */
+
+.typing {
+  align-self: flex-start;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--assistant-bg);
+  border: 1px solid var(--assistant-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(6px);
+  animation: msg-in 0.25s ease-out;
+}
+
+.typing.visible { display: flex; }
+
+.typing-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--cyan-dim);
+  letter-spacing: 0.5px;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.typing-dots .dot {
+  width: 5px;
+  height: 5px;
+  background: var(--cyan);
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
+
+.typing-dots .dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots .dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ── Input area ────────────────────────────────────────── */
+
+.input-area {
+  padding: 12px 4px 16px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: 10px;
+  padding: 6px;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.2s;
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--border-active);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.05);
+}
+
+.input-wrapper textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  color: var(--text-bright);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  max-height: 120px;
+  min-height: 40px;
+}
+
+.input-wrapper textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.send-btn {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(56, 189, 248, 0.08));
+  border: 1px solid var(--border-glow);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.send-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(56, 189, 248, 0.12));
+  border-color: var(--border-active);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.1);
+}
+
+.send-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+.send-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--cyan);
+}
+
+/* ── Scan line ──────────────────────────────────────── */
+
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.scanline.active { animation: scan 2s ease-in-out; }
+
+@keyframes scan {
+  0% { top: 0; opacity: 0.6; }
+  100% { top: 100vh; opacity: 0; }
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .app { padding: 0 6px; max-width: 100%; }
+  .msg { max-width: 92%; font-size: 13px; }
+  .header-title { font-size: 13px; letter-spacing: 1px; }
+  .sys-bar { gap: 12px; font-size: 9px; flex-wrap: wrap; }
+  .welcome h2 { font-size: 16px; }
+  .messages { padding: 12px 2px; }
+  .auth-box { padding: 24px 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="scanline" id="scanline"></div>
+
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-mark">OC</div>
+      <div>
+        <div class="header-title">OpenChawn</div>
+        <div class="header-sub">Neural Interface v0.6</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">LINK</span>
+      </div>
+      <button class="logout-btn hidden" id="logoutBtn">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- System bar -->
+  <div class="sys-bar hidden" id="sysBar">
+    <div class="tag">
+      <span class="tag-label">engine</span>
+      <span class="tag-value" id="sysProvider">OpenChawn</span>
+    </div>
+    <div class="tag">
+      <span class="tag-label">profile</span>
+      <span class="tag-value" id="sysProfile">---</span>
+    </div>
+    <div class="tag">
+      <span class="tag-label">lang</span>
+      <span class="tag-value" id="sysLang">---</span>
+    </div>
+    <div class="tag">
+      <span class="tag-label">user</span>
+      <span class="tag-value" id="sysUser">---</span>
+    </div>
+  </div>
+
+  <!-- AUTH SCREEN -->
+  <div class="auth-screen" id="authScreen">
+    <div class="welcome-icon">OC</div>
+    <div class="welcome-line"></div>
+
+    <!-- Login Form -->
+    <div class="auth-box" id="loginBox">
+      <h2>Connexion</h2>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="email@example.com" autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label>Mot de passe</label>
+        <input type="password" id="loginPassword" placeholder="********" autocomplete="current-password">
+      </div>
+      <button class="auth-btn" id="loginBtn">Connexion</button>
+      <div class="auth-error" id="loginError"></div>
+      <div class="auth-toggle">Pas de compte ? <a id="showRegister">Inscription</a></div>
+    </div>
+
+    <!-- Register Form -->
+    <div class="auth-box hidden" id="registerBox">
+      <h2>Inscription</h2>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="regEmail" placeholder="email@example.com" autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label>Nom</label>
+        <input type="text" id="regName" placeholder="Votre nom" autocomplete="name">
+      </div>
+      <div class="auth-field">
+        <label>Mot de passe (8 car. min)</label>
+        <input type="password" id="regPassword" placeholder="********" autocomplete="new-password">
+      </div>
+      <div class="auth-field">
+        <label>Type d'activite</label>
+        <select id="regBusiness"></select>
+      </div>
+      <button class="auth-btn" id="registerBtn">Creer mon compte</button>
+      <div class="auth-error" id="regError"></div>
+      <div class="auth-toggle">Deja inscrit ? <a id="showLogin">Connexion</a></div>
+    </div>
+  </div>
+
+  <!-- CHAT SCREEN (hidden until auth) -->
+  <div class="messages hidden" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">OC</div>
+      <div class="welcome-line"></div>
+      <h2>System Ready</h2>
+      <p>Interface neurale active. Transmettez votre requete dans la langue de votre choix.</p>
+    </div>
+
+    <div class="typing" id="typing">
+      <span class="typing-label">ANALYSE</span>
+      <div class="typing-dots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area hidden" id="inputArea">
+    <div class="input-wrapper">
+      <textarea id="input" rows="1" placeholder="Transmission..." autofocus></textarea>
+      <button class="send-btn" id="sendBtn" title="Transmettre">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+
+// ── State ───────────────────────────────────────────
+let token = sessionStorage.getItem('oc_token') || '';
+let currentUser = null;
+let sending = false;
+
+const dom = {
+  authScreen: document.getElementById('authScreen'),
+  loginBox: document.getElementById('loginBox'),
+  registerBox: document.getElementById('registerBox'),
+  loginEmail: document.getElementById('loginEmail'),
+  loginPassword: document.getElementById('loginPassword'),
+  loginBtn: document.getElementById('loginBtn'),
+  loginError: document.getElementById('loginError'),
+  regEmail: document.getElementById('regEmail'),
+  regName: document.getElementById('regName'),
+  regPassword: document.getElementById('regPassword'),
+  regBusiness: document.getElementById('regBusiness'),
+  registerBtn: document.getElementById('registerBtn'),
+  regError: document.getElementById('regError'),
+  showRegister: document.getElementById('showRegister'),
+  showLogin: document.getElementById('showLogin'),
+  sysBar: document.getElementById('sysBar'),
+  messages: document.getElementById('messages'),
+  inputArea: document.getElementById('inputArea'),
+  input: document.getElementById('input'),
+  send: document.getElementById('sendBtn'),
+  typing: document.getElementById('typing'),
+  welcome: document.getElementById('welcome'),
+  statusDot: document.getElementById('statusDot'),
+  statusText: document.getElementById('statusText'),
+  scanline: document.getElementById('scanline'),
+  sysProvider: document.getElementById('sysProvider'),
+  sysProfile: document.getElementById('sysProfile'),
+  sysLang: document.getElementById('sysLang'),
+  sysUser: document.getElementById('sysUser'),
+  logoutBtn: document.getElementById('logoutBtn'),
+};
+
+// ── Auth helpers ─────────────────────────────────────
+function authHeaders() {
+  return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+}
+
+async function apiFetch(path, opts = {}) {
+  opts.headers = { ...authHeaders(), ...(opts.headers || {}) };
+  const r = await fetch(API + path, opts);
+  if (r.status === 401) { logout(); throw new Error('Session expirée'); }
+  return r;
+}
+
+// ── Toggle auth forms ───────────────────────────────
+dom.showRegister.addEventListener('click', () => {
+  dom.loginBox.classList.add('hidden');
+  dom.registerBox.classList.remove('hidden');
+  dom.loginError.textContent = '';
+});
+
+dom.showLogin.addEventListener('click', () => {
+  dom.registerBox.classList.add('hidden');
+  dom.loginBox.classList.remove('hidden');
+  dom.regError.textContent = '';
+});
+
+// ── Load profiles for register ──────────────────────
+async function loadProfiles() {
+  try {
+    const r = await fetch(API + '/profiles');
+    const profiles = await r.json();
+    dom.regBusiness.innerHTML = profiles.map(p =>
+      '<option value="' + p.id + '">' + p.name + ' (' + p.category + ')</option>'
+    ).join('');
+  } catch { dom.regBusiness.innerHTML = '<option value="default">OpenChawn</option>'; }
+}
+loadProfiles();
+
+// ── Login ────────────────────────────────────────────
+dom.loginBtn.addEventListener('click', doLogin);
+dom.loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogin() {
+  dom.loginError.textContent = '';
+  dom.loginBtn.disabled = true;
+  try {
+    const r = await fetch(API + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: dom.loginEmail.value.trim(),
+        password: dom.loginPassword.value,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erreur');
+    token = d.token;
+    sessionStorage.setItem('oc_token', token);
+    currentUser = d.user;
+    enterChat();
+  } catch (err) {
+    dom.loginError.textContent = err.message;
+  } finally {
+    dom.loginBtn.disabled = false;
+  }
+}
+
+// ── Register ─────────────────────────────────────────
+dom.registerBtn.addEventListener('click', doRegister);
+dom.regPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+
+async function doRegister() {
+  dom.regError.textContent = '';
+  dom.registerBtn.disabled = true;
+  try {
+    const r = await fetch(API + '/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: dom.regEmail.value.trim(),
+        password: dom.regPassword.value,
+        display_name: dom.regName.value.trim(),
+        business_type: dom.regBusiness.value,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erreur');
+    token = d.token;
+    sessionStorage.setItem('oc_token', token);
+    currentUser = d.user;
+    enterChat();
+  } catch (err) {
+    dom.regError.textContent = err.message;
+  } finally {
+    dom.registerBtn.disabled = false;
+  }
+}
+
+// ── Logout ───────────────────────────────────────────
+dom.logoutBtn.addEventListener('click', logout);
+
+function logout() {
+  token = '';
+  currentUser = null;
+  sessionStorage.removeItem('oc_token');
+  dom.authScreen.classList.remove('hidden');
+  dom.messages.classList.add('hidden');
+  dom.inputArea.classList.add('hidden');
+  dom.sysBar.classList.add('hidden');
+  dom.logoutBtn.classList.add('hidden');
+}
+
+// ── Enter chat ───────────────────────────────────────
+function enterChat() {
+  dom.authScreen.classList.add('hidden');
+  dom.messages.classList.remove('hidden');
+  dom.inputArea.classList.remove('hidden');
+  dom.sysBar.classList.remove('hidden');
+  dom.logoutBtn.classList.remove('hidden');
+  dom.sysUser.textContent = currentUser?.email || '---';
+  dom.sysProfile.textContent = currentUser?.business_type || '---';
+  dom.input.focus();
+}
+
+// ── Auto-login if token exists ──────────────────────
+async function tryAutoLogin() {
+  if (!token) return;
+  try {
+    const r = await apiFetch('/me');
+    if (!r.ok) throw new Error();
+    currentUser = await r.json();
+    enterChat();
+  } catch { logout(); }
+}
+tryAutoLogin();
+
+// ── Health check ─────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    const ok = d.providers?.some(p => p.available) ?? (d.status === 'ok');
+    dom.statusDot.className = 'status-dot' + (ok ? '' : ' offline');
+    dom.statusText.textContent = ok ? 'LINK' : 'NO LINK';
+    if (d.providers?.length) dom.sysProvider.textContent = d.providers.find(p => p.available)?.name || '---';
+  } catch {
+    dom.statusDot.className = 'status-dot offline';
+    dom.statusText.textContent = 'NO LINK';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 15000);
+
+// ── Textarea auto-resize ────────────────────────────
+dom.input.addEventListener('input', () => {
+  dom.input.style.height = 'auto';
+  dom.input.style.height = Math.min(dom.input.scrollHeight, 120) + 'px';
+});
+
+dom.input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+dom.send.addEventListener('click', send);
+
+// ── Scan effect ─────────────────────────────────────
+function triggerScan() {
+  dom.scanline.classList.remove('active');
+  void dom.scanline.offsetWidth;
+  dom.scanline.classList.add('active');
+}
+
+// ── Scroll ──────────────────────────────────────────
+function scrollDown() {
+  dom.messages.scrollTop = dom.messages.scrollHeight;
+}
+
+// ── Add message ─────────────────────────────────────
+function addMsg(role, text, meta) {
+  if (dom.welcome) dom.welcome.remove();
+
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+
+  if (meta) {
+    const m = document.createElement('div');
+    m.className = 'msg-meta';
+    // provider masqué de l'UI (visible en console uniquement)
+    if (meta.lang) m.innerHTML += '<span>' + meta.lang + '</span>';
+    if (meta.fallback) m.innerHTML += '<span>fallback</span>';
+    if (meta.confidence) m.innerHTML += '<span>conf:' + meta.confidence + '</span>';
+    div.appendChild(m);
+  }
+
+  dom.messages.insertBefore(div, dom.typing);
+  scrollDown();
+}
+
+// ── Send ─────────────────────────────────────────────
+async function send() {
+  const text = dom.input.value.trim();
+  if (!text || sending) return;
+
+  sending = true;
+  dom.send.disabled = true;
+  dom.input.value = '';
+  dom.input.style.height = 'auto';
+
+  addMsg('user', text);
+  dom.typing.classList.add('visible');
+  triggerScan();
+  scrollDown();
+
+  try {
+    const r = await apiFetch('/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text }),
+    });
+
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || 'HTTP ' + r.status);
+    }
+    const d = await r.json();
+
+    addMsg('assistant', d.output || d.response || d.message || "...");
+
+    // provider gardé en console pour debug, pas affiché
+    if (d.provider) console.log('[OpenChawn] provider:', d.provider);
+    dom.sysLang.textContent = d.lang || '---';
+
+  } catch (err) {
+    addMsg('error', 'TRANSMISSION FAILED — ' + err.message);
+  } finally {
+    dom.typing.classList.remove('visible');
+    sending = false;
+    dom.send.disabled = false;
+    dom.input.focus();
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+import pytest
+import app.router as router_mod
+from app.mempalace import add_memory
+from app.router import handle
+
+
+class _OK:
+    def __init__(self, tag):
+        self.tag = tag
+
+    def is_available(self):
+        return True
+
+    def generate(self, prompt, user_id="", system_prompt=""):
+        return f"[{self.tag}] réponse complète et détaillée: {prompt[:40]}"
+
+
+class _Down:
+    def is_available(self):
+        return False
+
+    def generate(self, *a, **kw):
+        return "[ERREUR] down"
+
+
+@pytest.fixture
+def fake_reg(monkeypatch):
+    reg = {
+        "kimi":    _OK("kimi"),
+        "mistral": _OK("mistral"),
+        "ollama":  _OK("ollama"),
+        "openai":  _OK("openai"),
+    }
+    monkeypatch.setattr(router_mod, "_REGISTRY", reg)
+    return reg
+
+
+@pytest.fixture
+def empty_reg(monkeypatch):
+    monkeypatch.setattr(router_mod, "_REGISTRY", {})
+    return {}
+
+
+def test_handle_memory_compress():
+    res = handle("consolide la mémoire")
+    assert res["action"] == "MEMORY_COMPRESS"
+    assert res["output"]["status"] == "done"
+    assert "report" in res["output"]
+
+
+def test_handle_memory_compress_alt_keyword():
+    res = handle("compresse les souvenirs")
+    assert res["action"] == "MEMORY_COMPRESS"
+    assert res["output"]["status"] == "done"
+
+
+def test_handle_memory_read_returns_list():
+    add_memory("OpenChawn est un système IA local-first",
+               type="rule", importance_score=0.9)
+    res = handle("retrouve la mémoire OpenChawn")
+    assert res["action"] == "MEMORY_READ"
+    assert isinstance(res["output"], list)
+
+
+def test_handle_model_call_first_available(fake_reg):
+    res = handle("code-moi un fizzbuzz en Python")
+    assert res["action"] == "MODEL_CALL_NEEDED"
+    assert res["provider"] == "kimi"
+    assert res["output"].startswith("[kimi]")
+    assert res["learned_memory_id"]
+
+
+def test_handle_model_call_skips_down(fake_reg, monkeypatch):
+    fake_reg["kimi"] = _Down()
+    res = handle("raconte moi une chose simple")
+    assert res["action"] == "MODEL_CALL_NEEDED"
+    assert res["provider"] == "mistral"
+
+
+def test_handle_system_improvement_when_all_down(monkeypatch):
+    reg = {
+        "kimi":    _Down(),
+        "mistral": _Down(),
+        "ollama":  _Down(),
+        "openai":  _Down(),
+    }
+    monkeypatch.setattr(router_mod, "_REGISTRY", reg)
+    res = handle("question quelconque sans provider")
+    assert res["action"] == "SYSTEM_IMPROVEMENT"
+    assert res["output"]["status"] == "stub"
+
+
+def test_handle_system_improvement_when_empty_registry(empty_reg):
+    res = handle("question quelconque")
+    assert res["action"] == "SYSTEM_IMPROVEMENT"
+    assert res["output"]["status"] == "stub"

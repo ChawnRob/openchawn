@@ -1,0 +1,653 @@
+[
+  {
+    "id": "mem_4931859f",
+    "content": "salut ,présente toi et j aimerais créer une AI",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T10:59:53.771807",
+    "source": "chat"
+  },
+  {
+    "id": "mem_7bd9ab41",
+    "content": {
+      "action": "MEMORY_READ",
+      "output": []
+    },
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T10:59:53.772269",
+    "source": "chat"
+  },
+  {
+    "id": "mem_ca540dfd",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T11:42:24.463787",
+    "source": "chat"
+  },
+  {
+    "id": "mem_054aaaa3",
+    "content": "{'action': 'MEMORY_READ', 'output': []}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T11:42:24.464361",
+    "source": "chat"
+  },
+  {
+    "id": "mem_55e263fc",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T16:24:51.837520",
+    "source": "chat"
+  },
+  {
+    "id": "mem_c3706b8e",
+    "content": "Je réfléchis encore... reformule ou donne plus de contexte.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T16:24:51.838498",
+    "source": "chat"
+  },
+  {
+    "id": "mem_f42dbe5e",
+    "content": "tu te rappelle de moi ? dis moi comment je m appelle et présente toi",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T16:25:27.084306",
+    "source": "chat"
+  },
+  {
+    "id": "mem_fa678cba",
+    "content": "Je réfléchis encore... reformule ou donne plus de contexte.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T16:25:27.085132",
+    "source": "chat"
+  },
+  {
+    "id": "mem_933b247a",
+    "content": "hallo",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T16:34:12.393121",
+    "source": "chat"
+  },
+  {
+    "id": "mem_d3c9e44d",
+    "content": "Je réfléchis encore... reformule ou donne plus de contexte.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T16:34:12.393792",
+    "source": "chat"
+  },
+  {
+    "id": "mem_461da37b",
+    "content": "salut comment tu t appelle ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T21:14:25.461196",
+    "source": "chat"
+  },
+  {
+    "id": "mem_33bb1b5b",
+    "content": "{'action': 'MEMORY_READ', 'output': []}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T21:14:25.461545",
+    "source": "chat"
+  },
+  {
+    "id": "mem_6cd33c8e",
+    "content": "salut ,comment va s tu ? qui es tu ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T21:38:06.053150",
+    "source": "chat"
+  },
+  {
+    "id": "mem_65bfa200",
+    "content": "{'action': 'MEMORY_READ', 'output': []}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T21:38:06.053729",
+    "source": "chat"
+  },
+  {
+    "id": "mem_746ff91c",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:08:45.114502",
+    "source": "chat"
+  },
+  {
+    "id": "mem_36a28601",
+    "content": "{'action': 'MEMORY_READ', 'output': []}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:08:45.115232",
+    "source": "chat"
+  },
+  {
+    "id": "mem_369e056b",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:19:43.865465",
+    "source": "chat"
+  },
+  {
+    "id": "mem_81018d72",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:19:43.866264",
+    "source": "chat"
+  },
+  {
+    "id": "mem_d2fc3e96",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:27:54.520787",
+    "source": "chat"
+  },
+  {
+    "id": "mem_66dc2214",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:27:54.521672",
+    "source": "chat"
+  },
+  {
+    "id": "mem_666af102",
+    "content": "dis moi qui tu es ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:28:06.287820",
+    "source": "chat"
+  },
+  {
+    "id": "mem_4e5e59c9",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T22:28:06.288563",
+    "source": "chat"
+  },
+  {
+    "id": "mem_a8e25f00",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T23:21:48.999998",
+    "source": "chat"
+  },
+  {
+    "id": "mem_f4a1113e",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-28T23:21:49.000373",
+    "source": "chat"
+  },
+  {
+    "id": "mem_d380dcfb",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T09:46:32.264707",
+    "source": "chat"
+  },
+  {
+    "id": "mem_4b8867b6",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T09:46:32.266346",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9d431510",
+    "content": "hello",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:00:25.166091",
+    "source": "chat"
+  },
+  {
+    "id": "mem_b509b2c3",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:00:25.167609",
+    "source": "chat"
+  },
+  {
+    "id": "mem_fd3f1ef4",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:12:56.262162",
+    "source": "chat"
+  },
+  {
+    "id": "mem_1a3e2a7a",
+    "content": "Je suis OpenChawn. Comment puis-je t’aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:12:56.262669",
+    "source": "chat"
+  },
+  {
+    "id": "mem_b2e36638",
+    "content": "peut tu me donner un plan architectural de quelqu'un sénior de bytebytego ingénieur faire pour une application style Fifa",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:14:40.813700",
+    "source": "chat"
+  },
+  {
+    "id": "mem_b1402168",
+    "content": "Je suis OpenChawn. Comment puis-je t’aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:14:40.815596",
+    "source": "chat"
+  },
+  {
+    "id": "mem_2860cf4c",
+    "content": "salut ,dis mo 1+3= ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:22:43.579281",
+    "source": "chat"
+  },
+  {
+    "id": "mem_1c68f189",
+    "content": "Je suis OpenChawn. Comment puis-je t’aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:22:43.580973",
+    "source": "chat"
+  },
+  {
+    "id": "mem_8ce2f00e",
+    "content": "salut ,",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:45:54.354656",
+    "source": "chat"
+  },
+  {
+    "id": "mem_465f7b29",
+    "content": "Je suis OpenChawn. Comment puis-je t’aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T10:45:54.355353",
+    "source": "chat"
+  },
+  {
+    "id": "mem_790ce60d",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T12:50:02.976153",
+    "source": "chat"
+  },
+  {
+    "id": "mem_b4540a03",
+    "content": "{'output': ''}",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T12:50:02.976758",
+    "source": "chat"
+  },
+  {
+    "id": "mem_cfb5950e",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T14:09:38.075296",
+    "source": "chat"
+  },
+  {
+    "id": "mem_89691b54",
+    "content": "Salut ! Je suis OpenChawn, ton assistant IA polyvalent. Mon rôle est de t’aider à comprendre, créer et évoluer dans tes projets ou questions.\n\nTu veux créer une IA ? Très bien ! Dis-moi ce que tu as en tête : est-ce pour un usage particulier (chatbot, analyse de données, automatisation, etc.) ? As-tu des compétences techniques spécifiques (Python, frameworks, etc.) ? Ou cherches-tu simplement des conseils pour démarrer ?\n\nJe m’adapte à ton niveau et à tes besoins. 😊",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T14:09:38.076550",
+    "source": "chat"
+  },
+  {
+    "id": "mem_d1a6dd5d",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T14:12:34.406162",
+    "source": "chat"
+  },
+  {
+    "id": "mem_166c1b77",
+    "content": "2 + 2 = **4**.\n\nBesoin d’aide pour un calcul plus complexe, une explication ou autre chose ? 😊",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T14:12:34.407313",
+    "source": "chat"
+  },
+  {
+    "id": "mem_6b59dbdb",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T19:52:35.182888",
+    "source": "chat"
+  },
+  {
+    "id": "mem_075ac3ea",
+    "content": "Salut ! 👋\nJe suis OpenChawn, ton assistant IA polyvalent. Je suis là pour t’aider à comprendre, créer et évoluer, que ce soit dans tes projets, tes idées ou tes questionnements.\n\nEt toi, tu veux créer une IA ? C’est un projet passionnant ! Dis-moi en quoi je peux t’aider :\n- **Comprendre** les concepts de base ?\n- **Créer** un modèle ou un système ?\n- **Évoluer** avec des outils ou des ressources ?\n\nÀ toi de jouer ! 🚀",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T19:52:35.184964",
+    "source": "chat"
+  },
+  {
+    "id": "mem_30eaafa1",
+    "content": "salut ,présente toi",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:00:48.836326",
+    "source": "chat"
+  },
+  {
+    "id": "mem_5057be24",
+    "content": "Je suis une intelligence artificielle, ici pour t'aider à créer ton projet.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:00:48.838125",
+    "source": "chat"
+  },
+  {
+    "id": "mem_1310ffb0",
+    "content": "2+2+?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:04:34.139600",
+    "source": "chat"
+  },
+  {
+    "id": "mem_e8844e78",
+    "content": "4",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:04:34.142692",
+    "source": "chat"
+  },
+  {
+    "id": "mem_7ccbda6b",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:23:39.889790",
+    "source": "chat"
+  },
+  {
+    "id": "mem_324000e0",
+    "content": "Salut, je suis une intelligence artificielle avancée. Je peux t'aider à créer une AI en fonction de tes besoins.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:23:39.891389",
+    "source": "chat"
+  },
+  {
+    "id": "mem_60faab41",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:23:59.930183",
+    "source": "chat"
+  },
+  {
+    "id": "mem_53aa62f6",
+    "content": "4",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:23:59.932557",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9303fcd5",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:36:25.744409",
+    "source": "chat"
+  },
+  {
+    "id": "mem_c4474d5a",
+    "content": "Je suis une intelligence artificielle ici pour t'aider à créer ton projet d'IA.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-04-29T20:36:25.746086",
+    "source": "chat"
+  }
+]

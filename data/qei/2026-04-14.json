@@ -1,0 +1,194 @@
+[
+  {
+    "timestamp": "2026-04-14T04:43:00.577779",
+    "user_id": "Rob",
+    "prompt_preview": "je m'appelle Robert",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 1.0,
+      "error": 1.0,
+      "total": 1.0
+    }
+  },
+  {
+    "timestamp": "2026-04-14T04:45:27.967108",
+    "user_id": "Rob",
+    "prompt_preview": "tu te souviens de moi ?",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.0,
+      "error": 1.0,
+      "total": 0.67
+    }
+  },
+  {
+    "timestamp": "2026-04-14T13:13:31.922114",
+    "user_id": "rob",
+    "prompt_preview": "explique moi le machine learning",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.9,
+      "error": 1.0,
+      "total": 0.97
+    }
+  },
+  {
+    "timestamp": "2026-04-14T13:17:27.459082",
+    "user_id": "rob",
+    "prompt_preview": "do you remember me ?",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 1.0,
+      "error": 1.0,
+      "total": 1.0
+    }
+  },
+  {
+    "timestamp": "2026-04-14T13:18:20.531073",
+    "user_id": "rob",
+    "prompt_preview": "come te llama  ?",
+    "provider": "ollama",
+    "scores": {
+      "length": 0.6,
+      "relevance": 0.38,
+      "error": 1.0,
+      "total": 0.66
+    }
+  },
+  {
+    "timestamp": "2026-04-14T14:35:06.458697",
+    "user_id": "rob",
+    "prompt_preview": "hello how are you   ?",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 1.0,
+      "error": 1.0,
+      "total": 1.0
+    }
+  },
+  {
+    "timestamp": "2026-04-14T17:26:36.146788",
+    "user_id": "rob",
+    "prompt_preview": "what s your name  ?",
+    "provider": "ollama",
+    "scores": {
+      "length": 0.6,
+      "relevance": 0.9,
+      "error": 1.0,
+      "total": 0.83
+    }
+  },
+  {
+    "timestamp": "2026-04-14T18:24:52.460727",
+    "user_id": "rob",
+    "prompt_preview": "tu peut me donner les nouveaux producteur d électricité en France",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.68,
+      "error": 1.0,
+      "total": 0.89
+    }
+  },
+  {
+    "timestamp": "2026-04-14T18:26:36.843759",
+    "user_id": "rob",
+    "prompt_preview": "tu peut me donner les nouveaux producteur d électricité en France",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.55,
+      "error": 1.0,
+      "total": 0.85
+    }
+  },
+  {
+    "timestamp": "2026-04-14T18:37:10.891341",
+    "user_id": "rob",
+    "prompt_preview": "comment optimiser mon menu",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.75,
+      "error": 1.0,
+      "total": 0.92
+    }
+  },
+  {
+    "timestamp": "2026-04-14T19:03:44.165646",
+    "user_id": "rob",
+    "prompt_preview": "comment optimiser mon menu",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.75,
+      "error": 1.0,
+      "total": 0.92
+    }
+  },
+  {
+    "timestamp": "2026-04-14T19:06:33.520567",
+    "user_id": "rob",
+    "prompt_preview": "comment scaler",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.75,
+      "error": 1.0,
+      "total": 0.92
+    }
+  },
+  {
+    "timestamp": "2026-04-14T19:15:52.973753",
+    "user_id": "rob",
+    "prompt_preview": "comment scaler mon business",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 1.0,
+      "error": 1.0,
+      "total": 1.0
+    }
+  },
+  {
+    "timestamp": "2026-04-14T23:19:53.583006",
+    "user_id": "rob",
+    "prompt_preview": "Bonjour, présente-toi en une phrase",
+    "provider": "minimax",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.6,
+      "error": 1.0,
+      "total": 0.87
+    }
+  },
+  {
+    "timestamp": "2026-04-14T23:32:41.538693",
+    "user_id": "rob",
+    "prompt_preview": "Bonjour, présente-toi en une phrase",
+    "provider": "ollama",
+    "scores": {
+      "length": 1.0,
+      "relevance": 0.3,
+      "error": 1.0,
+      "total": 0.77
+    }
+  },
+  {
+    "timestamp": "2026-04-14T23:52:23.689754",
+    "user_id": "rob",
+    "prompt_preview": "Donne moi un conseil business",
+    "provider": "minimax",
+    "scores": {
+      "length": 1.0,
+      "relevance": 1.0,
+      "error": 1.0,
+      "total": 1.0
+    }
+  }
+]

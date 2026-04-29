@@ -1,0 +1,34 @@
+# ── Chat (protégé) ───────────────────────────────────────
+@app.post("/chat")
+def chat(req: ChatRequest, user: dict = Depends(get_current_user)):
+    user_id = f"user-{user['id']}"
+    profile_id = req.profile or user.get("business_type", "default")
+    from memory.fractal_memory import add_node, search_nodes
+
+    # chercher mémoire liée
+    memories = search_nodes(req.message)
+
+    context = ""
+    if memories:
+        context = "\n".join([m["content"] for m in memories[:3]])
+
+    # enrichir prompt
+    final_prompt = f"Contexte mémoire:\n{context}\n\nUtilisateur:\n{req.message}"
+
+    # réponse modèle
+    response = model_router(final_prompt)
+
+    # stocker nouvelle mémoire
+    add_node(
+        content=req.message,
+        tags=["user"],
+        source="chat",
+    )
+
+    add_node(
+        content=response,
+        tags=["assistant"],
+        source="chat",
+    )
+
+    return {"output": response}
