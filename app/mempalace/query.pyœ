@@ -1,0 +1,107 @@
+from __future__ import annotations
+import re
+from dataclasses import dataclass
+from typing import Optional
+from app.mempalace.schema import MemoryEntry, MemoryType, MemoryStatus
+from app.mempalace.store import store as default_store, MemPalaceStore
+
+
+_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+
+
+def _tokenize(text: str) -> set[str]:
+    return {t.lower() for t in _TOKEN_RE.findall(text or "") if len(t) > 1}
+
+
+@dataclass
+class QueryHit:
+    entry: MemoryEntry
+    score: float        # score final combiné
+    relevance: float    # similarité lexicale 0..1
+
+
+def _lex_relevance(q_tokens: set[str], entry: MemoryEntry) -> float:
+    """Similarité Jaccard simple sur content + summary."""
+    if not q_tokens:
+        return 0.0
+    e_tokens = _tokenize(entry.content) | _tokenize(entry.summary)
+    if not e_tokens:
+        return 0.0
+    inter = q_tokens & e_tokens
+    union = q_tokens | e_tokens
+    return len(inter) / len(union) if union else 0.0
+
+
+def _final_score(relevance: float, entry: MemoryEntry) -> float:
+    """
+    Pondération :
+    - 60 % pertinence lexicale
+    - 25 % importance manuelle
+    - 10 % réutilisation (normalisée log-like)
+    -  5 % confidence
+    """
+    reuse_norm = min(entry.reuse_score / 10.0, 1.0)
+    return (
+        0.60 * relevance
+        + 0.25 * entry.importance_score
+        + 0.10 * reuse_norm
+        + 0.05 * entry.confidence
+    )
+
+
+def search(
+    query: str,
+    *,
+    project: Optional[str] = None,
+    types: Optional[list[MemoryType]] = None,
+    status: MemoryStatus = "active",
+    top_k: int = 5,
+    min_relevance: float = 0.05,
+    touch: bool = True,
+    store: MemPalaceStore = default_store,
+) -> list[QueryHit]:
+    """
+    Recherche les entrées mémoire les plus pertinentes.
+
+    - `query`       : texte libre (prompt utilisateur ou sous-requête ASI-Evolve)
+    - `project`     : filtre projet (ex: 'openchawn', 'weetao', 'halt')
+    - `types`       : filtre types ('fact', 'rule', ...)
+    - `status`      : 'active' par défaut (ignore archived/deprecated)
+    - `top_k`       : nb max de hits retournés
+    - `min_relevance`: seuil sous lequel on ignore (évite bruit)
+    - `touch`       : si True, incrémente reuse_score sur les hits
+    """
+    q_tokens = _tokenize(query)
+    rows = store.all()
+
+    candidates: list[QueryHit] = []
+    for e in rows:
+        if e.status != status:
+            continue
+        if project and e.project != project:
+            continue
+        if types and e.type not in types:
+            continue
+        rel = _lex_relevance(q_tokens, e)
+        if rel < min_relevance:
+            continue
+        candidates.append(QueryHit(entry=e, score=_final_score(rel, e), relevance=rel))
+
+    candidates.sort(key=lambda h: h.score, reverse=True)
+    hits = candidates[:top_k]
+
+    if touch and hits:
+        for h in hits:
+            h.entry.touch()
+            store.update(h.entry)
+
+    return hits
+
+
+def has_answer(query: str, *, threshold: float = 0.35, **kw) -> bool:
+    """
+    Raccourci décisionnel pour ASI-Evolve :
+    True => mémoire suffisante, PAS besoin d'appeler un modèle.
+    """
+    hits = search(query, top_k=1, touch=False, **kw)
+    return bool(hits) and hits[0].score >= threshold

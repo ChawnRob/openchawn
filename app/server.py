@@ -1,43 +1,39 @@
-"""
-OpenChawn standalone FastAPI server.
-
-Lance le pipeline ASI-Evolve via POST /ask sans dépendre du legacy main.py.
-Usage:
-    uvicorn app.server:app --reload --port 8000
-"""
-from __future__ import annotations
-import logging
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.api.ask import router as ask_router
-from routers.memory import router as memory_router
+from pydantic import BaseModel
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-)
+from app.memory import save_memory, load_recent_memories
 
-app = FastAPI(
-    title="OpenChawn",
-    version="1.0.0",
-    description="Orchestrateur local-first explicable (MemPalace + ASI-evolve + Kimi + Minimax + Mistral + Ollama).",
-)
+app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
-
-app.include_router(ask_router)
-app.include_router(memory_router)
-
+class AskRequest(BaseModel):
+    prompt: str
 
 @app.get("/")
 def root():
+    return {"message": "OpenChawn is alive"}
+
+@app.post("/ask")
+def ask(request: AskRequest):
+    save_memory("user", request.prompt)
+
+    response = orchestrator(request.prompt)
+
+    save_memory("openchawn", f"Réponse donnée au prompt: {request.prompt}")
+
     return {
-        "service": "openchawn",
-        "version": app.version,
-        "endpoints": ["POST /ask", "GET /health"],
+        "response": response,
+        "status": "ok"
     }
+
+
+def orchestrator(prompt: str):
+    memories = load_recent_memories(limit=6)
+
+    memory_text = " | ".join(
+        [f"{m['role']}: {m['content']}" for m in memories]
+    )
+
+    return (
+        f"Processed locally: {prompt}\n"
+        f"Recent memory: {memory_text}"
+    )

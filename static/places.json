@@ -1,0 +1,240 @@
+[
+  {
+    "id": "pho-29",
+    "name": "Pho 29",
+    "cuisine": "Vietnamese",
+    "address": "29 Rue du Faubourg Saint-Martin, 75010 Paris",
+    "district": "Paris 10",
+    "sector": "Gare de l'Est",
+    "lat": 48.8712,
+    "lng": 2.3579,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.6/5 across sources · 2,432 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.6,
+        "reviews": 1820
+      },
+      "tripadvisor": {
+        "rating": 4.5,
+        "reviews": 612
+      }
+    }
+  },
+  {
+    "id": "chenapan",
+    "name": "Chenapan",
+    "cuisine": "French Bistrot",
+    "address": "12 Rue Daguerre, 75014 Paris",
+    "district": "Paris 14",
+    "sector": "Montparnasse",
+    "lat": 48.8349,
+    "lng": 2.3301,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.8/5 across sources · 600 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.8,
+        "reviews": 420
+      },
+      "tripadvisor": {
+        "rating": 4.7,
+        "reviews": 180
+      }
+    }
+  },
+  {
+    "id": "le-relais",
+    "name": "Le Relais de l'Entrecôte",
+    "cuisine": "Steakhouse",
+    "address": "20 Rue Saint-Benoît, 75006 Paris",
+    "district": "Paris 6",
+    "sector": "Saint-Germain",
+    "lat": 48.854,
+    "lng": 2.3328,
+    "verdict": "DOUBT",
+    "explanation": "Rating slightly below threshold (4.1/5)",
+    "sources": {
+      "google": {
+        "rating": 4.2,
+        "reviews": 8400
+      },
+      "tripadvisor": {
+        "rating": 4.0,
+        "reviews": 3100
+      }
+    }
+  },
+  {
+    "id": "septime",
+    "name": "Septime",
+    "cuisine": "Contemporary",
+    "address": "80 Rue de Charonne, 75011 Paris",
+    "district": "Paris 11",
+    "sector": "Bastille",
+    "lat": 48.8531,
+    "lng": 2.3791,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.7/5 across sources · 3,720 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.7,
+        "reviews": 2900
+      },
+      "tripadvisor": {
+        "rating": 4.6,
+        "reviews": 820
+      }
+    }
+  },
+  {
+    "id": "bouillon-pigalle",
+    "name": "Bouillon Pigalle",
+    "cuisine": "Brasserie",
+    "address": "22 Bd de Clichy, 75018 Paris",
+    "district": "Paris 18",
+    "sector": "Pigalle",
+    "lat": 48.883,
+    "lng": 2.3324,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.3/5 across sources · 23,600 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.3,
+        "reviews": 18200
+      },
+      "tripadvisor": {
+        "rating": 4.2,
+        "reviews": 5400
+      }
+    }
+  },
+  {
+    "id": "tourist-trap",
+    "name": "La Bonne Table Tour Eiffel",
+    "cuisine": "French",
+    "address": "Champ de Mars, 75007 Paris",
+    "district": "Paris 7",
+    "sector": "Tour Eiffel",
+    "lat": 48.8555,
+    "lng": 2.2984,
+    "verdict": "SKIP",
+    "explanation": "Low average rating (3.5/5)",
+    "sources": {
+      "google": {
+        "rating": 3.2,
+        "reviews": 4200
+      },
+      "tripadvisor": {
+        "rating": 3.8,
+        "reviews": 1800
+      }
+    }
+  },
+  {
+    "id": "chez-aline",
+    "name": "Chez Aline",
+    "cuisine": "Sandwich",
+    "address": "85 Rue de la Roquette, 75011 Paris",
+    "district": "Paris 11",
+    "sector": "Bastille",
+    "lat": 48.8574,
+    "lng": 2.3775,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.6/5 across sources · 960 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.6,
+        "reviews": 780
+      },
+      "tripadvisor": {
+        "rating": 4.5,
+        "reviews": 180
+      }
+    }
+  },
+  {
+    "id": "au-passage",
+    "name": "Au Passage",
+    "cuisine": "Wine Bar",
+    "address": "1bis Passage Saint-Sébastien, 75011 Paris",
+    "district": "Paris 11",
+    "sector": "Oberkampf",
+    "lat": 48.862,
+    "lng": 2.37,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.3/5 across sources · 830 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.4,
+        "reviews": 620
+      },
+      "tripadvisor": {
+        "rating": 4.1,
+        "reviews": 210
+      }
+    }
+  },
+  {
+    "id": "clamato",
+    "name": "Clamato",
+    "cuisine": "Seafood",
+    "address": "80 Rue de Charonne, 75011 Paris",
+    "district": "Paris 11",
+    "sector": "Bastille",
+    "lat": 48.8533,
+    "lng": 2.379,
+    "verdict": "STOP",
+    "explanation": "Consistent 4.6/5 across sources · 1,900 reviews",
+    "sources": {
+      "google": {
+        "rating": 4.6,
+        "reviews": 1420
+      },
+      "tripadvisor": {
+        "rating": 4.5,
+        "reviews": 480
+      }
+    }
+  },
+  {
+    "id": "inconsistent-spot",
+    "name": "Café des Voyageurs",
+    "cuisine": "Café",
+    "address": "15 Rue de Rivoli, 75004 Paris",
+    "district": "Paris 4",
+    "sector": "Marais",
+    "lat": 48.8562,
+    "lng": 2.3556,
+    "verdict": "DOUBT",
+    "explanation": "Sources disagree (Δ 1.1)",
+    "sources": {
+      "google": {
+        "rating": 4.5,
+        "reviews": 1100
+      },
+      "tripadvisor": {
+        "rating": 3.4,
+        "reviews": 180
+      }
+    }
+  },
+  {
+    "id": "no-trip-data",
+    "name": "Le Petit Vendôme",
+    "cuisine": "Sandwich",
+    "address": "8 Rue des Capucines, 75002 Paris",
+    "district": "Paris 2",
+    "sector": "Opéra",
+    "lat": 48.8689,
+    "lng": 2.3301,
+    "verdict": "DOUBT",
+    "explanation": "Only one source available (950 reviews)",
+    "sources": {
+      "google": {
+        "rating": 4.7,
+        "reviews": 950
+      }
+    }
+  }
+]

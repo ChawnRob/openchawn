@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ─── Python
 __pycache__/
 *.py[cod]
@@ -41,3 +42,11 @@ htmlcov/
 # ─── Logs
 *.log
 logs/
+=======
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+>>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88

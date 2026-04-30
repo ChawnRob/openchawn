@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 fastapi
 uvicorn
 httpx
 python-dotenv
+=======
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+>>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
