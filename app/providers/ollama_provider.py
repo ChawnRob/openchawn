@@ -17,7 +17,7 @@ class OllamaProvider(BaseProvider):
         self._checked_at: float = 0
 
     def generate(self, prompt: str, user_id: str = "", system_prompt: str = "") -> str:
-        sp = system_prompt or "Tu es un assistant IA."
+        sp = system_prompt or "Tu es OpenChawn. Réponds brièvement. Ne mentionne jamais Mistral, OpenAI ou un autre provider."
         try:
             response = httpx.post(
                 f"{self.base_url}/api/chat",

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import logging
 log = logging.getLogger("openchawn.router")
 
@@ -47,47 +46,13 @@ _SYSTEM = (
 )
 
 
-def handle(prompt: str) -> dict:
-    providers = get_registry()
-    clean_prompt = f"{_SYSTEM}\n\nQuestion: {prompt}"
+def handle(prompt: str, raw_message: str = "") -> dict:
+    # raw_message = message utilisateur brut (sans contexte mémoire injecté)
+    p = (raw_message or prompt).lower()
 
-    for name in ["mistral", "minimax", "ollama", "openai", "kimi"]:
-        provider = providers.get(name)
-        if not provider:
-            continue
+    # ── Commandes spéciales (avant appel LLM) ──
 
-        try:
-            if hasattr(provider, "is_available") and not provider.is_available():
-                print(f"[DEBUG] {name} unavailable")
-                continue
-
-            # injecter system prompt si le provider le supporte
-            if hasattr(provider, "generate") and "system_prompt" in provider.generate.__code__.co_varnames:
-                result = provider.generate(prompt, system_prompt=_SYSTEM)
-            else:
-                result = provider.generate(promp, system_prompt=_SYSTEM)
-            text = _as_text(result)
-
-            print(f"[DEBUG] {name} => {text}")
-
-            if text and text.strip():
-                return {
-                    "output": text.strip(),
-                    "provider": name
-                }
-
-        except Exception as e:
-            print(f"[router] {name} failed:", e)
-
-    return {
-        "output": "Je suis OpenChawn. Aucun modèle n’a répondu pour le moment.",
-        "provider": "fallback"
-    }
-=======
-def handle(prompt: str):
-    p = prompt.lower()
-
-    # 🧠 PRIORITÉ : compress
+    # Compress mémoire
     if "consolide" in p or "compresse" in p or "compress" in p:
         report = {
             "total_before": 0,
@@ -96,7 +61,6 @@ def handle(prompt: str):
             "decay_archived": 0,
             "groups_processed": 0,
         }
-
         try:
             from app.mempalace import compress
             r = compress()
@@ -107,15 +71,14 @@ def handle(prompt: str):
                 "decay_archived": r.decay_archived,
                 "groups_processed": r.groups_processed,
             }
-        except Exception as e:
+        except Exception:
             pass
-
         return {
             "action": "MEMORY_COMPRESS",
             "output": {"status": "done", "report": report},
         }
 
-    # 📖 Lecture mémoire
+    # Lecture mémoire
     if "memoire" in p or "mémoire" in p:
         hits = []
         try:
@@ -133,9 +96,40 @@ def handle(prompt: str):
             ]
         except Exception:
             pass
-
         return {
             "action": "MEMORY_READ",
             "output": hits,
         }
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
+
+    # ── Appel LLM via providers ──
+
+    providers = get_registry()
+
+    for name in ["ollama", "mistral", "minimax", "openai", "kimi"]:
+        provider = providers.get(name)
+        if not provider:
+            continue
+
+        try:
+            if hasattr(provider, "is_available") and not provider.is_available():
+                log.debug(f"{name} unavailable")
+                continue
+
+            result = provider.generate(prompt, system_prompt=_SYSTEM)
+            text = _as_text(result)
+
+            log.debug(f"{name} => {text[:80] if text else '(empty)'}")
+
+            if text and text.strip():
+                return {
+                    "output": text.strip(),
+                    "provider": name,
+                }
+
+        except Exception as e:
+            log.warning(f"{name} failed: {e}")
+
+    return {
+        "output": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
+        "provider": "fallback",
+    }

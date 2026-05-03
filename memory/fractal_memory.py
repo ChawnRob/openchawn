@@ -65,20 +65,18 @@ def list_nodes() -> list[dict]:
 
 def search_nodes(query: str) -> list[dict]:
     """Recherche simple : texte dans content ou tags."""
+    if not query or not isinstance(query, str):
+        return []
     q = query.lower()
     results = []
     for node in _load_store():
-         content = node.get("content", "")
-
-         if not isinstance(content, str):
-             content =str(content)
-
-         if q in content.lower():
-             results.append(node)
-
-         elif any(q in str(tag).lower() for tag in node.get("tags", [])):
-             results.append(node)
-
+        content = node.get("content", "")
+        if not isinstance(content, str):
+            content = str(content)
+        if q in content.lower():
+            results.append(node)
+        elif any(q in str(tag).lower() for tag in node.get("tags", [])):
+            results.append(node)
     return results
 
 

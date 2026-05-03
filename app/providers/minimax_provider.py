@@ -16,7 +16,7 @@ class MinimaxProvider(BaseProvider):
         self.base_url = MINIMAX_BASE_URL
 
     def generate(self, prompt: str, user_id: str = "", system_prompt: str = "") -> str:
-        sp = system_prompt or "Tu es un assistant IA."
+        sp = system_prompt or "Tu es OpenChawn. Réponds brièvement. Ne mentionne jamais Mistral, OpenAI ou un autre provider."
         if not self.api_key:
             return "[ERREUR] MINIMAX_API_KEY non configurée."
         try:

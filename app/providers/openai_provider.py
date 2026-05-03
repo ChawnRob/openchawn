@@ -16,7 +16,7 @@ class OpenAIProvider(BaseProvider):
         self.base_url = OPENAI_BASE_URL
 
     def generate(self, prompt: str, user_id: str = "", system_prompt: str = "") -> str:
-        sp = system_prompt or "Tu es un assistant IA."
+        sp = system_prompt or "Tu es OpenChawn. Réponds brièvement. Ne mentionne jamais Mistral, OpenAI ou un autre provider."
         if not self.api_key:
             return "[ERREUR] OPENAI_API_KEY non configurée."
         try:

@@ -1,6 +1,6 @@
-<<<<<<< HEAD
 import logging
 import re
+import requests as http_requests
 from app.router import handle
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,14 +14,14 @@ from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
 
-# ── Logging ──────────────────────────────────────────────
+
 logging.basicConfig(
     level=logging.INFO if IS_PROD else logging.DEBUG,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 logger = logging.getLogger("openchawn")
 
-# ── App ──────────────────────────────────────────────────
+
 app = FastAPI(
     title="OpenChawn",
     version="0.6.0",
@@ -30,7 +30,7 @@ app = FastAPI(
     openapi_url=None if IS_PROD else "/openapi.json",
 )
 
-# ── Middlewares (ordre = dernier ajouté s'exécute en premier) ──
+
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
@@ -41,18 +41,18 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-# ── Error handler global ─────────────────────────────────
+
 app.add_exception_handler(Exception, global_error_handler)
 
-# ── Init ─────────────────────────────────────────────────
+
 init_db()
 model_router = handle
 
-# ── Validation email ─────────────────────────────────────
+
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
 
-# ── Modèles ──────────────────────────────────────────────
+
 
 class RegisterRequest(BaseModel):
     email: str
@@ -130,13 +130,18 @@ class UpdateBusinessRequest(BaseModel):
         return v
 
 
-# ── Frontend ─────────────────────────────────────────────
+class ChatTestRequest(BaseModel):
+    message: str
+    model: str = "mistral:7b"
+
+
+
 @app.get("/")
 def serve_frontend():
     return FileResponse("static/index.html")
 
 
-# ── Auth : Register ──────────────────────────────────────
+
 @app.post("/register")
 def register(req: RegisterRequest):
     pw_hash = hash_password(req.password)
@@ -156,7 +161,7 @@ def register(req: RegisterRequest):
     }
 
 
-# ── Auth : Login ─────────────────────────────────────────
+
 @app.post("/login")
 def login(req: LoginRequest):
     user = get_user_by_email(req.email)
@@ -177,62 +182,80 @@ def login(req: LoginRequest):
     }
 
 
-# ── Chat (protégé) ───────────────────────────────────────
+
 @app.post("/chat")
 def chat(req: ChatRequest, user: dict = Depends(get_current_user)):
     from memory.fractal_memory import search_nodes, add_node
 
-    # 🔹 mémoire
+    # mémoire
     memories = search_nodes(req.message)
 
     context = ""
+    memory_used = False
     if memories:
         context = "\n".join([str(m.get("content", "")) for m in memories[:3]])
+        memory_used = True
 
-    # prompt final — le system prompt concis est injecté dans router.py
+    # prompt final
     if context:
-        final_prompt = f"Contexte mémoire:\n{context}\n\n{req.message}"
+        final_prompt = f"Contexte mémoire:\n{context}\n\nQuestion: {req.message}"
     else:
         final_prompt = req.message
 
-    # 🔹 appel modèle
-    
-    raw_response = model_router(final_prompt)
-    print("DEBUG RAW_RESPONSE:", raw_response)
-    if isinstance(raw_response,dict) and raw_response.get("action") == "MEMORY_READ":
-        raw_response = None
-    
+    # system prompt
+    system_prompt = (
+        "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
+        "RÈGLES STRICTES : "
+        "1. Réponds UNIQUEMENT en français. Jamais de chinois, anglais ou autre langue. "
+        "2. Réponds brièvement et directement. "
+        "3. Ne mentionne jamais Mistral, OpenAI, Qwen ou un autre provider. "
+        "4. Tu es OpenChawn, point final."
+    )
 
-    # 🔹 parsing SAFE
-    if isinstance(raw_response, dict):
-        response_text = (
-            raw_response.get("output")
-            or raw_response.get("response")
-            or raw_response.get("message")
-            or str(raw_response)
+    # appel Ollama directement
+    response_text = ""
+    provider_used = "none"
+
+    try:
+        r = http_requests.post(
+            "http://127.0.0.1:11434/api/chat",
+            json={
+                "model": "mistral:7b",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": final_prompt},
+                ],
+                "stream": False,
+            },
+            timeout=120,
         )
-    else:
-        response_text = str(raw_response)
+        r.raise_for_status()
+        data = r.json()
+        response_text = data.get("message", {}).get("content", "")
+        provider_used = "ollama/mistral:7b"
+    except Exception as e:
+        logger.error(f"Ollama call failed: {e}")
 
-    # 🔹 fallback
-    if (
-         not response_text
-         or response_text.strip() in ["", "[]", "{}", "None"]
-         or response_text.strip() == req.message.strip()
-    ):
-         response_text = "Je suis OpenChawn. Comment puis-je t’aider ?"
-    # 🔹 mémoire
+    # fallback
+    if not response_text or response_text.strip() in ["", "None"]:
+        response_text = "Je suis OpenChawn. Aucun modèle n'a répondu."
+        provider_used = "fallback"
+
+    # sauvegarde mémoire
     add_node(content=req.message, tags=["user"], source="chat")
     add_node(content=response_text, tags=["assistant"], source="chat")
 
-    return {"output": response_text}
+    return {
+        "output": response_text,
+        "provider": provider_used,
+        "memory_used": memory_used,
+    }
 
 
-# ── Health (public) ──────────────────────────────────────
+
 @app.get("/health")
 def health():
     status = {"mode": "handle", "status": "ok"}
-    # Ne pas exposer les détails internes en prod
     if IS_PROD:
         return {
             "status": "ok" if status.get("providers") else "degraded",
@@ -244,17 +267,17 @@ def health():
     return status
 
 
-# ── Profiles (public) ────────────────────────────────────
+
 @app.get("/profiles")
 def profiles():
     return list_profiles()
 
 
-# ── History (protégé, propre user uniquement) ─────────────
+
 @app.get("/history")
 def history(limit: int = 20, user: dict = Depends(get_current_user)):
     user_id = f"user-{user['id']}"
-    limit = min(limit, 100)  # cap
+    limit = min(limit, 100)
     return {"user_id": user_id, "history": router.get_history(user_id, limit)}
 
 
@@ -276,100 +299,45 @@ def qei_logs(user: dict = Depends(get_current_user)):
     return router.get_qei_logs()
 
 
+# ── Memory ───────────────────────────────────────────────
+from app.memory_loader import load_obsidian_memory
+
+@app.get("/memory")
+def memory():
+    return load_obsidian_memory()
+
+
+# ── Chat Test (NO AUTH — debug) ──────────────────────────
+OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+
+
+@app.post("/chat-test")
+def chat_test(req: ChatTestRequest):
+    """Appelle Ollama directement, sans auth. Debug uniquement."""
+    try:
+        r = http_requests.post(
+            OLLAMA_URL,
+            json={
+                "model": req.model,
+                "prompt": req.message,
+                "stream": False,
+            },
+            timeout=120,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return {
+            "model": data.get("model", req.model),
+            "response": data.get("response", ""),
+            "memory_used": False,
+        }
+    except http_requests.ConnectionError:
+        raise HTTPException(status_code=503, detail="Ollama non joignable sur :11434")
+    except http_requests.Timeout:
+        raise HTTPException(status_code=504, detail="Ollama timeout (120s)")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Static files ─────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="static"), name="static")
-=======
-"""
-HALT / Food Radar — FastAPI entrypoint.
-
-Run: uvicorn app.main:app --reload --port 8000
-Open: http://localhost:8000
-"""
-from pathlib import Path
-from typing import List
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-
-from app import engine, repository
-from app.schemas import PlaceCard, PlaceDetail, Verdict, VerdictNamed
-
-app = FastAPI(title="HALT / Food Radar", version="0.2.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-if _STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "version": app.version}
-
-
-@app.get("/places", response_model=List[PlaceCard])
-def list_places():
-    out: List[PlaceCard] = []
-    for p in repository.list_places():
-        v = engine.compute_verdict(p)
-        out.append(
-            PlaceCard(
-                id=p["id"],
-                name=p["name"],
-                cuisine=p["cuisine"],
-                address=p["address"],
-                district=p.get("district"),
-                sector=p.get("sector"),
-                lat=p["lat"],
-                lng=p["lng"],
-                verdict=v["verdict"],
-                explanation=v["explanation"],
-                sources=v["sources"],
-            )
-        )
-    return out
-
-
-@app.get("/places/{place_id}", response_model=PlaceDetail)
-def get_place(place_id: str):
-    p = repository.get_place(place_id)
-    if not p:
-        raise HTTPException(status_code=404, detail="Place not found")
-    v = engine.compute_verdict(p)
-    return PlaceDetail(
-        id=p["id"],
-        name=p["name"],
-        cuisine=p["cuisine"],
-        address=p["address"],
-        district=p.get("district"),
-        sector=p.get("sector"),
-        lat=p["lat"],
-        lng=p["lng"],
-        verdict=Verdict(**v),
-    )
-
-
-@app.get("/verdict/{place_id}", response_model=VerdictNamed)
-def get_verdict(place_id: str):
-    p = repository.get_place(place_id)
-    if not p:
-        raise HTTPException(status_code=404, detail="Place not found")
-    v = engine.compute_verdict(p)
-    return VerdictNamed(name=p["name"], **v)
-
-
-@app.get("/", response_class=HTMLResponse)
-def index():
-    html_path = _STATIC_DIR / "index.html"
-    if html_path.exists():
-        return HTMLResponse(html_path.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>HALT / Food Radar</h1><p>See /docs</p>")
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88

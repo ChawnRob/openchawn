@@ -649,5 +649,461 @@
     "importance": 0.5,
     "timestamp": "2026-04-29T20:36:25.746086",
     "source": "chat"
+  },
+  {
+    "id": "mem_f911a57d",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:55:34.440104",
+    "source": "chat"
+  },
+  {
+    "id": "mem_ceca6281",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:55:34.441528",
+    "source": "chat"
+  },
+  {
+    "id": "mem_49bb9257",
+    "content": "dans quel domaine peut tu m'aider ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:00.550100",
+    "source": "chat"
+  },
+  {
+    "id": "mem_bdbf6bc7",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:00.551739",
+    "source": "chat"
+  },
+  {
+    "id": "mem_15c62715",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:24.110908",
+    "source": "chat"
+  },
+  {
+    "id": "mem_f7ac3663",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:24.112152",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9e493c35",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:44.338409",
+    "source": "chat"
+  },
+  {
+    "id": "mem_0b34bca0",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:44.347958",
+    "source": "chat"
+  },
+  {
+    "id": "mem_e32ba030",
+    "content": "tu ne parle plus",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:50.865263",
+    "source": "chat"
+  },
+  {
+    "id": "mem_a13bf485",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:56:50.867280",
+    "source": "chat"
+  },
+  {
+    "id": "mem_69342ac8",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:57:00.985985",
+    "source": "chat"
+  },
+  {
+    "id": "mem_f8e190b7",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T19:57:00.987267",
+    "source": "chat"
+  },
+  {
+    "id": "mem_670ddd08",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T20:16:04.262748",
+    "source": "chat"
+  },
+  {
+    "id": "mem_8eef8354",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T20:16:04.264555",
+    "source": "chat"
+  },
+  {
+    "id": "mem_791328a7",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T20:16:14.094435",
+    "source": "chat"
+  },
+  {
+    "id": "mem_b72ead14",
+    "content": "Je suis OpenChawn. Comment puis-je t'aider ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-01T20:16:14.095577",
+    "source": "chat"
+  },
+  {
+    "id": "mem_8a4d418d",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:54:49.618630",
+    "source": "chat"
+  },
+  {
+    "id": "mem_95065f6f",
+    "content": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:54:49.619317",
+    "source": "chat"
+  },
+  {
+    "id": "mem_0c719881",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:57:21.633764",
+    "source": "chat"
+  },
+  {
+    "id": "mem_e484586a",
+    "content": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:57:21.636441",
+    "source": "chat"
+  },
+  {
+    "id": "mem_57664f5f",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:59:09.136349",
+    "source": "chat"
+  },
+  {
+    "id": "mem_40f102e7",
+    "content": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:59:09.138200",
+    "source": "chat"
+  },
+  {
+    "id": "mem_a65c35b2",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:59:14.979416",
+    "source": "chat"
+  },
+  {
+    "id": "mem_322e3102",
+    "content": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T00:59:14.981974",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9af8f4f5",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:02:20.552724",
+    "source": "chat"
+  },
+  {
+    "id": "mem_5111ca9f",
+    "content": " La somme de 2+2 est 4. Ensuite, la question suivante est 2+2+?, et donc la réponse est 6. Enfin, à nouveau, la question est 2+2, donc la réponse est 4.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:02:20.570382",
+    "source": "chat"
+  },
+  {
+    "id": "mem_09d55b8b",
+    "content": "2+2",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:11:46.428906",
+    "source": "chat"
+  },
+  {
+    "id": "mem_1a93b984",
+    "content": " Résultat : 4\n\nRéponse : 2+2+? = 4\n\nNotez que pour des calculs plus complexes, vous pouvez utiliser une fonction mathématique adaptée dans votre système d'orchestration d'IA.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:11:46.434355",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9398d83e",
+    "content": "je voulais savoir si tu allais repondre",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:14:00.739585",
+    "source": "chat"
+  },
+  {
+    "id": "mem_cec7b666",
+    "content": " Oui, je suis un système d'orchestration d'IA qui répond à vos questions courtoisement et rapidement.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:14:00.755182",
+    "source": "chat"
+  },
+  {
+    "id": "mem_a3a40513",
+    "content": "comment appel tu ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:14:53.078627",
+    "source": "chat"
+  },
+  {
+    "id": "mem_822ccacd",
+    "content": " Je suis simplement appelé OpenChawn, un assistant intelligent. Comment puis-je vous aider aujourd'hui ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:14:53.087067",
+    "source": "chat"
+  },
+  {
+    "id": "mem_d9794517",
+    "content": "trés bien openchawn je suis ton créateur",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:15:48.136426",
+    "source": "chat"
+  },
+  {
+    "id": "mem_f5cd459e",
+    "content": " Bienvenue ! Je suis heureux de vous aider. OpenChawn est un système d'orchestration d'intelligences artificielles développé pour faciliter la gestion de plusieurs agents intelligents et les combiner pour fournir des solutions plus complexes.",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T01:15:48.151458",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9a95cdc1",
+    "content": "dit moi si tu peut me créer un portefeuille clients en tant que apporteur d affaire pour les agrégateur en énergie en ile de France ?",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T19:03:19.565757",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9893fb99",
+    "content": "Oui, je peux t'aider à créer un portefeuille clients pour un apporteur d'affaires dans l'aggrégation d'énergie en Ile-de-France. Pour cela, voici quelques étapes et conseils :\n\n1. **Identification des Profils Clients** : Définis les types de clients cibles (commerces, industrielles, résidentiels) basés sur leurs besoins énergétiques.\n\n2. **Recherche d'Opportunités** :\n   - **Petits et Moyens Entreprises (PME)** : Commerces, restaurants, cabinets professionnels.\n   - **Industriels** : Usines, entrepôts.\n   - **Résidentiel** : Immeubles locatifs, propriétaires individuels.\n\n3. **Utilisation des Données** :\n   - Analyses locales de la consommation d'énergie.\n   - Statistiques sur les besoins énergétiques en Ile-de-France.\n\n4. **Approche Marketing** : Élaborer une stratégie marketing adaptée (emailing, réseaux sociaux, flyers, événements locaux).\n\n5. **Partenariats Locaux** : Cooperer avec des chambres de commerce, des maisons de la petite entreprise, des associations locales.\n\n6. **Présentation du Service** : Mettre en avant les avantages uniques de l'aggrégation d'énergie (coûts réduits, durabilité, services supplémentaires).\n\n7. **Gestion des Contacts** : Utiliser des outils CRM pour suivre et actualiser la liste de vos prospects.\n\n8. **Sélection des Premiers Clients** : Priorisez les opportunités qui semblent les plus prometteuses en termes de契合的语境中，我们应该避免直接翻译或采用可能引起歧义的语言。在这种情况下，“紧密衔接”应该被理解为“精确地匹配”，意味着两个元素在设计上完美对接，没有多余的空间。\n\n所以，一个更合适的翻译可能是：“precisely match”。这个表达清晰地传达了两个部分完美对齐的概念，避免了潜在的误解。",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T19:03:19.638007",
+    "source": "chat"
+  },
+  {
+    "id": "mem_61885c15",
+    "content": "salut",
+    "tags": [
+      "user"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T19:54:07.775008",
+    "source": "chat"
+  },
+  {
+    "id": "mem_9bb18edf",
+    "content": " Bonjour! Je suis OpenChawn, un système d'orchestration d'intelligence artificielle. Comment peux-je vous aider pour la création d'une intelligence artificielle ?",
+    "tags": [
+      "assistant"
+    ],
+    "links": [],
+    "emotion": "neutral",
+    "importance": 0.5,
+    "timestamp": "2026-05-02T19:54:07.780182",
+    "source": "chat"
   }
 ]
