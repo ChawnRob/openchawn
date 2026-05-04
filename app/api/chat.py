@@ -1,74 +1,64 @@
 from __future__ import annotations
-from typing import Any, Optional
-from fastapi import APIRouter, HTTPException
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from app.orchestrator import handle
-from app.mempalace import load_memories
 
-router = APIRouter(prefix="/openchawn", tags=["openchawn"])
+from app.auth.deps import get_current_user
+from app.config import MAX_MESSAGE_LENGTH
+from app.llm import generate_response
+from memory.fractal_memory import add_node, search_nodes
+
+router = APIRouter(tags=["openchawn"])
 
 
-# ─── Schémas pydantic stricts ─────────────────────────────────────────────
 class ChatRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=8000)
-    project: str = Field(default="openchawn", max_length=64)
-    user_id: str = Field(default="robert", max_length=64)
-    system_prompt: str = Field(default="", max_length=4000)
+    message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    profile: str = ""
 
 
-class HumanLayer(BaseModel):
-    detected_emotion: str
-    intent_hidden: str
-    confidence_level: float
-    recommended_nudge: str
-    nudge_type: str
+@router.post("/chat")
+def chat(
+    req: ChatRequest,
+    user: dict = Depends(get_current_user),
+    debug: bool = Query(default=False),
+):
+    _ = user
+    memories = search_nodes(req.message)
 
+    context = ""
+    memory_used = False
+    if memories:
+        context = "\n".join([str(m.get("content", "")) for m in memories[:3]])
+        memory_used = True
 
-class ASIDecision(BaseModel):
-    decision: str
-    reason: str
-    confidence: float
-    memory_query: Optional[dict] = None
-    memory_update: Optional[dict] = None
-    model_routing: Optional[dict] = None
-    human_layer: HumanLayer
-    system_note: Optional[str] = None
+    if context:
+        final_prompt = f"Contexte mémoire:\n{context}\n\nQuestion: {req.message}"
+    else:
+        final_prompt = req.message
 
-
-class ChatResponse(BaseModel):
-    action: str
-    asi: ASIDecision
-    output: Any
-    provider: Optional[str] = None
-    providers_tried: list[str] = []
-    learned_memory_id: Optional[str] = None
-
-
-class HealthResponse(BaseModel):
-    status: str
-    mempalace_entries: int
-    version: str
-
-
-# ─── Endpoints ────────────────────────────────────────────────────────────
-@router.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
-    try:
-        result = handle(
-            req.prompt,
-            project=req.project,
-            user_id=req.user_id,
-            system_prompt=req.system_prompt,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OpenChawn failure: {e}")
-    return ChatResponse(**result)
-
-
-@router.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return HealthResponse(
-        status="ok",
-        mempalace_entries=len(load_memories()),
-        version="openchawn-0.1",
+    system_prompt = (
+        "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
+        "RÈGLES STRICTES : "
+        "1. Réponds UNIQUEMENT en français. Jamais de chinois, anglais ou autre langue. "
+        "2. Réponds brièvement et directement. "
+        "3. Ne mentionne jamais Mistral, OpenAI, Qwen ou un autre provider. "
+        "4. Tu es OpenChawn, point final."
     )
+
+    llm_result = generate_response(
+        system_prompt=system_prompt,
+        user_message=final_prompt,
+    )
+    response_text = llm_result.get("output", "")
+    provider_used = llm_result.get("provider", "fallback")
+
+    add_node(content=req.message, tags=["user"], source="chat")
+    add_node(content=response_text, tags=["assistant"], source="chat")
+
+    result = {
+        "output": response_text,
+        "memory_used": memory_used,
+    }
+    if debug:
+        result["provider"] = provider_used
+    return result

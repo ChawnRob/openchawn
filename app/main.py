@@ -1,7 +1,6 @@
 import logging
 import re
 import requests as http_requests
-from app.router import handle
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +12,7 @@ from app.auth.database import init_db, create_user, get_user_by_email, update_us
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
+from app.api.chat import router as chat_router
 
 
 logging.basicConfig(
@@ -46,7 +46,7 @@ app.add_exception_handler(Exception, global_error_handler)
 
 
 init_db()
-model_router = handle
+app.include_router(chat_router)
 
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
@@ -101,21 +101,6 @@ class LoginRequest(BaseModel):
     @classmethod
     def validate_email(cls, v):
         return v.strip().lower()
-
-
-class ChatRequest(BaseModel):
-    message: str
-    profile: str = ""
-
-    @field_validator("message")
-    @classmethod
-    def validate_message(cls, v):
-        v = v.strip()
-        if not v:
-            raise ValueError("Message vide")
-        if len(v) > MAX_MESSAGE_LENGTH:
-            raise ValueError(f"Message trop long ({MAX_MESSAGE_LENGTH} max)")
-        return v
 
 
 class UpdateBusinessRequest(BaseModel):
@@ -179,76 +164,6 @@ def login(req: LoginRequest):
             "display_name": user["display_name"],
             "business_type": user["business_type"],
         },
-    }
-
-
-
-@app.post("/chat")
-def chat(req: ChatRequest, user: dict = Depends(get_current_user)):
-    from memory.fractal_memory import search_nodes, add_node
-
-    # mémoire
-    memories = search_nodes(req.message)
-
-    context = ""
-    memory_used = False
-    if memories:
-        context = "\n".join([str(m.get("content", "")) for m in memories[:3]])
-        memory_used = True
-
-    # prompt final
-    if context:
-        final_prompt = f"Contexte mémoire:\n{context}\n\nQuestion: {req.message}"
-    else:
-        final_prompt = req.message
-
-    # system prompt
-    system_prompt = (
-        "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
-        "RÈGLES STRICTES : "
-        "1. Réponds UNIQUEMENT en français. Jamais de chinois, anglais ou autre langue. "
-        "2. Réponds brièvement et directement. "
-        "3. Ne mentionne jamais Mistral, OpenAI, Qwen ou un autre provider. "
-        "4. Tu es OpenChawn, point final."
-    )
-
-    # appel Ollama directement
-    response_text = ""
-    provider_used = "none"
-
-    try:
-        r = http_requests.post(
-            "http://127.0.0.1:11434/api/chat",
-            json={
-                "model": "mistral:7b",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": final_prompt},
-                ],
-                "stream": False,
-            },
-            timeout=120,
-        )
-        r.raise_for_status()
-        data = r.json()
-        response_text = data.get("message", {}).get("content", "")
-        provider_used = "ollama/mistral:7b"
-    except Exception as e:
-        logger.error(f"Ollama call failed: {e}")
-
-    # fallback
-    if not response_text or response_text.strip() in ["", "None"]:
-        response_text = "Je suis OpenChawn. Aucun modèle n'a répondu."
-        provider_used = "fallback"
-
-    # sauvegarde mémoire
-    add_node(content=req.message, tags=["user"], source="chat")
-    add_node(content=response_text, tags=["assistant"], source="chat")
-
-    return {
-        "output": response_text,
-        "provider": provider_used,
-        "memory_used": memory_used,
     }
 
 

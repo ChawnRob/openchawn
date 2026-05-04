@@ -15,10 +15,7 @@ from app.mempalace.query import (
     has_answer,
     QueryHit,
 )
-<<<<<<< HEAD
 from app.mempalace.compress import compress, CompressReport
-=======
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
 
 __all__ = [
     "MemoryEntry",
@@ -32,9 +29,6 @@ __all__ = [
     "search_memory",
     "has_answer",
     "QueryHit",
-<<<<<<< HEAD
     "compress",
     "CompressReport",
-=======
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
 ]

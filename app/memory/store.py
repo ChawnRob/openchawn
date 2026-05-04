@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 MEMORY_DIR = os.getenv("OPENCHAWN_MEMORY_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "..", "data", "memory"))
+    os.path.join(os.path.dirname(__file__), "..", "..", "memory", "conversations"))
 
 
 class MemoryStore:

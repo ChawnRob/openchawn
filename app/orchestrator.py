@@ -2,16 +2,19 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 import logging
 
-<<<<<<< HEAD
+from app.router import handle as router_handle
 from app.memory.store import MemoryStore
 from app.memory.context import ContextBuilder
 
-=======
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
 log = logging.getLogger("openchawn.orchestrator")
 
 _RETRY_THRESHOLD = 0.5
 _MAX_RETRIES = 1
+
+
+def handle(prompt: str, raw_message: str = "") -> dict:
+    """Backward-compatible alias for the router entrypoint."""
+    return router_handle(prompt, raw_message=raw_message)
 
 
 @dataclass
@@ -210,7 +213,6 @@ def _overall_confidence(trace) -> float:
     return round(sum(confs) / len(confs), 2) if confs else 0.0
 
 
-<<<<<<< HEAD
 def ask(prompt: str, project: str = "default", user_id: str = "Robert1982") -> dict:
     # --- mémoire conversationnelle : enrichir le prompt ---
     _store = MemoryStore()
@@ -231,10 +233,6 @@ def ask(prompt: str, project: str = "default", user_id: str = "Robert1982") -> d
         log.warning(f"memory enrichment skipped: {e}")
 
     trace, ans, mem = _run_pipeline(enriched, project, user_id)
-=======
-def ask(prompt: str, project: str = "default", user_id: str = "robert") -> dict:
-    trace, ans, mem = _run_pipeline(prompt, project, user_id)
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
     overall = _overall_confidence(trace)
 
     retried = False
@@ -259,7 +257,6 @@ def ask(prompt: str, project: str = "default", user_id: str = "robert") -> dict:
     except Exception as e:
         log.info(f"learn skipped: {e}")
 
-<<<<<<< HEAD
     # --- mémoire conversationnelle : sauvegarder le tour ---
     try:
         _store.save_turn(user_id, "user", prompt)
@@ -268,8 +265,6 @@ def ask(prompt: str, project: str = "default", user_id: str = "robert") -> dict:
     except Exception as e:
         log.warning(f"memory save skipped: {e}")
 
-=======
->>>>>>> 3b574f3bedca39618e1e690171b52968536d0b88
     return {
         "answer": ans or "[stub]",
         "confidence": overall,
