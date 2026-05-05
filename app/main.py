@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import requests as http_requests
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -6,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
-from app.config import ALLOWED_ORIGINS, IS_PROD, MAX_MESSAGE_LENGTH
+from app.config import ALLOWED_ORIGINS, IS_PROD, MAX_MESSAGE_LENGTH, MODEL_PROVIDER
 from app.profiles import list_profiles, get_profile_for_user
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
@@ -119,6 +120,11 @@ class UpdateBusinessRequest(BaseModel):
 class ChatTestRequest(BaseModel):
     message: str
     model: str = "mistral:7b"
+
+
+class ProviderTestRequest(BaseModel):
+    provider: str
+    message: str
 
 
 
@@ -253,6 +259,119 @@ def chat_test(req: ChatTestRequest):
         raise HTTPException(status_code=504, detail="Ollama timeout (120s)")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Providers diagnostic (protégé) ──────────────────────
+
+@app.get("/providers/status")
+def providers_status(user: dict = Depends(get_current_user)):
+    _ = user
+    return {
+        "model_provider": MODEL_PROVIDER or "auto",
+        "openrouter_api_key_present": bool((os.getenv("OPENROUTER_API_KEY") or "").strip()),
+        "openrouter_model_present": bool((os.getenv("OPENROUTER_MODEL") or "").strip()),
+        "euria_api_key_present": bool((os.getenv("EURIA_API_KEY") or "").strip()),
+        "euria_provider_present": bool((os.getenv("EURIA_PROVIDER") or "").strip()),
+    }
+
+
+@app.post("/providers/test")
+def providers_test(req: ProviderTestRequest, user: dict = Depends(get_current_user)):
+    _ = user
+    provider = (req.provider or "").strip().lower()
+    logger.info(f"provider test requested | provider={provider}")
+
+    if provider == "openrouter":
+        api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
+        base_url = (os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1").strip().rstrip("/")
+        model = (os.getenv("OPENROUTER_MODEL") or "openrouter/auto").strip()
+
+        if not api_key:
+            logger.warning("provider test openrouter | missing key")
+            return {
+                "provider": "openrouter",
+                "model": model,
+                "success": False,
+                "status_code": None,
+                "response_preview": "",
+                "error": "OPENROUTER_API_KEY_MISSING",
+            }
+
+        try:
+            r = http_requests.post(
+                f"{base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "user", "content": req.message},
+                    ],
+                    "stream": False,
+                },
+                timeout=30,
+            )
+            status_code = r.status_code
+            body_preview = (r.text or "")[:240]
+            logger.info(f"provider test openrouter | response status={status_code}")
+
+            if not r.ok:
+                logger.warning(f"provider test openrouter | error body={body_preview}")
+                return {
+                    "provider": "openrouter",
+                    "model": model,
+                    "success": False,
+                    "status_code": status_code,
+                    "response_preview": "",
+                    "error": body_preview or "OPENROUTER_REQUEST_FAILED",
+                }
+
+            data = r.json()
+            output = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            return {
+                "provider": "openrouter",
+                "model": model,
+                "success": True,
+                "status_code": status_code,
+                "response_preview": str(output)[:240],
+                "error": None,
+            }
+        except Exception as e:
+            logger.warning(f"provider test openrouter | exception={e.__class__.__name__}: {e}")
+            return {
+                "provider": "openrouter",
+                "model": model,
+                "success": False,
+                "status_code": None,
+                "response_preview": "",
+                "error": f"{e.__class__.__name__}: {e}",
+            }
+
+    if provider == "euria":
+        logger.warning("provider test euria | EURIA endpoint not configured")
+        return {
+            "provider": "euria",
+            "model": None,
+            "success": False,
+            "status_code": None,
+            "response_preview": "",
+            "error": "EURIA_ENDPOINT_NOT_CONFIGURED",
+        }
+
+    return {
+        "provider": provider or None,
+        "model": None,
+        "success": False,
+        "status_code": None,
+        "response_preview": "",
+        "error": "UNSUPPORTED_PROVIDER",
+    }
 
 
 # ── Guest mode ──────────────────────────────────────────
