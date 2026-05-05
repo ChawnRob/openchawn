@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
@@ -20,6 +20,16 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
     profile: str = ""
 
+    @field_validator("message")
+    @classmethod
+    def validate_message_guardrails(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Message vide")
+        if len(v) > 2000:
+            raise ValueError("Message trop long (2000 caractères max)")
+        return v
+
 
 @router.post("/chat")
 def chat(
@@ -33,12 +43,13 @@ def chat(
     if is_guest:
         quota = check_guest_quota(user["guest_session_id"], user["ip"])
         if not quota["allowed"]:
+            logger.warning(
+                f"guest quota blocked | ip={user['ip']} | "
+                f"session={user['guest_session_id'][:12]}…"
+            )
             raise HTTPException(
                 status_code=429,
-                detail=(
-                    "Vous avez utilisé vos 5 messages gratuits aujourd'hui. "
-                    "Créez un compte pour continuer."
-                ),
+                detail="Vous avez atteint la limite gratuite. Créez un compte pour continuer.",
             )
 
     # ── Memory (authenticated users only) ──
@@ -70,6 +81,24 @@ def chat(
     )
     response_text = llm_result.get("output", "")
     provider_used = llm_result.get("provider", "fallback")
+    success = bool(llm_result.get("success", bool(response_text)))
+    provider_error = llm_result.get("error", None)
+    provider_status = llm_result.get("status_code", None)
+
+    logger.info(
+        f"chat provider={provider_used} success={success} "
+        f"status={provider_status} guest={is_guest}"
+    )
+
+    if not success or not response_text:
+        detail = "Provider indisponible."
+        if provider_error:
+            detail = f"Provider indisponible: {provider_error}"
+        logger.warning(
+            f"chat provider failed | provider={provider_used} "
+            f"status={provider_status} error={provider_error}"
+        )
+        raise HTTPException(status_code=503, detail=detail)
 
     # ── Memory persistence (authenticated users only) ──
     if not is_guest:
@@ -85,4 +114,5 @@ def chat(
         result["quota_remaining"] = quota["remaining"]
     if debug:
         result["provider"] = provider_used
+        result["provider_status"] = provider_status
     return result

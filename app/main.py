@@ -5,7 +5,7 @@ import requests as http_requests
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, field_validator
 from app.config import ALLOWED_ORIGINS, IS_PROD, MAX_MESSAGE_LENGTH, MODEL_PROVIDER
 from app.profiles import list_profiles, get_profile_for_user
@@ -131,6 +131,21 @@ class ProviderTestRequest(BaseModel):
 @app.get("/")
 def serve_frontend():
     return FileResponse("static/index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
+
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+def apple_touch_icon():
+    return Response(status_code=204)
+
+
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+def apple_touch_icon_precomposed():
+    return Response(status_code=204)
 
 
 

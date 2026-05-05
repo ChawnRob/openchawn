@@ -32,6 +32,8 @@ class _RateBucket:
 
 
 _buckets: dict[str, _RateBucket] = defaultdict(_RateBucket)
+_last_chat_request_at: dict[str, float] = {}
+_request_counts: dict[str, int] = defaultdict(int)
 
 # Routes et leurs limites
 _RATE_RULES: dict[str, int] = {
@@ -45,15 +47,43 @@ _RATE_RULES: dict[str, int] = {
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
+        client_ip = request.client.host if request.client else "unknown"
+        _request_counts[client_ip] += 1
+        logger.info(
+            f"request | ip={client_ip} | path={path} | count={_request_counts[client_ip]}"
+        )
+
+        # /chat guardrail: max 1 request per 2 seconds per IP
+        if path == "/chat":
+            auth_header = (request.headers.get("Authorization", "") or "").strip()
+            guest_session = (request.headers.get("X-Guest-Session", "") or "").strip()
+            if guest_session:
+                actor_key = f"{client_ip}:guest:{guest_session}"
+            elif auth_header.startswith("Bearer "):
+                actor_key = f"{client_ip}:auth:{auth_header[7:19]}"
+            else:
+                actor_key = client_ip
+            now = time.time()
+            last = _last_chat_request_at.get(actor_key, 0.0)
+            if now - last < 2.0:
+                logger.warning(
+                    f"rate limit blocked | ip={client_ip} | path={path} | "
+                    f"actor={actor_key[:48]} | delta={now - last:.3f}s"
+                )
+                return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+            _last_chat_request_at[actor_key] = now
+
         limit = _RATE_RULES.get(path)
         if limit:
-            client_ip = request.client.host if request.client else "unknown"
             key = f"{client_ip}:{path}"
             if not _buckets[key].check(limit):
-                logger.warning(f"Rate limit: {client_ip} on {path}")
+                logger.warning(
+                    f"rate limit blocked | ip={client_ip} | path={path} | "
+                    f"rule={limit}/60s"
+                )
                 return JSONResponse(
                     status_code=429,
-                    content={"detail": "Trop de requêtes. Réessayez dans un moment."},
+                    content={"detail": "Too many requests"},
                 )
         return await call_next(request)
 
