@@ -11,6 +11,7 @@ from app.profiles import list_profiles, get_profile_for_user
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
+from app.auth.guest import create_guest_session, get_guest_quota_status
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
 from app.api.chat import router as chat_router
 
@@ -252,6 +253,28 @@ def chat_test(req: ChatTestRequest):
         raise HTTPException(status_code=504, detail="Ollama timeout (120s)")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Guest mode ──────────────────────────────────────────
+
+@app.post("/guest/session")
+def guest_session(request: Request):
+    """Crée une session guest anonyme. Aucun login requis."""
+    client_ip = request.client.host if request.client else "unknown"
+    session = create_guest_session(client_ip)
+    return session
+
+
+@app.get("/guest/quota")
+def guest_quota(request: Request):
+    """Vérifie le quota restant d'une session guest."""
+    session_id = request.headers.get("X-Guest-Session", "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Header X-Guest-Session manquant")
+    status = get_guest_quota_status(session_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Session guest inconnue")
+    return status
 
 
 # ── Static files ─────────────────────────────────────────

@@ -34,6 +34,9 @@ LANG_INSTRUCTION = "Réponds UNIQUEMENT en {lang_name}. Ne mélange JAMAIS les l
 # "auto" = sélection par priorité | ou forcer un nom
 PROVIDER = os.getenv("OPENCHAWN_PROVIDER", "auto")
 
+# ── LLM gateway (MODEL_PROVIDER=openrouter → OpenRouter si clé présente) ──
+MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "").strip().lower()
+
 # ── Ollama config (local) ────────────────────────────────
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:7b")
@@ -55,6 +58,9 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 # ── Fallback (legacy, ignoré — fallback toujours actif) ──
 FALLBACK_ENABLED = True
+
+# ── Guest mode ───────────────────────────────────────────
+GUEST_DAILY_LIMIT = int(os.getenv("OPENCHAWN_GUEST_DAILY_LIMIT", "5"))
 
 # ── Database ──────────────────────────────────────────────
 DATABASE_PATH = os.getenv("OPENCHAWN_DB_PATH", "./data/openchawn.db")

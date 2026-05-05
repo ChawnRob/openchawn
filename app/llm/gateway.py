@@ -3,18 +3,21 @@ from __future__ import annotations
 import os
 import requests as http_requests
 
+from app.config import MODEL_PROVIDER
+
+
 def generate_response(*, system_prompt: str, user_message: str) -> dict[str, str]:
     """
     Unified OpenChawn LLM gateway.
 
-    Primary: OpenRouter (cloud, OpenAI-compatible API)
-    Fallback: Ollama local
+    Primary: OpenRouter si MODEL_PROVIDER=openrouter (ou vide) et OPENROUTER_API_KEY.
+    Sinon ou sans clé : Ollama local (fallback gratuit).
     """
     def _openrouter_chat() -> str:
         api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
         if not api_key:
             return ""
-        base_url = (os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1").rstrip("/")
+        base_url = (os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1").strip().rstrip("/")
         model = (os.getenv("OPENROUTER_MODEL") or "openrouter/auto").strip()
         try:
             r = http_requests.post(
@@ -41,10 +44,12 @@ def generate_response(*, system_prompt: str, user_message: str) -> dict[str, str
 
     def _ollama_chat() -> str:
         try:
+            base = (os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434").rstrip("/")
+            model = (os.getenv("OLLAMA_MODEL") or "mistral:7b").strip()
             r = http_requests.post(
-                "http://127.0.0.1:11434/api/chat",
+                f"{base}/api/chat",
                 json={
-                    "model": "mistral:7b",
+                    "model": model,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message},
@@ -63,7 +68,16 @@ def generate_response(*, system_prompt: str, user_message: str) -> dict[str, str
     provider_used = "none"
 
     has_openrouter_key = bool((os.getenv("OPENROUTER_API_KEY") or "").strip())
-    if has_openrouter_key:
+    use_openrouter = False
+    if MODEL_PROVIDER == "ollama":
+        use_openrouter = False
+    elif MODEL_PROVIDER == "openrouter":
+        use_openrouter = has_openrouter_key
+    else:
+        # vide ou inconnu : compat — OpenRouter si clé présente
+        use_openrouter = has_openrouter_key
+
+    if use_openrouter:
         response_text = _openrouter_chat()
         provider_used = "openrouter" if response_text else "none"
 

@@ -38,6 +38,7 @@ _RATE_RULES: dict[str, int] = {
     "/chat": RATE_LIMIT_CHAT,
     "/register": RATE_LIMIT_AUTH,
     "/login": RATE_LIMIT_AUTH,
+    "/guest/session": RATE_LIMIT_AUTH,
 }
 
 

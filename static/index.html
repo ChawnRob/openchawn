@@ -707,6 +707,10 @@ body::after {
       <div class="auth-error" id="regError"></div>
       <div class="auth-toggle">Deja inscrit ? <a id="showLogin">Connexion</a></div>
     </div>
+
+    <div class="auth-toggle" style="margin-top: 8px;">
+      <a id="continueGuest">Continuer en invité</a>
+    </div>
   </div>
 
   <!-- CHAT SCREEN (hidden until auth) -->
@@ -764,6 +768,7 @@ console.log('[OpenChawn] device:', OC_DEVICE);
 let token = sessionStorage.getItem('oc_token') || '';
 let currentUser = null;
 let sending = false;
+let isGuestMode = false;
 
 const dom = {
   authScreen: document.getElementById('authScreen'),
@@ -796,17 +801,56 @@ const dom = {
   sysLang: document.getElementById('sysLang'),
   sysUser: document.getElementById('sysUser'),
   logoutBtn: document.getElementById('logoutBtn'),
+  continueGuest: document.getElementById('continueGuest'),
 };
 
 // ── Auth helpers ─────────────────────────────────────
 function authHeaders() {
-  return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+  const h = { 'Content-Type': 'application/json' };
+  const t = (token || sessionStorage.getItem('oc_token') || '').trim();
+  if (t) {
+    h['Authorization'] = 'Bearer ' + t;
+  } else {
+    const g = (sessionStorage.getItem('oc_guest_session') || '').trim();
+    if (g) h['X-Guest-Session'] = g;
+  }
+  return h;
+}
+
+async function ensureGuestSession(forceNew = false) {
+  if (forceNew) sessionStorage.removeItem('oc_guest_session');
+  let gid = (sessionStorage.getItem('oc_guest_session') || '').trim();
+  if (gid) return;
+  const r = await fetch(API + '/guest/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!r.ok) throw new Error('Impossible de créer une session invité');
+  const d = await r.json();
+  sessionStorage.setItem('oc_guest_session', d.session_id);
 }
 
 async function apiFetch(path, opts = {}) {
-  opts.headers = { ...authHeaders(), ...(opts.headers || {}) };
-  const r = await fetch(API + path, opts);
-  if (r.status === 401) { logout(); throw new Error('Session expirée'); }
+  const run = () => fetch(API + path, {
+    ...opts,
+    headers: { ...authHeaders(), ...(opts.headers || {}) },
+  });
+  let r = await run();
+  if (r.status === 401) {
+    if (token) {
+      token = '';
+      sessionStorage.removeItem('oc_token');
+      sessionStorage.removeItem('oc_user');
+    } else {
+      sessionStorage.removeItem('oc_guest_session');
+    }
+    await ensureGuestSession(false);
+    r = await run();
+  }
+  if (r.status === 401) {
+    showAuthForLogin();
+    throw new Error('Session expirée');
+  }
   return r;
 }
 
@@ -821,6 +865,12 @@ dom.showLogin.addEventListener('click', () => {
   dom.registerBox.classList.add('hidden');
   dom.loginBox.classList.remove('hidden');
   dom.regError.textContent = '';
+});
+
+dom.continueGuest.addEventListener('click', () => {
+  dom.loginError.textContent = '';
+  dom.regError.textContent = '';
+  enterGuestChat();
 });
 
 // ── Load profiles for register ──────────────────────
@@ -855,6 +905,8 @@ async function doLogin() {
     if (!r.ok) throw new Error(Array.isArray(d.detail) ? d.detail.map(e => e.msg).join(', ') : d.detail || 'Erreur');
     token = d.token;
     sessionStorage.setItem('oc_token', token);
+    sessionStorage.removeItem('oc_guest_session');
+    sessionStorage.setItem('oc_user', JSON.stringify(d.user));
     currentUser = d.user;
     enterChat();
   } catch (err) {
@@ -886,6 +938,8 @@ async function doRegister() {
     if (!r.ok) throw new Error(Array.isArray(d.detail) ? d.detail.map(e => e.msg).join(', ') : d.detail || 'Erreur');
     token = d.token;
     sessionStorage.setItem('oc_token', token);
+    sessionStorage.removeItem('oc_guest_session');
+    sessionStorage.setItem('oc_user', JSON.stringify(d.user));
     currentUser = d.user;
     enterChat();
   } catch (err) {
@@ -895,44 +949,103 @@ async function doRegister() {
   }
 }
 
-// ── Logout ───────────────────────────────────────────
-dom.logoutBtn.addEventListener('click', logout);
+// ── Logout / Connexion header ───────────────────────
+dom.logoutBtn.addEventListener('click', async () => {
+  if (token) {
+    token = '';
+    currentUser = null;
+    sessionStorage.removeItem('oc_token');
+    sessionStorage.removeItem('oc_user');
+    try {
+      await ensureGuestSession(false);
+    } catch (_) {}
+    enterGuestChat();
+  } else {
+    showAuthForLogin();
+  }
+});
 
-function logout() {
-  token = '';
-  currentUser = null;
-  sessionStorage.removeItem('oc_token');
+function showAuthForLogin() {
   dom.authScreen.classList.remove('hidden');
   dom.messages.classList.add('hidden');
   dom.inputArea.classList.add('hidden');
   dom.sysBar.classList.add('hidden');
-  dom.logoutBtn.classList.add('hidden');
+  dom.loginBox.classList.remove('hidden');
+  dom.registerBox.classList.add('hidden');
+  dom.loginError.textContent = '';
+  dom.regError.textContent = '';
 }
 
-// ── Enter chat ───────────────────────────────────────
+// ── Enter chat (compte) ──────────────────────────────
 function enterChat() {
+  isGuestMode = false;
   dom.authScreen.classList.add('hidden');
   dom.messages.classList.remove('hidden');
   dom.inputArea.classList.remove('hidden');
   dom.sysBar.classList.remove('hidden');
   dom.logoutBtn.classList.remove('hidden');
+  dom.logoutBtn.textContent = 'Déconnexion';
   dom.sysUser.textContent = currentUser?.email || '---';
   dom.sysProfile.textContent = currentUser?.business_type || '---';
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   dom.input.focus();
 }
 
-// ── Auto-login if token exists ──────────────────────
-async function tryAutoLogin() {
-  if (!token) return;
-  try {
-    const r = await apiFetch('/me');
-    if (!r.ok) throw new Error();
-    currentUser = await r.json();
-    enterChat();
-  } catch { logout(); }
+// ── Enter chat (invité) ──────────────────────────────
+function enterGuestChat() {
+  isGuestMode = true;
+  dom.authScreen.classList.add('hidden');
+  dom.messages.classList.remove('hidden');
+  dom.inputArea.classList.remove('hidden');
+  dom.sysBar.classList.remove('hidden');
+  dom.logoutBtn.classList.remove('hidden');
+  dom.logoutBtn.textContent = 'Connexion';
+  dom.sysUser.textContent = 'Invité';
+  dom.sysProfile.textContent = 'guest';
+  document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
+  dom.input.focus();
 }
-tryAutoLogin();
+
+// ── Auto-login si token valide ───────────────────────
+async function tryAutoLogin() {
+  if (!token) return false;
+  try {
+    const r = await fetch(API + '/history?limit=1', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    try {
+      currentUser = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+    } catch (_) {
+      currentUser = null;
+    }
+    if (!currentUser) {
+      currentUser = { email: String(d.user_id || 'compte'), business_type: 'default' };
+    }
+    enterChat();
+    return true;
+  } catch (_) {
+    token = '';
+    sessionStorage.removeItem('oc_token');
+    sessionStorage.removeItem('oc_user');
+    return false;
+  }
+}
+
+async function boot() {
+  const ok = await tryAutoLogin();
+  if (!ok) {
+    try {
+      await ensureGuestSession(false);
+      enterGuestChat();
+    } catch (e) {
+      showAuthForLogin();
+      dom.loginError.textContent = e.message || 'Erreur démarrage invité';
+    }
+  }
+}
+boot();
 
 // ── Health check ─────────────────────────────────────
 async function checkHealth() {
