@@ -635,7 +635,7 @@ body::after {
         <div class="status-dot" id="statusDot"></div>
         <span id="statusText">LINK</span>
       </div>
-      <button class="logout-btn hidden" id="logoutBtn">LOGOUT</button>
+      <button class="logout-btn" id="logoutBtn">Connexion</button>
     </div>
   </div>
 
@@ -664,7 +664,7 @@ body::after {
   </div>
 
   <!-- AUTH SCREEN -->
-  <div class="auth-screen" id="authScreen">
+  <div class="auth-screen hidden" id="authScreen">
     <div class="welcome-icon">OC</div>
     <div class="welcome-line"></div>
 
@@ -714,7 +714,7 @@ body::after {
   </div>
 
   <!-- CHAT SCREEN (hidden until auth) -->
-  <div class="messages hidden" id="messages">
+  <div class="messages" id="messages">
     <div class="welcome" id="welcome">
       <div class="welcome-icon">OC</div>
       <div class="welcome-line"></div>
@@ -732,7 +732,7 @@ body::after {
     </div>
   </div>
 
-  <div class="input-area hidden" id="inputArea">
+  <div class="input-area" id="inputArea">
     <div class="input-wrapper">
       <textarea id="input" rows="1" placeholder="Transmission..." autofocus></textarea>
       <button class="send-btn" id="sendBtn" title="Transmettre">
@@ -1034,15 +1034,20 @@ async function tryAutoLogin() {
 }
 
 async function boot() {
+  // / ouvre directement le chat en invité (login optionnel)
+  enterGuestChat();
+
   const ok = await tryAutoLogin();
-  if (!ok) {
-    try {
-      await ensureGuestSession(false);
-      enterGuestChat();
-    } catch (e) {
-      showAuthForLogin();
-      dom.loginError.textContent = e.message || 'Erreur démarrage invité';
-    }
+  if (ok) {
+    return;
+  }
+
+  try {
+    await ensureGuestSession(false);
+  } catch (e) {
+    // On garde le chat ouvert même si la session guest
+    // n'a pas pu être créée immédiatement.
+    console.warn('[OpenChawn] guest session init failed:', e?.message || e);
   }
 }
 boot();
