@@ -67,13 +67,13 @@ def _route_models(text: str) -> dict:
     if _CODE_RE.search(text) or _REASON_RE.search(text):
         return {
             "tier": "premium",
-            "chain": ["kimi", "minimax", "mistral", "ollama"],
+            "chain": ["kimi", "deepseek", "openrouter", "openai", "ollama"],
             "temperature": 0.2 if _CODE_RE.search(text) else 0.3,
             "reason": "Tâche code/raisonnement → tier premium (Kimi K2.6).",
         }
     return {
         "tier": "economic",
-        "chain": ["minimax", "mistral", "kimi", "ollama"],
+        "chain": ["deepseek", "openrouter", "kimi", "ollama"],
         "temperature": 0.6,
         "reason": "Tâche générique → tier éco en priorité (cible 70/20/10).",
     }

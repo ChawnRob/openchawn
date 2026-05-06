@@ -1,6 +1,15 @@
 from __future__ import annotations
-import os
+
 import httpx
+
+from app.config import (
+    KIMI_API_KEY,
+    KIMI_BASE_URL,
+    KIMI_MODEL,
+    KIMI_MAX_TOKENS,
+    KIMI_TEMPERATURE,
+    KIMI_TIMEOUT,
+)
 from app.providers.base import BaseProvider
 
 
@@ -8,12 +17,12 @@ class KimiProvider(BaseProvider):
     """Provider Kimi K2.6 (Moonshot AI) — tier premium OpenChawn."""
 
     def __init__(self) -> None:
-        self.api_key    = os.getenv("KIMI_API_KEY", "").strip()
-        self.base_url   = os.getenv("KIMI_BASE_URL", "https://api.moonshot.ai/v1").rstrip("/")
-        self.model      = os.getenv("KIMI_MODEL", "kimi-k2-0905-preview")
-        self.temperature = float(os.getenv("KIMI_TEMPERATURE", "0.6"))
-        self.timeout    = float(os.getenv("KIMI_TIMEOUT", "120"))
-        self.max_tokens = int(os.getenv("KIMI_MAX_TOKENS", "2048"))
+        self.api_key = (KIMI_API_KEY or "").strip()
+        self.base_url = (KIMI_BASE_URL or "https://api.moonshot.ai/v1").rstrip("/")
+        self.model = KIMI_MODEL or "kimi-k2-0905-preview"
+        self.temperature = float(KIMI_TEMPERATURE)
+        self.timeout = float(KIMI_TIMEOUT)
+        self.max_tokens = int(KIMI_MAX_TOKENS)
 
     # ─── Interface BaseProvider ────────────────────────────────────────
 

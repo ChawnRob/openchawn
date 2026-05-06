@@ -34,10 +34,12 @@ def _summary(text: str, n: int = 140) -> str:
 
 def _load_provider(name: str):
     mapping = {
-        "minimax": ("app.providers.minimax_provider", "MinimaxProvider"),
-        "kimi":    ("app.providers.kimi_provider",    "KimiProvider"),
-        "mistral": ("app.providers.mistral_provider", "MistralProvider"),
-        "ollama":  ("app.providers.ollama_provider",  "OllamaProvider"),
+        "openrouter": ("app.providers.openrouter_provider", "OpenRouterProvider"),
+        "deepseek": ("app.providers.deepseek_provider", "DeepSeekProvider"),
+        "kimi": ("app.providers.kimi_provider", "KimiProvider"),
+        "openai": ("app.providers.openai_provider", "OpenAIProvider"),
+        "infomaniak": ("app.providers.infomaniak_provider", "InfomaniakProvider"),
+        "ollama": ("app.providers.ollama_provider", "OllamaProvider"),
     }
     if name not in mapping:
         return None
@@ -141,12 +143,13 @@ def step_kimi(prompt: str):
 
 
 def step_minimax(prompt: str, kimi_ctx: str):
-    p = _load_provider("minimax")
+    """Optimisation via DeepSeek (ex étape Minimax)."""
+    p = _load_provider("deepseek")
     full = f"Question: {prompt}\nContexte culturel: {kimi_ctx or '(aucun)'}\n\nReformule la question de maniere optimale et concise."
     out, conf = _call(p, prompt=full,
         system_prompt="Tu optimises la requete pour clarte et precision.")
     return PipelineStep(
-        source_module="Minimax",
+        source_module="DeepSeek",
         action="optimize",
         reason="optimiser la formulation et l efficacite",
         input_summary=_summary(prompt),
@@ -156,13 +159,14 @@ def step_minimax(prompt: str, kimi_ctx: str):
 
 
 def step_mistral(prompt: str, optimized: str):
-    p = _load_provider("mistral")
+    """Structuration via OpenRouter (ex étape Mistral)."""
+    p = _load_provider("openrouter")
     base = optimized or prompt
     full = f"Question optimisee: {base}\n\nDecompose la reponse en etapes logiques claires."
     out, conf = _call(p, prompt=full,
         system_prompt="Tu structures la logique de la reponse en etapes claires.")
     return PipelineStep(
-        source_module="Mistral",
+        source_module="OpenRouter",
         action="structure_logic",
         reason="structurer la logique de la reponse",
         input_summary=_summary(base),
@@ -172,23 +176,30 @@ def step_mistral(prompt: str, optimized: str):
 
 
 def step_ollama(prompt: str, mem_hits: list, kimi: str, minimax: str, mistral: str):
+    from app.config import OLLAMA_ENABLED
+
     mem_block = "\n".join(f"- {h['content']}" for h in mem_hits[:3]) or "(aucun)"
     full = (
         f"Question utilisateur: {prompt}\n\n"
         f"Memoire pertinente:\n{mem_block}\n\n"
         f"Contexte culturel (Kimi): {kimi or '(aucun)'}\n\n"
-        f"Question optimisee (Minimax): {minimax or '(aucune)'}\n\n"
-        f"Structure logique (Mistral): {mistral or '(aucune)'}\n\n"
+        f"Question optimisee (DeepSeek): {minimax or '(aucune)'}\n\n"
+        f"Structure logique (OpenRouter): {mistral or '(aucune)'}\n\n"
         f"Genere la reponse finale claire, utile, en francais."
     )
-    p = _load_provider("ollama")
+    if OLLAMA_ENABLED:
+        p = _load_provider("ollama")
+        src = "Ollama"
+    else:
+        p = _load_provider("openai")
+        src = "OpenAI"
     out, conf = _call(p, prompt=full,
         system_prompt="Tu es OpenChawn. Reponds clairement a l utilisateur.")
     if not out:
         out = "[OpenChawn stub] aucun provider de generation disponible."
         conf = 0.1
     return PipelineStep(
-        source_module="Ollama",
+        source_module=src,
         action="final_generation",
         reason="generer la reponse finale agregee",
         input_summary=_summary(prompt),
@@ -202,9 +213,9 @@ def _run_pipeline(prompt: str, project: str, user_id: str, feedback: str = ""):
     s1, mem  = _safe_step("MemPalace",  step_mempalace,  prompt, project);                trace.append(s1)
     s2, _    = _safe_step("ASI-evolve", step_asi_evolve, prompt, project, user_id, feedback); trace.append(s2)
     s3, kimi = _safe_step("Kimi",       step_kimi,       prompt);                          trace.append(s3)
-    s4, mm   = _safe_step("Minimax",    step_minimax,    prompt, kimi or "");              trace.append(s4)
-    s5, mst  = _safe_step("Mistral",    step_mistral,    prompt, mm or "");                trace.append(s5)
-    s6, ans  = _safe_step("Ollama",     step_ollama,     prompt, mem or [], kimi or "", mm or "", mst or ""); trace.append(s6)
+    s4, mm   = _safe_step("DeepSeek",   step_minimax,    prompt, kimi or "");              trace.append(s4)
+    s5, mst  = _safe_step("OpenRouter", step_mistral,    prompt, mm or "");                 trace.append(s5)
+    s6, ans  = _safe_step("Final",      step_ollama,     prompt, mem or [], kimi or "", mm or "", mst or ""); trace.append(s6)
     return trace, ans, mem
 
 

@@ -16,11 +16,12 @@ def get_registry():
     if _REGISTRY:
         return _REGISTRY
 
-    _load_provider("mistral", "app.providers.mistral_provider", "MistralProvider")
-    _load_provider("minimax", "app.providers.minimax_provider", "MinimaxProvider")
-    _load_provider("ollama", "app.providers.ollama_provider", "OllamaProvider")
+    _load_provider("openrouter", "app.providers.openrouter_provider", "OpenRouterProvider")
     _load_provider("openai", "app.providers.openai_provider", "OpenAIProvider")
+    _load_provider("deepseek", "app.providers.deepseek_provider", "DeepSeekProvider")
     _load_provider("kimi", "app.providers.kimi_provider", "KimiProvider")
+    _load_provider("infomaniak", "app.providers.infomaniak_provider", "InfomaniakProvider")
+    _load_provider("ollama", "app.providers.ollama_provider", "OllamaProvider")
 
     return _REGISTRY
 
@@ -40,7 +41,7 @@ def _as_text(result):
 
 _SYSTEM = (
     "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle. "
-    "Tu ne mentionnes JAMAIS Mistral AI, OpenAI, ou un autre provider. "
+    "Tu ne mentionnes JAMAIS le nom d'un fournisseur de modèle ou moteur externe. "
     "Si on te demande qui tu es, réponds : 'Je suis OpenChawn, un système d'orchestration d'intelligence artificielle conçu pour analyser et utiliser les meilleurs modèles selon la situation.' "
     "Réponds brièvement et directement. Ne répète jamais la question. Pas d'introduction. Pas d'explication sauf si demandé."
 )
@@ -104,8 +105,9 @@ def handle(prompt: str, raw_message: str = "") -> dict:
     # ── Appel LLM via providers ──
 
     providers = get_registry()
+    from app.provider_manager import get_provider_manager
 
-    for name in ["ollama", "mistral", "minimax", "openai", "kimi"]:
+    for name in get_provider_manager().resolution_order():
         provider = providers.get(name)
         if not provider:
             continue

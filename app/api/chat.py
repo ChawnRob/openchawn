@@ -19,6 +19,10 @@ router = APIRouter(tags=["openchawn"])
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
     profile: str = ""
+    provider: str = ""
+    project_name: str = ""
+    memory_context: str = ""
+    user_goal: str = ""
 
     @field_validator("message")
     @classmethod
@@ -66,6 +70,17 @@ def chat(
     else:
         final_prompt = req.message
 
+    # ── Enrich prompt with optional V11.6 fields ──
+    extra_parts = []
+    if req.project_name:
+        extra_parts.append(f"Projet: {req.project_name}")
+    if req.memory_context:
+        extra_parts.append(f"Mémoire: {req.memory_context}")
+    if req.user_goal:
+        extra_parts.append(f"Objectif: {req.user_goal}")
+    if extra_parts:
+        final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
+
     system_prompt = (
         "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
         "RÈGLES STRICTES : "
@@ -75,9 +90,12 @@ def chat(
         "4. Tu es OpenChawn, point final."
     )
 
+    provider_hint = (req.provider or "").strip().lower()
+
     llm_result = generate_response(
         system_prompt=system_prompt,
         user_message=final_prompt,
+        provider_hint=provider_hint,
     )
     response_text = llm_result.get("output", "")
     provider_used = llm_result.get("provider", "fallback")

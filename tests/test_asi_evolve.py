@@ -53,7 +53,7 @@ def test_decision_model_call_economic_default():
     out = decide("raconte moi un fait amusant")
     assert out["decision"] == "MODEL_CALL_NEEDED"
     assert out["model_routing"]["tier"] == "economic"
-    assert out["model_routing"]["chain"][0] == "minimax"
+    assert out["model_routing"]["chain"][0] == "deepseek"
 
 
 def test_human_layer_complete_schema():

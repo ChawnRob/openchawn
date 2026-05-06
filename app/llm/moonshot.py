@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
 
-DEFAULT_BASE = "https://api.moonshot.cn/v1"
-DEFAULT_MODEL = "kimi-k2.6"
-DEFAULT_TIMEOUT = 120.0
+from app.settings import get_settings
+
+_DEFAULT_BASE = "https://api.moonshot.cn/v1"
+_DEFAULT_MODEL = "kimi-k2.6-9b"
+_DEFAULT_TIMEOUT = 120.0
 
 
 def moonshot_chat_completion(
@@ -23,13 +24,14 @@ def moonshot_chat_completion(
     Retourne le texte assistant, ou une chaîne vide si la clé est absente
     ou si l'appel échoue (le caller peut alors basculer sur Ollama).
     """
-    api_key = (os.getenv("MOONSHOT_API_KEY") or "").strip()
+    s = get_settings()
+    api_key = (s.moonshot_api_key or "").strip()
     if not api_key:
         return ""
 
-    base = (os.getenv("MOONSHOT_BASE_URL") or DEFAULT_BASE).rstrip("/")
-    m = (model or os.getenv("MOONSHOT_MODEL") or DEFAULT_MODEL).strip()
-    t = timeout if timeout is not None else float(os.getenv("MOONSHOT_TIMEOUT", str(DEFAULT_TIMEOUT)))
+    base = (s.moonshot_base_url or _DEFAULT_BASE).rstrip("/")
+    m = (model or s.moonshot_model or _DEFAULT_MODEL).strip()
+    t = timeout if timeout is not None else float(s.moonshot_timeout or _DEFAULT_TIMEOUT)
 
     messages: list[dict[str, str]] = []
     if system_prompt:

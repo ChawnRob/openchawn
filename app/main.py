@@ -7,7 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, field_validator
-from app.config import ALLOWED_ORIGINS, IS_PROD, MAX_MESSAGE_LENGTH, MODEL_PROVIDER
+from app.config import (
+    ALLOWED_ORIGINS,
+    IS_PROD,
+    LOG_LEVEL,
+    MAX_MESSAGE_LENGTH,
+    MODEL_PROVIDER,
+)
+from app.provider_manager import get_provider_manager
+from app.settings import get_settings
 from app.profiles import list_profiles, get_profile_for_user
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
@@ -18,7 +26,7 @@ from app.api.chat import router as chat_router
 
 
 logging.basicConfig(
-    level=logging.INFO if IS_PROD else logging.DEBUG,
+    level=getattr(logging, (LOG_LEVEL or "INFO").upper(), logging.INFO),
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 logger = logging.getLogger("openchawn")
@@ -192,16 +200,23 @@ def login(req: LoginRequest):
 
 @app.get("/health")
 def health():
-    status = {"mode": "handle", "status": "ok"}
-    if IS_PROD:
-        return {
-            "status": "ok" if status.get("providers") else "degraded",
-            "providers": [
-                {"name": p["name"], "available": p["available"]}
-                for p in status.get("providers", [])
-            ],
-        }
-    return status
+    return {"mode": "handle", "status": "ok"}
+
+
+@app.get("/health/providers")
+def health_providers():
+    """État des providers LLM (Railway / ops) — sans secrets."""
+    pm = get_provider_manager()
+    s = get_settings()
+    return {
+        "environment": s.openchawn_env,
+        "default_provider": (s.default_provider or "") or None,
+        "active_provider": pm.active_provider() or None,
+        "available_providers": pm.available_providers(),
+        "missing_required_keys": pm.missing_required_keys(),
+        "ollama_enabled": s.ollama_enabled,
+        "production_safe": pm.production_safe(),
+    }
 
 
 
@@ -245,15 +260,27 @@ def memory():
 
 
 # ── Chat Test (NO AUTH — debug) ──────────────────────────
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 
 
 @app.post("/chat-test")
 def chat_test(req: ChatTestRequest):
     """Appelle Ollama directement, sans auth. Debug uniquement."""
+    s = get_settings()
+    if not s.ollama_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Ollama désactivé (OLLAMA_ENABLED=false). Activez Ollama et définissez OLLAMA_URL.",
+        )
+    base = (s.ollama_base_url or s.ollama_url or "").strip().rstrip("/")
+    if not base:
+        raise HTTPException(
+            status_code=503,
+            detail="OLLAMA_URL / OLLAMA_BASE_URL manquant alors qu'Ollama est activé.",
+        )
+    gen_url = f"{base}/api/generate"
     try:
         r = http_requests.post(
-            OLLAMA_URL,
+            gen_url,
             json={
                 "model": req.model,
                 "prompt": req.message,

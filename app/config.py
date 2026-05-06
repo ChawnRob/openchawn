@@ -1,66 +1,94 @@
-import os
-from dotenv import load_dotenv
+"""
+Compatibilité ascendante : réexporte tous les paramètres depuis `app.settings`.
+Les modules existants importent `app.config` sans changement de nom de variable.
+"""
+from __future__ import annotations
 
-# ── Charge le .env AVANT tout os.getenv() ─────────────────
-load_dotenv()
+from app.settings import get_settings
 
-# ── Mode production ───────────────────────────────────────
-ENV = os.getenv("OPENCHAWN_ENV", "development")  # development | production
-IS_PROD = ENV == "production"
+_s = get_settings()
 
-# ── Secret key (OBLIGATOIRE en production) ────────────────
-SECRET_KEY = os.getenv("OPENCHAWN_SECRET_KEY", "dev-secret-change-me-in-production")
+ENV = _s.openchawn_env
+IS_PROD = _s.is_production
+
+SECRET_KEY = _s.secret_key
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = int(os.getenv("OPENCHAWN_JWT_HOURS", "24"))
+JWT_EXPIRE_HOURS = _s.jwt_expire_hours
 
-# ── CORS — origines autorisées ────────────────────────────
-ALLOWED_ORIGINS = os.getenv(
-    "OPENCHAWN_CORS_ORIGINS",
-    "http://localhost:8000,http://127.0.0.1:8000"
-).split(",")
+ALLOWED_ORIGINS = [x.strip() for x in _s.cors_origins_raw.split(",") if x.strip()]
 
-# ── Rate limiting ─────────────────────────────────────────
-RATE_LIMIT_CHAT = int(os.getenv("OPENCHAWN_RATE_CHAT", "30"))
-RATE_LIMIT_AUTH = int(os.getenv("OPENCHAWN_RATE_AUTH", "10"))
-MAX_MESSAGE_LENGTH = int(os.getenv("OPENCHAWN_MAX_MSG_LEN", "4000"))
+RATE_LIMIT_CHAT = _s.rate_limit_chat
+RATE_LIMIT_AUTH = _s.rate_limit_auth
+MAX_MESSAGE_LENGTH = _s.max_message_length
 
-# ── Profil actif ─────────────────────────────────────────
-PROFILE = os.getenv("OPENCHAWN_PROFILE", "default")
+PROFILE = _s.profile
 
-# ── Template langue ───────────────────────────────────────
-LANG_INSTRUCTION = "Réponds UNIQUEMENT en {lang_name}. Ne mélange JAMAIS les langues dans ta réponse."
+LANG_INSTRUCTION = (
+    "Réponds UNIQUEMENT en {lang_name}. Ne mélange JAMAIS les langues dans ta réponse."
+)
 
-# ── Provider principal ────────────────────────────────────
-# "auto" = sélection par priorité | ou forcer un nom
-PROVIDER = os.getenv("OPENCHAWN_PROVIDER", "auto")
+PROVIDER = _s.openchawn_provider
+MODEL_PROVIDER = _s.effective_model_provider
 
-# ── LLM gateway (MODEL_PROVIDER=openrouter → OpenRouter si clé présente) ──
-MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "").strip().lower()
+OLLAMA_BASE_URL = _s.ollama_base_url
+OLLAMA_MODEL = _s.ollama_model
 
-# ── Ollama config (local) ────────────────────────────────
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:7b")
+MINIMAX_API_KEY = _s.minimax_api_key
+MINIMAX_MODEL = _s.minimax_model
+MINIMAX_BASE_URL = _s.minimax_base_url
 
-# ── MiniMax API ───────────────────────────────────────────
-MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
-MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "MiniMax-M2.7")
-MINIMAX_BASE_URL = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.io/v1")
+MISTRAL_API_KEY = _s.mistral_api_key
+MISTRAL_MODEL = _s.mistral_model
+MISTRAL_BASE_URL = _s.mistral_base_url
 
-# ── Mistral API (cloud) ──────────────────────────────────
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
-MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
-MISTRAL_BASE_URL = os.getenv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1")
+OPENAI_API_KEY = _s.openai_api_key
+OPENAI_MODEL = _s.openai_model
+OPENAI_BASE_URL = _s.openai_base_url
+OPENAI_PROMPT_ID = _s.openai_prompt_id
+OPENAI_PROMPT_VERSION = _s.openai_prompt_version
 
-# ── OpenAI API (dernier recours) ─────────────────────────
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+ANTHROPIC_API_KEY = _s.anthropic_api_key
+ANTHROPIC_MODEL = _s.anthropic_model
+ANTHROPIC_BASE_URL = _s.anthropic_base_url
 
-# ── Fallback (legacy, ignoré — fallback toujours actif) ──
+DEEPSEEK_API_KEY = _s.deepseek_api_key
+DEEPSEEK_MODEL = _s.deepseek_model
+DEEPSEEK_BASE_URL = _s.deepseek_base_url
+
+INFOMANIAK_API_KEY = _s.infomaniak_api_key
+INFOMANIAK_MODEL = _s.infomaniak_model
+INFOMANIAK_BASE_URL = _s.infomaniak_base_url
+
+QWEN_API_KEY = _s.qwen_api_key
+QWEN_MODEL = _s.qwen_model
+QWEN_BASE_URL = _s.qwen_base_url
+
+PERPLEXITY_API_KEY = _s.perplexity_api_key
+PERPLEXITY_MODEL = _s.perplexity_model
+PERPLEXITY_BASE_URL = _s.perplexity_base_url
+
+KIMI_API_KEY = _s.kimi_effective_key
+KIMI_MODEL = _s.kimi_effective_model
+KIMI_BASE_URL = _s.kimi_effective_base
+KIMI_TEMPERATURE = _s.kimi_temperature
+KIMI_TIMEOUT = _s.kimi_timeout
+KIMI_MAX_TOKENS = _s.kimi_max_tokens
+
 FALLBACK_ENABLED = True
+GUEST_DAILY_LIMIT = _s.guest_daily_limit
 
-# ── Guest mode ───────────────────────────────────────────
-GUEST_DAILY_LIMIT = int(os.getenv("OPENCHAWN_GUEST_DAILY_LIMIT", "5"))
+DATABASE_PATH = _s.database_path
+DATABASE_URL = _s.database_url
+REDIS_URL = _s.redis_url
+MEMORY_BACKEND = _s.memory_backend
+MEMORY_DB_URL = _s.memory_db_url
+APP_BASE_URL = _s.app_base_url
+FRONTEND_URL = _s.frontend_url
+LOG_LEVEL = _s.log_level
 
-# ── Database ──────────────────────────────────────────────
-DATABASE_PATH = os.getenv("OPENCHAWN_DB_PATH", "./data/openchawn.db")
+OPENROUTER_API_KEY = _s.openrouter_api_key
+OPENROUTER_BASE_URL = _s.openrouter_base_url
+OPENROUTER_MODEL = _s.openrouter_model
+
+OLLAMA_ENABLED = _s.ollama_enabled
+DEFAULT_PROVIDER = _s.default_provider

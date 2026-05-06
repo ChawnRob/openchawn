@@ -50,6 +50,8 @@ class OllamaProvider(BaseProvider):
 
     def is_available(self) -> bool:
         """Check avec cache 60s — UN SEUL appel /api/tags par minute max."""
+        if not (self.base_url or "").strip():
+            return False
         now = time.time()
         if self._available is not None and (now - self._checked_at) < 60:
             return self._available
