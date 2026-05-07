@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import requests as http_requests
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
@@ -18,10 +18,15 @@ from app.provider_manager import get_provider_manager
 from app.profiles import list_profiles, get_profile_for_user
 from app.routing import get_cost_tracking_hooks, get_fallback_manager, get_provider_health_hooks
 from app.memory.fractal_memory import (
+    concept_graph_lightweight,
     concept_memories,
+    get_last_memory_context,
+    list_archived_memories,
     memories_by_type,
     memory_health,
     memory_lifecycle_health,
+    memory_observability_overview,
+    memory_trace,
     recent_memories,
     search_memories,
     store_indexes_snapshot,
@@ -346,6 +351,44 @@ def memory_session_view():
         "indexes": [],
         "entries": memories_by_type("session", 100, include_archived=True),
     }
+
+
+@app.get("/memory/observability/overview")
+def memory_observability_overview_route():
+    return memory_observability_overview()
+
+
+@app.get("/memory/trace/{memory_id}")
+def memory_trace_route(memory_id: str):
+    out = memory_trace(memory_id)
+    if out.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    return out
+
+
+@app.get("/memory/last-context")
+def memory_last_context():
+    return get_last_memory_context()
+
+
+@app.get("/memory/concepts/graph")
+def memory_concepts_graph():
+    return concept_graph_lightweight()
+
+
+@app.get("/memory/archive")
+def memory_archive_route(
+    project: str = Query(default=""),
+    memory_type: str = Query(default=""),
+    older_than_days: float | None = Query(default=None),
+    limit: int = Query(default=80, ge=1, le=150),
+):
+    return list_archived_memories(
+        project=project,
+        memory_type=memory_type,
+        older_than_days=older_than_days,
+        limit=limit,
+    )
 
 
 @app.get("/profiles")

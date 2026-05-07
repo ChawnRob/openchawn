@@ -6,6 +6,7 @@ import math
 import os
 import re
 import uuid
+import copy
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from collections.abc import Iterable
@@ -19,7 +20,23 @@ STORE_PATH = Path("data/memory/fractal_memory.json")
 MAX_CONTEXT_MEMORIES = 12  # couches agrégées (session+project+user+system réduites)
 STORE_VERSION = 2
 _STORE_LOCK = Lock()
+_LAST_CONTEXT_LOCK = Lock()
 logger = logging.getLogger("openchawn.memory.fractal")
+
+# Dernier retrieval injecté (debug / introspection — best-effort multi-workers)
+_FUTURE_OBS_UI_NOTE = (
+    "Futur: timeline UI, memory graph UI, semantic explorer (non implémentés)."
+)
+_LAST_CONTEXT_SNAPSHOT: dict[str, object] = {
+    "captured_at": None,
+    "query_preview": "",
+    "user_key_preview": "",
+    "items": [],
+    "note": _FUTURE_OBS_UI_NOTE,
+}
+
+_MAX_REINFORCEMENT_HISTORY = 40
+_MAX_DECAY_HISTORY = 28
 
 # Types mémoire multi-couches (V11.6)
 MEMORY_TYPES = frozenset({"system", "project", "user", "session"})
@@ -289,9 +306,36 @@ def apply_provider_contradiction_flags(
     return conflict
 
 
+def _metadata_append_capped(
+    entry: dict,
+    key: str,
+    item: dict,
+    cap: int,
+) -> None:
+    md = entry.setdefault("metadata", {})
+    if not isinstance(md, dict):
+        return
+    hist = md.get(key)
+    if not isinstance(hist, list):
+        hist = []
+    hist = list(hist)
+    hist.append(item)
+    md[key] = hist[-cap:]
+
+
 def refresh_lifecycle_decay(entries: list[dict]) -> None:
+    now = _now_iso()
     for e in entries:
-        e["decay_score"] = recompute_decay_score(e)
+        old = float(e.get("decay_score") or 0.0)
+        new_v = recompute_decay_score(e)
+        if abs(new_v - old) >= 0.35:
+            _metadata_append_capped(
+                e,
+                "decay_history",
+                {"at": now, "decay_score": new_v, "previous": old, "reason": "recompute"},
+                _MAX_DECAY_HISTORY,
+            )
+        e["decay_score"] = new_v
 
 
 def _attach_concept_canon_metadata(concept_entry: dict, summary_text: str) -> None:
@@ -360,12 +404,39 @@ def reinforce_entries(entries: list[dict], ids: Iterable[str]) -> None:
             continue
         if str(e.get("lifecycle_status", MEMORY_LIFECYCLE_ACTIVE)) != MEMORY_LIFECYCLE_ACTIVE:
             continue
+        prev_decay = float(e.get("decay_score") or 0.0)
         e["access_count"] = int(e.get("access_count") or 0) + 1
         e["last_accessed_at"] = now
         imp = float(e.get("importance_score") or 0.0)
-        prev = float(e.get("decay_score") or 0.0)
         reduction = 6.0 + imp * 18.0
-        e["decay_score"] = round(max(0.0, prev - reduction), 2)
+        new_decay = round(max(0.0, prev_decay - reduction), 2)
+        e["decay_score"] = new_decay
+        md = e.setdefault("metadata", {})
+        if isinstance(md, dict):
+            md["retrieval_hits"] = int(e.get("access_count") or 0)
+        _metadata_append_capped(
+            e,
+            "reinforcement_history",
+            {
+                "at": now,
+                "decay_before": prev_decay,
+                "decay_after": new_decay,
+                "access_count_after": int(e.get("access_count") or 0),
+            },
+            _MAX_REINFORCEMENT_HISTORY,
+        )
+        if abs(new_decay - prev_decay) >= 0.2:
+            _metadata_append_capped(
+                e,
+                "decay_history",
+                {
+                    "at": now,
+                    "decay_score": new_decay,
+                    "previous": prev_decay,
+                    "reason": "reinforcement",
+                },
+                _MAX_DECAY_HISTORY,
+            )
 
 
 def is_active_memory(entry: dict) -> bool:
@@ -376,6 +447,45 @@ def layered_sort_key(rel: int, importance: float, decay: float, ts: str) -> tupl
     """Décroissant : valeur composite forte d'abord (on trie reverse plus bas)."""
     composite = importance * 110.0 + float(rel) * 15.0 - decay * 0.85
     return composite, rel, importance, ts
+
+
+def _composite_retrieval_score(rel: int, importance: float, decay: float) -> float:
+    return importance * 110.0 + float(rel) * 15.0 - decay * 0.85
+
+
+def _remember_last_context_snapshot(
+    query: str,
+    user_key: str,
+    items_with_debug: list[dict],
+) -> None:
+    global _LAST_CONTEXT_SNAPSHOT
+    sanitized: list[dict] = []
+    for it in items_with_debug:
+        dbg = it.get("_retrieval_debug")
+        if not isinstance(dbg, dict):
+            dbg = {}
+        sanitized.append(
+            {
+                "memory_id": it.get("id"),
+                "memory_type": it.get("memory_type"),
+                "memory_level": it.get("memory_level"),
+                "summary_preview": str(it.get("summary", ""))[:180],
+                **dbg,
+            }
+        )
+    with _LAST_CONTEXT_LOCK:
+        _LAST_CONTEXT_SNAPSHOT = {
+            "captured_at": _now_iso(),
+            "query_preview": (query or "")[:320],
+            "user_key_preview": (user_key or "")[:64],
+            "items": sanitized,
+            "note": _FUTURE_OBS_UI_NOTE,
+        }
+
+
+def get_last_memory_context() -> dict[str, object]:
+    with _LAST_CONTEXT_LOCK:
+        return copy.deepcopy(_LAST_CONTEXT_SNAPSHOT)
 
 class MemoryBackend(ABC):
     name = "base"
@@ -819,11 +929,56 @@ def build_layered_memory_context(
             _lines_for_label("CONTEXTE SESSION (court terme)", session_pick),
         ]
         body = "\n\n".join(p for p in parts if p)
-        all_mem = system_pick + user_pick + project_pick + session_pick
+
+        def _annotate_layer(layer: str, picks: list[dict], *, prefer_recency: bool) -> list[dict]:
+            out_a: list[dict] = []
+            for i, src in enumerate(picks):
+                rel = _score_relevance(keys, src) if layer != "system" else 0
+                imp = float(src.get("importance_score", 0.0))
+                decay = float(src.get("decay_score", 0.0))
+                composite = _composite_retrieval_score(rel, imp, decay)
+                if layer == "system":
+                    why = "layer:system;strategy:importance_decay;deduped_pick"
+                elif layer == "user":
+                    why = "layer:user;keyword_overlap_with_query;user_scope"
+                elif layer == "project":
+                    why = "layer:project;keyword_overlap_with_query;project_scope"
+                else:
+                    why = "layer:session;keyword_overlap_with_query;session_user_scope"
+                dbg: dict[str, object] = {
+                    "why_selected": f"{why};layer_rank={i + 1};prefer_recency={prefer_recency}",
+                    "relevance_score": rel,
+                    "importance_score": imp,
+                    "decay_score": decay,
+                    "memory_type": str(src.get("memory_type", "")),
+                    "retrieval_rank": 0,
+                    "composite_score": round(composite, 2),
+                }
+                c = dict(src)
+                c["_retrieval_debug"] = dbg
+                out_a.append(c)
+            return out_a
+
+        sys_ex = _annotate_layer("system", system_pick, prefer_recency=False)
+        usr_ex = _annotate_layer("user", user_pick, prefer_recency=False)
+        proj_ex = _annotate_layer("project", project_pick, prefer_recency=False)
+        sess_ex = _annotate_layer("session", session_pick, prefer_recency=True)
+        all_mem: list[dict] = []
+        rnk = 0
+        for block in (sys_ex, usr_ex, proj_ex, sess_ex):
+            for it in block:
+                rnk += 1
+                rd = it.get("_retrieval_debug")
+                if isinstance(rd, dict):
+                    rd["retrieval_rank"] = rnk
+                all_mem.append(it)
+
         reinforced_ids = [str(it.get("id")) for it in all_mem if it.get("id")]
         reinforce_entries(entries, reinforced_ids)
         refresh_lifecycle_decay(entries)
         _save_entries(entries)
+
+    _remember_last_context_snapshot(q, user_key, all_mem)
 
     logger.info(
         "layered memory counts system=%s user=%s project=%s session=%s query_len=%s",
@@ -869,7 +1024,7 @@ def store_indexes_snapshot() -> dict[str, object]:
 class PostgresMemoryBackend(MemoryBackend):
     name = "postgres"
 
-    # Colonnes futures alignées V11.6 lifecycle (migration à activer avec DATABASE_URL) :
+    # Colonnes futures alignées V11.6 lifecycle + observabilité (JSON metadata / hors schéma) :
     # created_at, last_accessed_at, access_count, decay_score, lifecycle_status, contradiction_detected
     CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS fractal_memories (
@@ -1291,6 +1446,278 @@ def recent_memories(limit: int = 10, *, include_archived: bool = True) -> list[d
         entries = [e for e in entries if is_active_memory(e)]
     entries.sort(key=lambda e: str(e.get("timestamp", "")), reverse=True)
     return entries[: max(1, min(limit, 50))]
+
+
+def memory_observability_overview() -> dict[str, object]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        return {"status": "error", "config_error": str(e)}
+    lifecycle = memory_lifecycle_health()
+
+    with _STORE_LOCK:
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+    active_memories = sum(1 for e in entries if is_active_memory(e))
+    archived_memories = sum(
+        1 for e in entries if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED
+    )
+    merged_concepts = 0
+    for e in entries:
+        if str(e.get("memory_level")) != "concept_memory":
+            continue
+        md = e.get("metadata")
+        mc = int((md or {}).get("merge_count") or 1) if isinstance(md, dict) else 1
+        if mc > 1:
+            merged_concepts += 1
+
+    contradiction_count = sum(1 for e in entries if e.get("contradiction_detected"))
+    act = [e for e in entries if is_active_memory(e)]
+    avg_imp = (
+        round(sum(float(e.get("importance_score", 0.0)) for e in act) / len(act), 4)
+        if act
+        else None
+    )
+    avg_decay = (
+        round(sum(float(e.get("decay_score", 0.0)) for e in act) / len(act), 4)
+        if act
+        else None
+    )
+    pj: dict[str, int] = {}
+    for e in entries:
+        p = _normalize_project_slug(str(e.get("project_name") or e.get("project") or "general"))
+        key = p or "_none"
+        pj[key] = pj.get(key, 0) + 1
+    top_projects = [{"project": k, "count": v} for k, v in sorted(pj.items(), key=lambda kv: (-kv[1], kv[0]))[:12]]
+
+    mt: dict[str, int] = {}
+    for e in entries:
+        t = str(e.get("memory_type") or "?")
+        mt[t] = mt.get(t, 0) + 1
+    top_memory_types = [{"memory_type": k, "count": v} for k, v in sorted(mt.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+    mh = lifecycle.get("memory_health_score")
+
+    return {
+        "status": "ok",
+        "total_memories": len(entries),
+        "active_memories": active_memories,
+        "archived_memories": archived_memories,
+        "contradiction_count": contradiction_count,
+        "merged_concepts": merged_concepts,
+        "average_importance": avg_imp,
+        "average_decay": avg_decay,
+        "memory_health_score": mh,
+        "top_projects": top_projects,
+        "top_memory_types": top_memory_types,
+        "note": _FUTURE_OBS_UI_NOTE,
+    }
+
+
+def _lookup_entry(entries: list[dict], memory_id: str) -> dict | None:
+    mid = (memory_id or "").strip()
+    if not mid:
+        return None
+    for e in entries:
+        if str(e.get("id")) == mid:
+            return e
+    return None
+
+
+def memory_trace(memory_id: str) -> dict[str, object]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        return {"status": "error", "config_error": str(e)}
+    mid = (memory_id or "").strip()
+    if not mid:
+        return {"status": "not_found"}
+
+    with _STORE_LOCK:
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+        e = _lookup_entry(entries, mid)
+
+    if not e:
+        return {"status": "not_found"}
+
+    md_raw = e.get("metadata")
+    md_dict: dict[str, object] = md_raw if isinstance(md_raw, dict) else {}
+
+    rh = md_dict.get("reinforcement_history")
+    reinforcement_history = rh if isinstance(rh, list) else []
+    dh = md_dict.get("decay_history")
+    decay_history = dh if isinstance(dh, list) else []
+
+    aliases = md_dict.get("aliases")
+    aliases_out = aliases if isinstance(aliases, list) else []
+
+    linked_cc = md_dict.get("linked_concept_id")
+    merged_into = None
+    if linked_cc:
+        merged_into = {"concept_id": str(linked_cc)}
+
+    hits = md_dict.get("retrieval_hits")
+    if hits is None:
+        hits = int(e.get("access_count") or 0)
+
+    return {
+        "status": "ok",
+        "memory_id": e.get("id"),
+        "creation": {
+            "created_at": e.get("created_at"),
+            "timestamp": e.get("timestamp"),
+            "source": e.get("source"),
+            "memory_type": e.get("memory_type"),
+            "memory_level": e.get("memory_level"),
+            "project_name": e.get("project_name"),
+            "user_id": e.get("user_id"),
+            "parent_id": e.get("parent_id"),
+        },
+        "accesses": {
+            "access_count": int(e.get("access_count") or 0),
+            "last_accessed_at": e.get("last_accessed_at"),
+        },
+        "reinforcement_history": reinforcement_history,
+        "decay_history": decay_history,
+        "archive_status": str(e.get("lifecycle_status", MEMORY_LIFECYCLE_ACTIVE)),
+        "contradiction_flags": {
+            "contradiction_detected": bool(e.get("contradiction_detected")),
+        },
+        "merged_into": merged_into,
+        "aliases": aliases_out,
+        "retrieval_hits": hits,
+        "importance_score": float(e.get("importance_score") or 0.0),
+        "decay_score": float(e.get("decay_score") or 0.0),
+        "note": _FUTURE_OBS_UI_NOTE,
+    }
+
+
+def concept_graph_lightweight() -> dict[str, object]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        return {"status": "error", "config_error": str(e), "concepts": [], "note": _FUTURE_OBS_UI_NOTE}
+    with _STORE_LOCK:
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+    concepts = [x for x in entries if str(x.get("memory_level")) == "concept_memory"]
+    out_nodes: list[dict[str, object]] = []
+    entry_by_id = {str(x.get("id")): x for x in entries if x.get("id")}
+
+    for c in concepts:
+        cid = str(c.get("id"))
+        md = c.get("metadata") if isinstance(c.get("metadata"), dict) else {}
+        aliases = md.get("aliases") if isinstance(md.get("aliases"), list) else [str(c.get("summary") or "")]
+
+        linked_memories: list[str] = []
+        for x in entries:
+            xm = x.get("metadata")
+            if not isinstance(xm, dict):
+                continue
+            if str(xm.get("linked_concept_id") or "") == cid:
+                xid = str(x.get("id") or "")
+                if xid:
+                    linked_memories.append(xid)
+        for ch in c.get("children_ids") or []:
+            s = str(ch)
+            if s and s not in linked_memories:
+                linked_memories.append(s)
+        pid = c.get("parent_id")
+        if pid:
+            ps = str(pid)
+            if ps and ps not in linked_memories:
+                linked_memories.append(ps)
+
+        projects: set[str] = set()
+        pn_c = _normalize_project_slug(str(c.get("project_name") or ""))
+        if pn_c:
+            projects.add(pn_c)
+        for lm in linked_memories:
+            lx = entry_by_id.get(lm)
+            if not lx:
+                continue
+            pnl = _normalize_project_slug(str(lx.get("project_name") or ""))
+            if pnl:
+                projects.add(pnl)
+
+        contradiction_links: list[dict[str, object]] = []
+        if bool(c.get("contradiction_detected")):
+            subj_self, pol_self = _concept_sentiment_signals(str(c.get("summary", "")))
+            for o in concepts:
+                if o is c:
+                    continue
+                if not bool(o.get("contradiction_detected")):
+                    continue
+                sj, pj = _concept_sentiment_signals(str(o.get("summary", "")))
+                if subj_self and sj == subj_self and pol_self and pj and pol_self != pj:
+                    contradiction_links.append(
+                        {
+                            "other_concept_id": str(o.get("id")),
+                            "subject": sj,
+                            "relationship": "polarity_conflict_flagged",
+                        }
+                    )
+
+        out_nodes.append(
+            {
+                "concept_id": cid,
+                "summary": str(c.get("summary", ""))[:260],
+                "aliases": aliases,
+                "linked_projects": sorted(projects),
+                "linked_memories": sorted(set(linked_memories)),
+                "contradiction_links": contradiction_links,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "concept_count": len(out_nodes),
+        "concepts": out_nodes,
+        "note": _FUTURE_OBS_UI_NOTE,
+    }
+
+
+def list_archived_memories(
+    *,
+    project: str = "",
+    memory_type: str = "",
+    older_than_days: float | None = None,
+    limit: int = 80,
+) -> dict[str, object]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        return {"status": "error", "config_error": str(e), "items": []}
+    filt_mt = (memory_type or "").strip().lower()
+    if filt_mt and filt_mt not in MEMORY_TYPES:
+        return {"status": "error", "detail": "invalid_memory_type", "items": []}
+    filt_proj = _normalize_project_slug(project or "")
+    cap = max(1, min(int(limit), 150))
+
+    with _STORE_LOCK:
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+    arch = [e for e in entries if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED]
+
+    out: list[dict] = []
+    for e in arch:
+        if filt_mt and str(e.get("memory_type")) != filt_mt:
+            continue
+        if filt_proj:
+            ep = _normalize_project_slug(str(e.get("project_name") or ""))
+            if ep != filt_proj:
+                continue
+        if older_than_days is not None:
+            age = _entry_age_days(e)
+            if age < float(older_than_days):
+                continue
+        out.append(e)
+
+    out.sort(key=lambda x: str(x.get("timestamp", "")), reverse=True)
+    return {
+        "status": "ok",
+        "count": len(out),
+        "items": out[:cap],
+        "filters": {"project": project or None, "memory_type": filt_mt or None, "older_than_days": older_than_days},
+        "note": _FUTURE_OBS_UI_NOTE,
+    }
 
 
 def memory_lifecycle_health() -> dict[str, object]:
