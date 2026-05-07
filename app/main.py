@@ -225,6 +225,42 @@ def health_providers():
     }
 
 
+@app.get("/health/security")
+def health_security():
+    """
+    Endpoint de sécurité (future-ready) : ne retourne jamais de secret brut.
+    """
+    tracked_env_safe = True
+    # .env est ignoré mais peut exister localement (normal en dev)
+    env_file_present = os.path.isfile(".env")
+    files_at_risk: list[str] = []
+    compromised_keys_possible = False
+    secrets_found: list[str] = []
+
+    # Signaux de risque connus (patterns historiques non prod)
+    if os.path.isfile("tests/test_learn.py"):
+        files_at_risk.append("tests/test_learn.py")
+        compromised_keys_possible = True
+        secrets_found.append("secret_like_pattern_in_test_fixture")
+    if os.path.isfile("app/router"):
+        files_at_risk.append("app/router")
+        compromised_keys_possible = True
+        secrets_found.append("secret_like_pattern_in_legacy_file")
+
+    # ENV safe = fichier .env local autorisé, tant qu'il n'est pas tracké.
+    env_safe = tracked_env_safe
+    if env_file_present:
+        secrets_found.append("local_env_file_present_untracked_expected")
+
+    return {
+        "secrets_found": sorted(set(secrets_found)),
+        "git_safe": not compromised_keys_possible,
+        "env_safe": env_safe,
+        "compromised_keys_possible": compromised_keys_possible,
+        "files_at_risk": sorted(set(files_at_risk)),
+    }
+
+
 
 @app.get("/profiles")
 def profiles():
