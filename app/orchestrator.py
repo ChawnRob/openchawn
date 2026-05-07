@@ -38,8 +38,6 @@ def _load_provider(name: str):
         "deepseek": ("app.providers.deepseek_provider", "DeepSeekProvider"),
         "kimi": ("app.providers.kimi_provider", "KimiProvider"),
         "openai": ("app.providers.openai_provider", "OpenAIProvider"),
-        "infomaniak": ("app.providers.infomaniak_provider", "InfomaniakProvider"),
-        "ollama": ("app.providers.ollama_provider", "OllamaProvider"),
     }
     if name not in mapping:
         return None
@@ -176,8 +174,6 @@ def step_mistral(prompt: str, optimized: str):
 
 
 def step_ollama(prompt: str, mem_hits: list, kimi: str, minimax: str, mistral: str):
-    from app.config import OLLAMA_ENABLED
-
     mem_block = "\n".join(f"- {h['content']}" for h in mem_hits[:3]) or "(aucun)"
     full = (
         f"Question utilisateur: {prompt}\n\n"
@@ -187,12 +183,8 @@ def step_ollama(prompt: str, mem_hits: list, kimi: str, minimax: str, mistral: s
         f"Structure logique (OpenRouter): {mistral or '(aucune)'}\n\n"
         f"Genere la reponse finale claire, utile, en francais."
     )
-    if OLLAMA_ENABLED:
-        p = _load_provider("ollama")
-        src = "Ollama"
-    else:
-        p = _load_provider("openai")
-        src = "OpenAI"
+    p = _load_provider("openai")
+    src = "OpenAI"
     out, conf = _call(p, prompt=full,
         system_prompt="Tu es OpenChawn. Reponds clairement a l utilisateur.")
     if not out:
@@ -262,7 +254,7 @@ def ask(prompt: str, project: str = "default", user_id: str = "Robert1982") -> d
         from app.asi_evolve.learn import learn_from_exchange
         learn_from_exchange(
             prompt=prompt, response=ans or "",
-            provider="ollama", tier="local",
+            provider="deepseek", tier="economic",
             project=project, user_id=user_id,
         )
     except Exception as e:

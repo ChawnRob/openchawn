@@ -3,17 +3,13 @@ from __future__ import annotations
 import logging
 import requests as http_requests
 
-from app.provider_manager import PROVIDER_PRIORITY, get_provider_manager
+from app.provider_manager import FIXED_ORDER, get_provider_manager
 from app.settings import Settings, get_settings
 
 logger = logging.getLogger("openchawn.gateway")
 
 
 def _extract_openai_response_text(data: dict) -> str:
-    """
-    Parse POST /v1/responses JSON. `output_text` est surtout exposé par les SDK ;
-    en HTTP brut il faut agréger les blocs output_text dans output[].content.
-    """
     if not isinstance(data, dict):
         return ""
     agg = (data.get("output_text") or "").strip()
@@ -33,7 +29,7 @@ def _extract_openai_response_text(data: dict) -> str:
     return "\n".join(texts).strip()
 
 
-def _openai_compatible(
+def _chat_completions(
     *,
     base_url: str,
     api_key: str,
@@ -41,13 +37,16 @@ def _openai_compatible(
     system_prompt: str,
     user_message: str,
     timeout: float = 120.0,
+    log_label: str = "compat",
 ) -> tuple[str, int | None, str | None]:
-    b = base_url.rstrip("/")
+    """POST {base_url}/chat/completions (sans ajouter /v1 à la base)."""
+    b = (base_url or "").strip().rstrip("/")
     if not api_key:
         return "", None, "OPENAI_COMPAT_API_KEY_MISSING"
+    url = f"{b}/chat/completions"
     try:
         r = http_requests.post(
-            f"{b}/chat/completions",
+            url,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -65,8 +64,8 @@ def _openai_compatible(
         sc = r.status_code
         if not r.ok:
             preview = (r.text or "")[:240]
-            logger.warning(f"compat model={model} status={sc} body={preview}")
-            return "", sc, preview or "OPENAI_COMPAT_REQUEST_FAILED"
+            logger.warning(f"{log_label} model={model} status={sc} body={preview}")
+            return "", sc, preview or "CHAT_COMPLETIONS_REQUEST_FAILED"
         data = r.json()
         content = (
             (data.get("choices") or [{}])[0]
@@ -78,7 +77,7 @@ def _openai_compatible(
             return "", sc, "EMPTY_RESPONSE"
         return content, sc, None
     except Exception as e:
-        logger.warning(f"compat exception err={e.__class__.__name__}: {e}")
+        logger.warning(f"{log_label} exception={e.__class__.__name__}: {e}")
         return "", None, f"{e.__class__.__name__}: {e}"
 
 
@@ -87,7 +86,7 @@ def _openai_responses(
     system_prompt: str,
     user_message: str,
 ) -> tuple[str, int | None, str | None]:
-    if not s.openai_api_key:
+    if not (s.openai_api_key or "").strip():
         return "", None, "OPENAI_API_KEY_MISSING"
     base_url = s.openai_base_url.rstrip("/")
     body: dict = {
@@ -134,44 +133,6 @@ def _openai_responses(
         return "", None, f"{e.__class__.__name__}: {e}"
 
 
-def _ollama_chat(
-    s: Settings,
-    system_prompt: str,
-    user_message: str,
-) -> tuple[str, int | None, str | None]:
-    if not s.ollama_enabled:
-        return "", None, "OLLAMA_DISABLED"
-    base = (s.ollama_base_url or s.ollama_url or "").strip().rstrip("/")
-    if not base:
-        return "", None, "OLLAMA_URL_MISSING"
-    try:
-        r = http_requests.post(
-            f"{base}/api/chat",
-            json={
-                "model": s.ollama_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                "stream": False,
-            },
-            timeout=120,
-        )
-        data = r.json()
-        sc = r.status_code
-        if not r.ok:
-            preview = (r.text or "")[:200]
-            logger.warning(f"ollama status={sc} body={preview}")
-            return "", sc, preview or "OLLAMA_REQUEST_FAILED"
-        content = (data.get("message", {}).get("content", "") or "").strip()
-        if not content:
-            return "", sc, "OLLAMA_EMPTY_RESPONSE"
-        return content, sc, None
-    except Exception as e:
-        logger.warning(f"ollama exception={e.__class__.__name__}: {e}")
-        return "", None, f"{e.__class__.__name__}: {e}"
-
-
 def _dispatch(
     name: str,
     s: Settings,
@@ -179,63 +140,89 @@ def _dispatch(
     user_message: str,
 ) -> tuple[str, int | None, str | None]:
     if name == "openrouter":
-        return _openai_compatible(
+        return _chat_completions(
             base_url=s.openrouter_base_url,
-            api_key=s.openrouter_api_key,
+            api_key=(s.openrouter_api_key or "").strip(),
             model=s.openrouter_model,
             system_prompt=system_prompt,
             user_message=user_message,
+            log_label="openrouter",
         )
     if name == "openai":
         return _openai_responses(s, system_prompt, user_message)
     if name == "deepseek":
-        return _openai_compatible(
+        return _chat_completions(
             base_url=s.deepseek_base_url,
-            api_key=s.deepseek_api_key,
-            model=s.deepseek_model,
+            api_key=(s.deepseek_api_key or "").strip(),
+            model=(s.deepseek_model or "").strip() or "deepseek-v4-flash",
             system_prompt=system_prompt,
             user_message=user_message,
+            log_label="deepseek",
         )
     if name == "kimi":
-        return _openai_compatible(
-            base_url=s.kimi_effective_base,
-            api_key=s.kimi_effective_key,
-            model=s.kimi_effective_model,
+        key = (s.kimi_api_key or "").strip()
+        if not key:
+            return "", None, "KIMI_NOT_CONFIGURED"
+        base = (s.kimi_base_url or "").strip().rstrip("/") or "https://api.moonshot.ai/v1"
+        kem = (s.kimi_model or "").strip() or "kimi-k2-0905-preview"
+        return _chat_completions(
+            base_url=base,
+            api_key=key,
+            model=kem,
             system_prompt=system_prompt,
             user_message=user_message,
+            log_label="kimi",
         )
-    if name == "infomaniak":
-        if not s.infomaniak_base_url:
-            return "", None, "INFOMANIAK_BASE_URL_MISSING"
-        return _openai_compatible(
-            base_url=s.infomaniak_base_url,
-            api_key=s.infomaniak_api_key,
-            model=s.infomaniak_model,
-            system_prompt=system_prompt,
-            user_message=user_message,
-        )
-    if name == "ollama":
-        return _ollama_chat(s, system_prompt, user_message)
     return "", None, "UNKNOWN_PROVIDER"
 
 
-def _try_order(provider_hint: str) -> list[str]:
-    pm = get_provider_manager()
+def _hint_order(pm, provider_hint: str) -> list[str]:
     base = pm.resolution_order()
     h = (provider_hint or "").strip().lower()
     if not h:
-        return list(base)
-    if h in base or h in PROVIDER_PRIORITY:
-        return [h] + [x for x in base if x != h]
-    return list(base)
+        return base
+    if h in FIXED_ORDER:
+        extra = pm.settings
+        hint_ok = (
+            (h == "deepseek" and bool((extra.deepseek_api_key or "").strip()))
+            or (h == "kimi" and bool((extra.kimi_api_key or "").strip()))
+            or (h == "openrouter" and bool((extra.openrouter_api_key or "").strip()))
+            or (h == "openai" and bool((extra.openai_api_key or "").strip()))
+        )
+        if hint_ok:
+            return [h] + [x for x in base if x != h]
+    return base
 
 
 def generate_response(*, system_prompt: str, user_message: str, provider_hint: str = "") -> dict[str, str | bool | int | None]:
     """
-    Gateway : OpenRouter → OpenAI → DeepSeek → Kimi → Infomaniak → Ollama (si activé).
+    Chaîne **explicite uniquement parmi providers configurés** :
+    DeepSeek → Kimi → OpenRouter → OpenAI (voir ProviderManager).
+
+    Pas d’Ollama. Pas de tentative si DEFAULT_PROVIDER=deepseek sans DEEPSEEK_API_KEY.
     """
     s = get_settings()
-    seq = _try_order(provider_hint)
+    pm = get_provider_manager()
+
+    if _normalize_pref(s.default_provider) == "deepseek" and not (s.deepseek_api_key or "").strip():
+        return {
+            "output": "",
+            "provider": "none",
+            "success": False,
+            "status_code": None,
+            "error": "DeepSeek API key missing",
+        }
+
+    seq = _hint_order(pm, provider_hint)
+
+    if not seq:
+        return {
+            "output": "",
+            "provider": "none",
+            "success": False,
+            "status_code": None,
+            "error": "Aucune clé API LLM configurée (DEEPSEEK, Kimi optionnel, OpenRouter ou OpenAI).",
+        }
 
     last_err: str | None = None
     last_code: int | None = None
@@ -250,20 +237,20 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
                 "status_code": code,
                 "error": None,
             }
-        if err:
+        if err and err != "KIMI_NOT_CONFIGURED":
             last_err = err
             last_code = code
-            logger.info(f"provider_skip name={name} err={err}")
+            logger.info(f"provider_fail name={name} err={err}")
 
-    detail = last_err or (
-        "NO_LLM_CONFIGURED: aucune clé API utilisable parmi "
-        "OPENROUTER_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, KIMI_API_KEY, "
-        "INFOMANIAK_* ou Ollama activé en développement."
-    )
+    detail = last_err or "Échec de tous les providers configurés."
     return {
         "output": "",
-        "provider": "fallback",
+        "provider": "none",
         "success": False,
         "status_code": last_code,
         "error": detail,
     }
+
+
+def _normalize_pref(x: str) -> str:
+    return (x or "").strip().lower()

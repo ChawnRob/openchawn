@@ -15,7 +15,6 @@ from app.config import (
     MODEL_PROVIDER,
 )
 from app.provider_manager import get_provider_manager
-from app.settings import get_settings
 from app.profiles import list_profiles, get_profile_for_user
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
@@ -207,14 +206,10 @@ def health():
 def health_providers():
     """État des providers LLM (Railway / ops) — sans secrets."""
     pm = get_provider_manager()
-    s = get_settings()
     return {
-        "environment": s.openchawn_env,
-        "default_provider": (s.default_provider or "") or None,
         "active_provider": pm.active_provider() or None,
-        "available_providers": pm.available_providers(),
-        "missing_required_keys": pm.missing_required_keys(),
-        "ollama_enabled": s.ollama_enabled,
+        "configured_providers": pm.configured_providers(),
+        "missing_keys": pm.missing_keys(),
         "production_safe": pm.production_safe(),
     }
 
@@ -264,43 +259,11 @@ def memory():
 
 @app.post("/chat-test")
 def chat_test(req: ChatTestRequest):
-    """Appelle Ollama directement, sans auth. Debug uniquement."""
-    s = get_settings()
-    if not s.ollama_enabled:
-        raise HTTPException(
-            status_code=403,
-            detail="Ollama désactivé (OLLAMA_ENABLED=false). Activez Ollama et définissez OLLAMA_URL.",
-        )
-    base = (s.ollama_base_url or s.ollama_url or "").strip().rstrip("/")
-    if not base:
-        raise HTTPException(
-            status_code=503,
-            detail="OLLAMA_URL / OLLAMA_BASE_URL manquant alors qu'Ollama est activé.",
-        )
-    gen_url = f"{base}/api/generate"
-    try:
-        r = http_requests.post(
-            gen_url,
-            json={
-                "model": req.model,
-                "prompt": req.message,
-                "stream": False,
-            },
-            timeout=120,
-        )
-        r.raise_for_status()
-        data = r.json()
-        return {
-            "model": data.get("model", req.model),
-            "response": data.get("response", ""),
-            "memory_used": False,
-        }
-    except http_requests.ConnectionError:
-        raise HTTPException(status_code=503, detail="Ollama non joignable sur :11434")
-    except http_requests.Timeout:
-        raise HTTPException(status_code=504, detail="Ollama timeout (120s)")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Conservé pour compat URL ; plus d’appel local Ollama (route désactivée)."""
+    raise HTTPException(
+        status_code=410,
+        detail="OpenChawn n'utilise plus Ollama (/chat avec providers cloud uniquement).",
+    )
 
 
 # ── Providers diagnostic (protégé) ──────────────────────

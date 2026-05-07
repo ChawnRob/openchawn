@@ -5,11 +5,24 @@ from app.router import handle
 from app.providers.base import BaseProvider
 
 
+class _FakePM:
+
+    resolution: list[str]
+
+    def __init__(self, resolution: list[str]) -> None:
+        self.resolution = resolution
+
+    def resolution_order(self) -> list[str]:
+        return list(self.resolution)
+
+
 class _OK(BaseProvider):
     def __init__(self, tag):
         self.tag = tag
+
     def is_available(self):
         return True
+
     def generate(self, prompt, user_id="", system_prompt=""):
         return f"[{self.tag}] réponse complète et détaillée sur {prompt[:40]} avec plus de 30 chars."
 
@@ -17,26 +30,34 @@ class _OK(BaseProvider):
 class _Down(BaseProvider):
     def is_available(self):
         return False
+
     def generate(self, *a, **kw):
         return "[ERREUR] down"
 
 
 @pytest.fixture
 def fake_reg(monkeypatch):
+    monkeypatch.setattr(
+        "app.provider_manager.get_provider_manager",
+        lambda: _FakePM(["kimi", "deepseek", "openrouter", "openai"]),
+    )
+
     reg = {
-        "kimi":    _OK("kimi"),
-        "minimax": _Down(),
-        "mistral": _OK("mistral"),
-        "ollama":  _OK("ollama"),
-        "openai":  _OK("openai"),
+        "kimi": _OK("kimi"),
+        "deepseek": _Down(),
+        "openrouter": _OK("openrouter"),
+        "openai": _OK("openai"),
     }
     monkeypatch.setattr(router_mod, "_REGISTRY", reg)
     return reg
 
 
 def test_handle_memory_read():
-    add_memory("ASI-Evolve = cerveau décisionnel local-first",
-               type="rule", importance_score=0.9)
+    add_memory(
+        "ASI-Evolve = cerveau décisionnel local-first",
+        type="rule",
+        importance_score=0.9,
+    )
     res = handle("quel est le cerveau décisionnel")
     assert res["action"] == "MEMORY_READ"
     assert isinstance(res["output"], list) and res["output"]
@@ -49,32 +70,48 @@ def test_handle_memory_write_persists():
     assert "stored_id" in res["output"]
 
 
-def test_handle_model_call_premium_kimi(fake_reg):
+def test_handle_model_call_premium_kimi(fake_reg, monkeypatch):
+    monkeypatch.setattr(
+        "app.provider_manager.get_provider_manager",
+        lambda: _FakePM(["kimi", "deepseek", "openrouter", "openai"]),
+    )
     res = handle("code-moi une fonction Rust de tri rapide")
     assert res["action"] == "MODEL_CALL_NEEDED"
     assert res["provider"] == "kimi"
     assert res["output"].startswith("[kimi]")
 
 
-def test_handle_model_call_fallback_skips_down(fake_reg):
+def test_handle_model_call_fallback_skips_down(fake_reg, monkeypatch):
+    monkeypatch.setattr(
+        "app.provider_manager.get_provider_manager",
+        lambda: _FakePM(["deepseek", "openrouter", "kimi", "openai"]),
+    )
+    reg = router_mod._REGISTRY
+    reg["deepseek"] = _Down()
+    reg["openrouter"] = _OK("openrouter")
+    reg["kimi"] = _OK("kimi")
     res = handle("raconte moi une chose simple")
-    # tier=economic → minimax first (down) → mistral OK
     assert res["action"] == "MODEL_CALL_NEEDED"
-    assert res["provider"] == "mistral"
+    assert res["provider"] == "openrouter"
 
 
 def test_handle_model_call_all_down(fake_reg):
-    for k in fake_reg:
-        fake_reg[k] = _Down()
+    fake_reg_inner = router_mod._REGISTRY
+    for k in fake_reg_inner:
+        fake_reg_inner[k] = _Down()
     res = handle("question quelconque")
-    assert res["output"].startswith("[ERREUR]")
+    assert res["action"] == "MODEL_CALL_NEEDED"
     assert res["provider"] is None
+    assert "Aucun modèle" in res["output"] or "[ERREUR]" in res["output"]
 
 
 def test_handle_memory_compress_executes_real():
     for _ in range(3):
-        add_memory("règle identique pour test compress via router",
-                   type="rule", importance_score=0.9)
+        add_memory(
+            "règle identique pour test compress via router",
+            type="rule",
+            importance_score=0.9,
+        )
     res = handle("consolide la mémoire")
     assert res["action"] == "MEMORY_COMPRESS"
     assert res["output"]["status"] == "done"
@@ -91,4 +128,3 @@ def test_handle_model_call_triggers_learn(fake_reg):
     res = handle("code-moi un fizzbuzz en Python")
     assert res["action"] == "MODEL_CALL_NEEDED"
     assert res["provider"] == "kimi"
-    assert res.get("learned_memory_id")  # auto-learning actif

@@ -9,12 +9,12 @@ logger = logging.getLogger("openchawn.provider.deepseek")
 
 
 class DeepSeekProvider(BaseProvider):
-    """DeepSeek — API OpenAI-compatible."""
+    """DeepSeek — client compatible OpenAI (POST …/chat/completions, sans /v1 dans la base)."""
 
     def __init__(self) -> None:
-        self.api_key = DEEPSEEK_API_KEY
-        self.model = DEEPSEEK_MODEL
-        self.base_url = DEEPSEEK_BASE_URL.rstrip("/")
+        self.api_key = (DEEPSEEK_API_KEY or "").strip()
+        self.model = (DEEPSEEK_MODEL or "").strip() or "deepseek-v4-flash"
+        self.base_url = (DEEPSEEK_BASE_URL or "").strip().rstrip("/")
 
     def generate(self, prompt: str, user_id: str = "", system_prompt: str = "") -> str:
         sp = system_prompt or (
@@ -24,7 +24,7 @@ class DeepSeekProvider(BaseProvider):
             return "[ERREUR] DEEPSEEK_API_KEY non configurée."
         try:
             response = post_with_retry(
-                url=f"{self.base_url}/chat/completions",
+                url=f"{self.base_url.rstrip('/')}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",

@@ -60,22 +60,22 @@ def _route_models(text: str) -> dict:
     if _LOCAL_RE.search(text):
         return {
             "tier": "local",
-            "chain": ["ollama"],
+            "chain": ["deepseek"],
             "temperature": 0.5,
-            "reason": "Contrainte local_only détectée.",
+            "reason": "Contrainte local_only détectée → priorité DeepSeek cloud.",
         }
     if _CODE_RE.search(text) or _REASON_RE.search(text):
         return {
             "tier": "premium",
-            "chain": ["kimi", "deepseek", "openrouter", "openai", "ollama"],
+            "chain": ["kimi", "deepseek", "openrouter", "openai"],
             "temperature": 0.2 if _CODE_RE.search(text) else 0.3,
-            "reason": "Tâche code/raisonnement → tier premium (Kimi K2.6).",
+            "reason": "Tâche code/raisonnement → tier premium (Kimi puis DeepSeek).",
         }
     return {
         "tier": "economic",
-        "chain": ["deepseek", "openrouter", "kimi", "ollama"],
+        "chain": ["deepseek", "openrouter", "kimi"],
         "temperature": 0.6,
-        "reason": "Tâche générique → tier éco en priorité (cible 70/20/10).",
+        "reason": "Tâche générique → DeepSeek puis alternatives cloud.",
     }
 
 

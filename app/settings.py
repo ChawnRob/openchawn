@@ -18,6 +18,15 @@ from dotenv import load_dotenv
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_DEV_SECRET = "dev-secret-change-me-in-production"
+_DEEPSEEK_HOST = "https://api.deepseek.com"
+
+
+def _deepseek_base_normalize(url: str) -> str:
+    """Base sans segment /v1 — ex. https://api.deepseek.com (POST …/chat/completions)."""
+    u = (url or "").strip().rstrip("/")
+    if u.endswith("/v1"):
+        u = u[:-3].rstrip("/")
+    return u or _DEEPSEEK_HOST
 
 
 def _str(
@@ -195,17 +204,13 @@ def _build_settings() -> Settings:
 
     secret = _str("SECRET_KEY", "OPENCHAWN_SECRET_KEY", default=_DEFAULT_DEV_SECRET)
 
-    ollama_enabled = _bool("OLLAMA_ENABLED", default=False)
-    # Toujours désactivé en production (même si une variable le réactive).
-    if is_prod:
-        ollama_enabled = False
+    # OpenChawn n’appelle pas Ollama (Railway : OLLAMA_ENABLED=false).
+    _ = _bool("OLLAMA_ENABLED", default=False)
+    ollama_enabled = False
+    ollama_url = ""
+    ollama_base = ""
 
-    ollama_url = _str("OLLAMA_URL", "OLLAMA_BASE_URL", default="http://127.0.0.1:11434").rstrip("/")
-    ollama_base = _str("OLLAMA_BASE_URL", "OLLAMA_URL", default="http://127.0.0.1:11434").rstrip("/")
-
-    if not ollama_enabled:
-        ollama_url = ""
-        ollama_base = ""
+    deepseek_base = _deepseek_base_normalize(_str("DEEPSEEK_BASE_URL", default=_DEEPSEEK_HOST))
 
     db_path = _str("OPENCHAWN_DB_PATH", default="./data/openchawn.db")
     database_url = _str("DATABASE_URL", default="")
@@ -226,7 +231,7 @@ def _build_settings() -> Settings:
         max_message_length=_int("OPENCHAWN_MAX_MSG_LEN", 4000),
         profile=_str("OPENCHAWN_PROFILE", default="default"),
         guest_daily_limit=_int("OPENCHAWN_GUEST_DAILY_LIMIT", 5),
-        default_provider=_str("DEFAULT_PROVIDER", default="").strip().lower(),
+        default_provider=_str("DEFAULT_PROVIDER", default="deepseek").strip().lower(),
         model_provider=_str("MODEL_PROVIDER", default="").strip().lower(),
         openchawn_provider=_str("OPENCHAWN_PROVIDER", default="auto").strip().lower(),
         app_base_url=_str("APP_BASE_URL", default="").rstrip("/"),
@@ -247,7 +252,7 @@ def _build_settings() -> Settings:
         minimax_model=_str("MINIMAX_MODEL", default="MiniMax-M2.7"),
         minimax_base_url=_str("MINIMAX_BASE_URL", default="https://api.minimax.io/v1").rstrip("/"),
         kimi_api_key=_str("KIMI_API_KEY", default=""),
-        kimi_model=_str("KIMI_MODEL", default="kimi-k2-0905-preview"),
+        kimi_model=_str("KIMI_MODEL", default=""),
         kimi_base_url=_str("KIMI_BASE_URL", default="https://api.moonshot.ai/v1").rstrip("/"),
         openai_api_key=_str("OPENAI_API_KEY", default=""),
         openai_model=_str("OPENAI_MODEL", default="gpt-4o-mini"),
@@ -260,10 +265,8 @@ def _build_settings() -> Settings:
             "/"
         ),
         deepseek_api_key=_str("DEEPSEEK_API_KEY", default=""),
-        deepseek_model=_str("DEEPSEEK_MODEL", default="deepseek-chat"),
-        deepseek_base_url=_str("DEEPSEEK_BASE_URL", default="https://api.deepseek.com/v1").rstrip(
-            "/"
-        ),
+        deepseek_model=_str("DEEPSEEK_MODEL", default="deepseek-v4-flash"),
+        deepseek_base_url=deepseek_base,
         infomaniak_api_key=_str("INFOMANIAK_API_KEY", default=""),
         infomaniak_model=_str("INFOMANIAK_MODEL", default=""),
         infomaniak_base_url=_str("INFOMANIAK_BASE_URL", default="").rstrip("/"),

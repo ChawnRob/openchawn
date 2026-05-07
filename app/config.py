@@ -67,9 +67,9 @@ PERPLEXITY_API_KEY = _s.perplexity_api_key
 PERPLEXITY_MODEL = _s.perplexity_model
 PERPLEXITY_BASE_URL = _s.perplexity_base_url
 
-KIMI_API_KEY = _s.kimi_effective_key
-KIMI_MODEL = _s.kimi_effective_model
-KIMI_BASE_URL = _s.kimi_effective_base
+KIMI_API_KEY = _s.kimi_api_key
+KIMI_MODEL = ((_s.kimi_model or "").strip()) or "kimi-k2-0905-preview"
+KIMI_BASE_URL = _s.kimi_base_url or "https://api.moonshot.ai/v1"
 KIMI_TEMPERATURE = _s.kimi_temperature
 KIMI_TIMEOUT = _s.kimi_timeout
 KIMI_MAX_TOKENS = _s.kimi_max_tokens

@@ -16,12 +16,10 @@ def get_registry():
     if _REGISTRY:
         return _REGISTRY
 
-    _load_provider("openrouter", "app.providers.openrouter_provider", "OpenRouterProvider")
-    _load_provider("openai", "app.providers.openai_provider", "OpenAIProvider")
     _load_provider("deepseek", "app.providers.deepseek_provider", "DeepSeekProvider")
     _load_provider("kimi", "app.providers.kimi_provider", "KimiProvider")
-    _load_provider("infomaniak", "app.providers.infomaniak_provider", "InfomaniakProvider")
-    _load_provider("ollama", "app.providers.ollama_provider", "OllamaProvider")
+    _load_provider("openrouter", "app.providers.openrouter_provider", "OpenRouterProvider")
+    _load_provider("openai", "app.providers.openai_provider", "OpenAIProvider")
 
     return _REGISTRY
 
@@ -124,6 +122,7 @@ def handle(prompt: str, raw_message: str = "") -> dict:
 
             if text and text.strip():
                 return {
+                    "action": "MODEL_CALL_NEEDED",
                     "output": text.strip(),
                     "provider": name,
                 }
@@ -132,6 +131,7 @@ def handle(prompt: str, raw_message: str = "") -> dict:
             log.warning(f"{name} failed: {e}")
 
     return {
+        "action": "MODEL_CALL_NEEDED",
         "output": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
-        "provider": "fallback",
+        "provider": None,
     }

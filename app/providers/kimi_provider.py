@@ -14,15 +14,24 @@ from app.providers.base import BaseProvider
 
 
 class KimiProvider(BaseProvider):
-    """Provider Kimi K2.6 (Moonshot AI) — tier premium OpenChawn."""
+    """Kimi — API Moonshot/OpenAI-compatible (optionnel si KIMI_API_KEY vide)."""
 
     def __init__(self) -> None:
         self.api_key = (KIMI_API_KEY or "").strip()
-        self.base_url = (KIMI_BASE_URL or "https://api.moonshot.ai/v1").rstrip("/")
-        self.model = KIMI_MODEL or "kimi-k2-0905-preview"
-        self.temperature = float(KIMI_TEMPERATURE)
-        self.timeout = float(KIMI_TIMEOUT)
-        self.max_tokens = int(KIMI_MAX_TOKENS)
+        self.base_url = (KIMI_BASE_URL or "https://api.moonshot.ai/v1").strip().rstrip("/")
+        self.model = ((KIMI_MODEL or "").strip()) or "kimi-k2-0905-preview"
+        try:
+            self.temperature = float(KIMI_TEMPERATURE)
+        except (TypeError, ValueError):
+            self.temperature = 0.6
+        try:
+            self.timeout = float(KIMI_TIMEOUT)
+        except (TypeError, ValueError):
+            self.timeout = 120.0
+        try:
+            self.max_tokens = int(KIMI_MAX_TOKENS)
+        except (TypeError, ValueError):
+            self.max_tokens = 2048
 
     # ─── Interface BaseProvider ────────────────────────────────────────
 

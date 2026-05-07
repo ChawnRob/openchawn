@@ -46,7 +46,7 @@ def test_decision_model_call_local():
     out = decide("fais ça en offline sans internet")
     assert out["decision"] == "MODEL_CALL_NEEDED"
     assert out["model_routing"]["tier"] == "local"
-    assert out["model_routing"]["chain"] == ["ollama"]
+    assert out["model_routing"]["chain"] == ["deepseek"]
 
 
 def test_decision_model_call_economic_default():

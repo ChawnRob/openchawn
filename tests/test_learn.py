@@ -44,8 +44,8 @@ def test_learn_redacts_secrets():
 
 def test_learn_tier_importance_mapping():
     e1 = learn_from_exchange("q premium", "x" * 60, provider="kimi",    tier="premium")
-    e2 = learn_from_exchange("q eco",     "y" * 60, provider="minimax", tier="economic")
-    e3 = learn_from_exchange("q local",   "z" * 60, provider="ollama",  tier="local")
+    e2 = learn_from_exchange("q eco",     "y" * 60, provider="deepseek", tier="economic")
+    e3 = learn_from_exchange("q local",   "z" * 60, provider="openrouter", tier="local")
     assert e1.importance_score == 0.70
     assert e2.importance_score == 0.55
     assert e3.importance_score == 0.45
