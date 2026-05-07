@@ -14,9 +14,28 @@ from threading import Lock
 from app.settings import get_settings
 
 STORE_PATH = Path("data/memory/fractal_memory.json")
-MAX_CONTEXT_MEMORIES = 5
+MAX_CONTEXT_MEMORIES = 12  # couches agrégées (session+project+user+system réduites)
+STORE_VERSION = 2
 _STORE_LOCK = Lock()
 logger = logging.getLogger("openchawn.memory.fractal")
+
+# Types mémoire multi-couches (V11.6)
+MEMORY_TYPES = frozenset({"system", "project", "user", "session"})
+KNOWN_PROJECT_SLUGS = frozenset(
+    {"openchawn", "fluxorca", "weetao", "illhu", "luthor"}
+)
+
+# Futur memory_decay / archival / aging — données réservées, non utilisées encore
+MEMORY_DECAY_FIELDS = frozenset(
+    {"archived_at", "decayed_at", "last_access_ts", "age_weight"}
+)
+
+# Indexes logiques séparés (concepts / préférences) — synchro depuis les entrées
+DEFAULT_INDEXES: dict[str, object] = {
+    "system_concepts": [],
+    "project_concepts": {},  # project_slug -> list[str]
+    "user_preferences": {},  # user_key -> list[str]
+}
 
 _SENSITIVE_RE = re.compile(
     r"(api[_-]?key|sk-[a-z0-9_-]{8,}|token|secret|password)",
@@ -94,26 +113,27 @@ class LocalJsonMemoryBackend(MemoryBackend):
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def load_entries(self) -> list[dict]:
+    def _read_document(self) -> tuple[list[dict], dict[str, object]]:
         if not self.path.exists():
-            return []
+            return [], dict(DEFAULT_INDEXES)
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError, ValueError):
-            return []
-        if not isinstance(data, list):
-            return []
-        return [x for x in data if isinstance(x, dict)]
+            return [], dict(DEFAULT_INDEXES)
+        entries, indexes = parse_store_document_body(data)
+        return entries, indexes
+
+    def load_entries(self) -> list[dict]:
+        entries, _indexes = self._read_document()
+        return entries
 
     def save_entries(self, entries: list[dict]) -> None:
+        indexes = rebuild_logical_indexes(entries)
+        doc = serialize_store_document(entries, indexes)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(entries, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        self.path.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def persistent_storage(self) -> bool:
-        # Railway filesystem is ephemeral across redeploys/restarts.
         return not (os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"))
 
     def storage_path(self) -> str:
@@ -125,13 +145,380 @@ class LocalJsonMemoryBackend(MemoryBackend):
         return ""
 
 
+def parse_store_document_body(data: object) -> tuple[list[dict], dict[str, object]]:
+    """Retourne (entries normalisées, indexes depuis fichier ou reconstruction)."""
+    if isinstance(data, list):
+        entries = [_ensure_entry_defaults(e) for e in data if isinstance(e, dict)]
+        return entries, rebuild_logical_indexes(entries)
+    if isinstance(data, dict):
+        entries_raw = data.get("entries")
+        if isinstance(entries_raw, list):
+            entries = [_ensure_entry_defaults(e) for e in entries_raw if isinstance(e, dict)]
+            indexes = {
+                "system_concepts": data.get("system_concepts") or [],
+                "project_concepts": data.get("project_concepts") or {},
+                "user_preferences": data.get("user_preferences") or {},
+            }
+            if (
+                not indexes["system_concepts"]
+                and not indexes["project_concepts"]
+                and not indexes["user_preferences"]
+            ):
+                indexes = rebuild_logical_indexes(entries)
+            return entries, indexes
+    return [], dict(DEFAULT_INDEXES)
+
+
+def serialize_store_document(entries: list[dict], indexes: dict[str, object]) -> dict[str, object]:
+    return {
+        "version": STORE_VERSION,
+        "entries": entries,
+        "system_concepts": list(indexes.get("system_concepts", [])),
+        "project_concepts": dict(indexes.get("project_concepts", {})),
+        "user_preferences": dict(indexes.get("user_preferences", {})),
+        "reserved_decay": {},  # futur decay / archival
+    }
+
+
+def rebuild_logical_indexes(entries: list[dict]) -> dict[str, object]:
+    system_concepts: list[str] = []
+    project_concepts: dict[str, list[str]] = {}
+    user_preferences: dict[str, list[str]] = {}
+    for e in entries:
+        if str(e.get("memory_level", "")) != "concept_memory":
+            continue
+        summary = str(e.get("summary", "")).strip()
+        if not summary:
+            continue
+        mt = str(e.get("memory_type", "session"))
+        if mt == "system":
+            if summary not in system_concepts:
+                system_concepts.append(summary)
+            continue
+        if mt == "project":
+            slug = str(e.get("project_name") or e.get("project") or "general").strip().lower()
+            lst = project_concepts.setdefault(slug, [])
+            if summary not in lst:
+                lst.append(summary)
+            continue
+        if mt == "user":
+            uk = str(e.get("user_id") or "_anon").strip()
+            lst = user_preferences.setdefault(uk, [])
+            if summary not in lst:
+                lst.append(summary)
+    return {
+        "system_concepts": system_concepts,
+        "project_concepts": project_concepts,
+        "user_preferences": user_preferences,
+    }
+
+
+def _normalize_project_slug(name: str) -> str:
+    s = (name or "").strip().lower()
+    s = re.sub(r"[^\w\d]+", "_", s)
+    return s.strip("_")
+
+
+def detect_project_slug_from_text(text: str) -> str:
+    lowered = (text or "").lower()
+    for slug in KNOWN_PROJECT_SLUGS:
+        if slug in lowered.replace(" ", "").replace("-", "").replace("/", ""):
+            return slug
+    for slug in KNOWN_PROJECT_SLUGS:
+        if slug in lowered:
+            return slug
+    return ""
+
+
+def _ensure_entry_defaults(e: dict) -> dict:
+    if "memory_type" not in e or str(e["memory_type"]) not in MEMORY_TYPES:
+        inferred = _infer_legacy_memory_type(e)
+        e["memory_type"] = inferred
+    e["memory_type"] = str(e["memory_type"]).strip().lower()
+    if "project_name" not in e or not str(e.get("project_name", "")).strip():
+        e["project_name"] = _normalize_project_slug(str(e.get("project", "")))
+    if "user_id" not in e:
+        e["user_id"] = ""
+    if "metadata" not in e or not isinstance(e.get("metadata"), dict):
+        e["metadata"] = {}
+    for k in MEMORY_DECAY_FIELDS:
+        e["metadata"].setdefault(k, None)
+    if "project" not in e:
+        e["project"] = e.get("project_name", "")
+    return e
+
+
+def _infer_legacy_memory_type(e: dict) -> str:
+    tags = [str(t).lower() for t in e.get("tags", [])]
+    if "concept" in tags and str(e.get("summary", "")).startswith("Decision/Concept:"):
+        return "project"
+    return "session"
+
+
+def classify_memory_type(
+    *,
+    user_message: str,
+    assistant_response: str,
+    project_name_hint: str,
+    user_key: str,
+    is_guest: bool,
+) -> str:
+    text = f"{user_message} {assistant_response}".lower()
+    if re.search(
+        r"(deepseek.*(principal|par défaut|defaut)|provider principal|"
+        r"ollama.*(interdit|forbidden|désactivé)|railway.*(production|prod)|"
+        r"mémoire système|memoire systeme)",
+        text,
+        re.IGNORECASE,
+    ):
+        return "system"
+    if user_key and not is_guest and _looks_user_preference(user_message):
+        return "user"
+    if _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(user_message):
+        return "project"
+    return "session"
+
+
+def _looks_user_preference(msg: str) -> bool:
+    m = (msg or "").lower()
+    return any(
+        k in m
+        for k in (
+            "préfère",
+            "prefere",
+            "préférence",
+            "preference",
+            "style",
+            "ton ",
+            "toujours",
+            "réponses structurées",
+            "reponses structurees",
+            "comme bytebytego",
+            "ingénieur",
+            "ingenieur",
+        )
+    )
+
+
+def _norm_summary_key(summary: str) -> str:
+    return re.sub(r"\s+", " ", (summary or "").strip().lower())[:120]
+
+
+def _score_relevance(keys: set[str], entry: dict) -> int:
+    bucket = " ".join(
+        [
+            str(entry.get("user_message", "")),
+            str(entry.get("assistant_response", "")),
+            str(entry.get("summary", "")),
+            " ".join(str(t) for t in entry.get("tags", [])),
+            str(entry.get("project_name", "")),
+            str(entry.get("project", "")),
+        ]
+    ).lower()
+    if not bucket:
+        return 0
+    return len(keys.intersection(_keywords(bucket))) if keys else 0
+
+
+def _pick_layer_entries(
+    entries: list[dict],
+    *,
+    memory_type: str,
+    query_keys: set[str],
+    user_key: str,
+    project_slug: str,
+    limit: int,
+    prefer_recency: bool,
+) -> list[dict]:
+    pool = [
+        e
+        for e in entries
+        if str(e.get("memory_type", "")) == memory_type
+        and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
+    ]
+    if not pool:
+        pool = [e for e in entries if str(e.get("memory_type", "")) == memory_type]
+
+    scored: list[tuple[int, float, str, dict]] = []
+    for e in pool:
+        if memory_type == "session" and user_key:
+            uid_e = str(e.get("user_id", "") or "").strip()
+            if uid_e and uid_e != user_key:
+                continue
+        rel = _score_relevance(query_keys, e) if query_keys else 0
+        imp = float(e.get("importance_score", 0.0))
+        ts = str(e.get("timestamp", ""))
+        scored.append((rel, imp, ts, e))
+
+    if prefer_recency:
+        scored.sort(key=lambda x: (x[2], x[0], x[1]), reverse=True)
+    else:
+        scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+
+    out: list[dict] = []
+    for rel, imp, ts, e in scored:
+        if memory_type == "user" and user_key and str(e.get("user_id", "")) != user_key:
+            continue
+        if memory_type == "project" and project_slug:
+            ep = str(e.get("project_name") or e.get("project") or "").lower()
+            if ep and ep != project_slug and project_slug not in ep:
+                if rel == 0:
+                    continue
+        out.append(e)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def build_layered_memory_context(
+    query: str,
+    *,
+    user_key: str = "",
+    project_name_hint: str = "",
+    is_guest: bool = True,
+) -> tuple[str, list[dict]]:
+    q = (query or "").strip()
+    keys = _keywords(q)
+    project_slug = _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(q)
+
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        logger.warning("layered memory skipped reason=backend_config_error detail=%s", e)
+        return "", []
+
+    with _STORE_LOCK:
+        entries = _load_entries()
+
+    session_pick = _pick_layer_entries(
+        entries,
+        memory_type="session",
+        query_keys=keys,
+        user_key=user_key,
+        project_slug=project_slug,
+        limit=5,
+        prefer_recency=True,
+    )
+    project_pick = _pick_layer_entries(
+        entries,
+        memory_type="project",
+        query_keys=keys,
+        user_key=user_key,
+        project_slug=project_slug,
+        limit=3,
+        prefer_recency=False,
+    )
+    user_pick: list[dict] = []
+    if user_key and not is_guest:
+        user_pick = _pick_layer_entries(
+            entries,
+            memory_type="user",
+            query_keys=keys,
+            user_key=user_key,
+            project_slug=project_slug,
+            limit=2,
+            prefer_recency=False,
+        )
+
+    system_pick = sorted(
+        [
+            e
+            for e in entries
+            if str(e.get("memory_type")) == "system"
+            and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
+        ],
+        key=lambda x: (float(x.get("importance_score", 0.0)), str(x.get("timestamp", ""))),
+        reverse=True,
+    )[:2]
+    if len(system_pick) < 2:
+        for e in entries:
+            if str(e.get("memory_type")) == "system" and e not in system_pick:
+                system_pick.append(e)
+            if len(system_pick) >= 2:
+                break
+
+    seen_keys: set[str] = set()
+
+    def _dedupe(lst: list[dict]) -> list[dict]:
+        out: list[dict] = []
+        for item in lst:
+            k = _norm_summary_key(str(item.get("summary", "")))
+            if k and k in seen_keys:
+                continue
+            if k:
+                seen_keys.add(k)
+            out.append(item)
+        return out
+
+    system_pick = _dedupe(system_pick)
+    user_pick = _dedupe(user_pick)
+    project_pick = _dedupe(project_pick)
+    session_pick = _dedupe(session_pick)
+
+    def _lines(label: str, items: list[dict]) -> str:
+        if not items:
+            return ""
+        lines = [f"── {label} ──"]
+        for it in items:
+            summ = str(it.get("summary", "")).strip()
+            if not summ:
+                continue
+            lines.append(f"• {summ}")
+        return "\n".join(lines)
+
+    parts = [
+        _lines("MÉMOIRE SYSTÈME (règles globales OpenChawn)", system_pick),
+        _lines("PRÉFÉRENCES UTILISATEUR", user_pick),
+        _lines("MÉMOIRE PROJET", project_pick),
+        _lines("CONTEXTE SESSION (court terme)", session_pick),
+    ]
+    body = "\n\n".join(p for p in parts if p)
+    all_mem = system_pick + user_pick + project_pick + session_pick
+    logger.info(
+        "layered memory counts system=%s user=%s project=%s session=%s query_len=%s",
+        len(system_pick),
+        len(user_pick),
+        len(project_pick),
+        len(session_pick),
+        len(q),
+    )
+    return body, all_mem
+
+
+def memories_by_type(memory_type: str, limit: int = 50) -> list[dict]:
+    mt = (memory_type or "").strip().lower()
+    if mt not in MEMORY_TYPES:
+        return []
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError:
+        return []
+    with _STORE_LOCK:
+        entries = _load_entries()
+    pool = [e for e in entries if str(e.get("memory_type")) == mt]
+    pool.sort(key=lambda e: str(e.get("timestamp", "")), reverse=True)
+    return pool[: max(1, min(limit, 200))]
+
+
+def store_indexes_snapshot() -> dict[str, object]:
+    try:
+        entries = _load_entries()
+    except MemoryBackendConfigError:
+        return dict(DEFAULT_INDEXES)
+    return rebuild_logical_indexes(entries)
+
+
 class PostgresMemoryBackend(MemoryBackend):
     name = "postgres"
 
+    # Colonnes futures alignées V11.6 (migration à activer avec DATABASE_URL)
     CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS fractal_memories (
         id TEXT PRIMARY KEY,
         timestamp TIMESTAMPTZ NOT NULL,
+        memory_type TEXT NOT NULL DEFAULT 'session',
+        project_name TEXT NOT NULL DEFAULT '',
+        user_id TEXT NOT NULL DEFAULT '',
         source TEXT NOT NULL,
         user_message TEXT NOT NULL,
         assistant_response TEXT NOT NULL,
@@ -271,23 +658,31 @@ def _mk_entry(
     tags: list[str],
     importance_score: float,
     project: str,
+    memory_type: str,
+    project_name: str,
+    user_id: str,
     parent_id: str | None = None,
     children_ids: list[str] | None = None,
     memory_level: str = "raw_memory",
 ) -> dict:
+    slug = _normalize_project_slug(project_name or project)
     return {
         "id": f"mem_{uuid.uuid4().hex[:12]}",
         "timestamp": _now_iso(),
+        "memory_type": memory_type,
+        "project_name": slug,
+        "user_id": user_id or "",
         "source": source or "chat",
         "user_message": user_message,
         "assistant_response": assistant_response,
         "summary": summary,
         "tags": tags,
         "importance_score": importance_score,
-        "project": project or "",
+        "project": project or slug or "",
         "parent_id": parent_id,
         "children_ids": children_ids or [],
         "memory_level": memory_level,
+        "metadata": {},
     }
 
 
@@ -297,6 +692,9 @@ def write_exchange(
     user_message: str,
     assistant_response: str,
     project: str = "",
+    user_key: str = "",
+    project_name_hint: str = "",
+    is_guest: bool = True,
 ) -> MemoryWriteResult:
     try:
         _ = _get_backend()
@@ -308,8 +706,23 @@ def write_exchange(
         logger.info("memory write skipped reason=sensitive_content_detected")
         return MemoryWriteResult(saved=False, reason="sensitive_content_detected")
 
-    tags = _detect_tags(user_message, assistant_response, project)
+    hint = project_name_hint or project
+    mtype = classify_memory_type(
+        user_message=user_message,
+        assistant_response=assistant_response,
+        project_name_hint=hint,
+        user_key=user_key,
+        is_guest=is_guest,
+    )
+    proj_slug = _normalize_project_slug(hint) or detect_project_slug_from_text(
+        f"{user_message} {assistant_response}"
+    )
+    uid = user_key or ""
+
+    tags = _detect_tags(user_message, assistant_response, project or hint)
     importance = _importance_score(user_message, assistant_response, tags)
+    if mtype == "system":
+        importance = max(importance, 0.85)
     summary = _summary_text(user_message, assistant_response)
 
     raw_entry = _mk_entry(
@@ -319,7 +732,10 @@ def write_exchange(
         summary=summary,
         tags=tags,
         importance_score=importance,
-        project=project,
+        project=project or proj_slug,
+        memory_type=mtype,
+        project_name=proj_slug,
+        user_id=uid,
         memory_level="raw_memory",
     )
     summary_entry = _mk_entry(
@@ -329,7 +745,10 @@ def write_exchange(
         summary=summary,
         tags=tags,
         importance_score=max(0.35, round(importance - 0.1, 2)),
-        project=project,
+        project=project or proj_slug,
+        memory_type=mtype,
+        project_name=proj_slug,
+        user_id=uid,
         parent_id=raw_entry["id"],
         memory_level="summary_memory",
     )
@@ -340,7 +759,10 @@ def write_exchange(
         summary=_concept_summary(user_message, assistant_response, tags),
         tags=sorted(set(tags + ["concept"])),
         importance_score=max(0.5, round(importance, 2)),
-        project=project,
+        project=project or proj_slug,
+        memory_type=mtype,
+        project_name=proj_slug,
+        user_id=uid,
         parent_id=raw_entry["id"],
         memory_level="concept_memory",
     )
@@ -351,9 +773,11 @@ def write_exchange(
         entries.extend([raw_entry, summary_entry, concept_entry])
         _save_entries(entries)
     logger.info(
-        "memory write saved entries=%s project=%s source=%s",
+        "memory write saved entries=%s memory_type=%s project=%s user=%s source=%s",
         3,
-        project or "",
+        mtype,
+        proj_slug or "",
+        "guest" if is_guest else (uid or "unknown"),
         source or "chat",
     )
 
@@ -389,6 +813,8 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
                 str(e.get("summary", "")),
                 " ".join([str(t) for t in e.get("tags", [])]),
                 str(e.get("project", "")),
+                str(e.get("project_name", "")),
+                str(e.get("memory_type", "")),
             ]
         ).lower()
         if not bucket:
@@ -407,21 +833,20 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
 
 
 def build_memory_context(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> tuple[str, list[dict]]:
-    ranked = search_memories(query, limit=20)
-    important = [m for m in ranked if float(m.get("importance_score", 0.0)) >= 0.6][:3]
-    recent = recent_memories(limit=8)
-    recent = [m for m in recent if m.get("id") not in {x.get("id") for x in important}][:2]
-    memories = (important + recent)[: max(1, min(limit, 5))]
-    logger.info("memory retrieval query_len=%s count=%s", len(query or ""), len(memories))
-    if not memories:
-        return "", []
-    lines = []
-    for idx, mem in enumerate(memories, start=1):
-        level = mem.get("memory_level", "raw_memory")
-        summary = str(mem.get("summary", "")).strip()
-        tags = ", ".join([str(t) for t in mem.get("tags", [])][:4])
-        lines.append(f"{idx}. [{level}] {summary} | tags: {tags}")
-    return "\n".join(lines), memories
+    ctx, memories = build_layered_memory_context(
+        query,
+        user_key="",
+        project_name_hint="",
+        is_guest=True,
+    )
+    if limit and len(memories) > limit:
+        memories = memories[:limit]
+    logger.info(
+        "memory retrieval query_len=%s count=%s layered=fallback_anon",
+        len((query or "").strip()),
+        len(memories),
+    )
+    return ctx, memories
 
 
 def top_memories(limit: int = 10) -> list[dict]:

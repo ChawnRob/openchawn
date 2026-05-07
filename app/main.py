@@ -19,9 +19,11 @@ from app.profiles import list_profiles, get_profile_for_user
 from app.routing import get_cost_tracking_hooks, get_fallback_manager, get_provider_health_hooks
 from app.memory.fractal_memory import (
     concept_memories,
+    memories_by_type,
     memory_health,
     recent_memories,
     search_memories,
+    store_indexes_snapshot,
     top_memories,
 )
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
@@ -300,6 +302,44 @@ def memory_top():
     items = top_memories(limit=10)
     return {"status": "ok", "count": len(items), "items": items}
 
+
+@app.get("/memory/system")
+def memory_system():
+    idx = store_indexes_snapshot()
+    return {
+        "status": "ok",
+        "indexes": idx.get("system_concepts"),
+        "entries": memories_by_type("system", 80),
+    }
+
+
+@app.get("/memory/projects")
+def memory_projects_view():
+    idx = store_indexes_snapshot()
+    return {
+        "status": "ok",
+        "indexes": idx.get("project_concepts"),
+        "entries": memories_by_type("project", 120),
+    }
+
+
+@app.get("/memory/user")
+def memory_user_view():
+    idx = store_indexes_snapshot()
+    return {
+        "status": "ok",
+        "indexes": idx.get("user_preferences"),
+        "entries": memories_by_type("user", 120),
+    }
+
+
+@app.get("/memory/session")
+def memory_session_view():
+    return {
+        "status": "ok",
+        "indexes": [],
+        "entries": memories_by_type("session", 100),
+    }
 
 
 @app.get("/profiles")

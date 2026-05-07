@@ -9,7 +9,7 @@ from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
 from app.llm import generate_response
-from app.memory.fractal_memory import build_memory_context, write_exchange
+from app.memory.fractal_memory import build_layered_memory_context, write_exchange
 
 logger = logging.getLogger("openchawn.chat")
 
@@ -56,19 +56,28 @@ def chat(
                 detail="Vous avez atteint la limite gratuite. Créez un compte pour continuer.",
             )
 
-    # ── Memory retrieval (fractal MVP JSON local) ──
-    context = ""
+    proj_hint = (req.project_name or "").strip()
+    if is_guest:
+        user_key = f"guest-{(user.get('guest_session_id') or '')[:28]}"
+    else:
+        user_key = f"user-{user.get('id', '')}"
+
     memory_used = False
-    memory_context, memories = build_memory_context(req.message, limit=5)
+    memory_context, memories = build_layered_memory_context(
+        req.message,
+        user_key=user_key,
+        project_name_hint=proj_hint,
+        is_guest=is_guest,
+    )
     if memory_context:
-        context = memory_context
         memory_used = True
     logger.info("chat memory retrieval count=%s used=%s", len(memories), memory_used)
 
-    if context:
-        final_prompt = f"Contexte mémoire:\n{context}\n\nQuestion: {req.message}"
+    base_request = req.message
+    if memory_context:
+        final_prompt = f"{memory_context}\n\n── DEMANDE ──\n{base_request}"
     else:
-        final_prompt = req.message
+        final_prompt = base_request
 
     # ── Enrich prompt with optional V11.6 fields ──
     extra_parts = []
@@ -125,6 +134,9 @@ def chat(
         user_message=req.message,
         assistant_response=response_text,
         project=req.project_name,
+        user_key=user_key,
+        project_name_hint=proj_hint,
+        is_guest=is_guest,
     )
     if write_result.saved:
         logger.info("chat memory writeback status=saved entries=%s", len(write_result.entry_ids))
