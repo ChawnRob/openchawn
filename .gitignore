@@ -24,6 +24,7 @@ ENV/
 # ─── MemPalace data persistée
 data/mempalace/memories.json
 data/mempalace/*.tmp
+data/memory/*.json
 
 # ─── IDE / OS
 .idea/

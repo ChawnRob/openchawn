@@ -9,7 +9,7 @@ from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
 from app.llm import generate_response
-from memory.fractal_memory import add_node, search_nodes
+from app.memory.fractal_memory import build_memory_context, write_exchange
 
 logger = logging.getLogger("openchawn.chat")
 
@@ -56,14 +56,13 @@ def chat(
                 detail="Vous avez atteint la limite gratuite. Créez un compte pour continuer.",
             )
 
-    # ── Memory (authenticated users only) ──
+    # ── Memory retrieval (fractal MVP JSON local) ──
     context = ""
     memory_used = False
-    if not is_guest:
-        memories = search_nodes(req.message)
-        if memories:
-            context = "\n".join([str(m.get("content", "")) for m in memories[:3]])
-            memory_used = True
+    memory_context, memories = build_memory_context(req.message, limit=5)
+    if memory_context:
+        context = memory_context
+        memory_used = True
 
     if context:
         final_prompt = f"Contexte mémoire:\n{context}\n\nQuestion: {req.message}"
@@ -118,10 +117,14 @@ def chat(
         )
         raise HTTPException(status_code=503, detail=detail)
 
-    # ── Memory persistence (authenticated users only) ──
-    if not is_guest:
-        add_node(content=req.message, tags=["user"], source="chat")
-        add_node(content=response_text, tags=["assistant"], source="chat")
+    # ── Fractal memory writeback (secured filter in module) ──
+    source = "chat_guest" if is_guest else "chat_user"
+    write_result = write_exchange(
+        source=source,
+        user_message=req.message,
+        assistant_response=response_text,
+        project=req.project_name,
+    )
 
     result = {
         "output": response_text,
@@ -133,4 +136,7 @@ def chat(
     if debug:
         result["provider"] = provider_used
         result["provider_status"] = provider_status
+        result["memory_write_saved"] = write_result.saved
+        if not write_result.saved and write_result.reason:
+            result["memory_write_reason"] = write_result.reason
     return result

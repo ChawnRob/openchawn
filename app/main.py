@@ -17,6 +17,7 @@ from app.config import (
 from app.provider_manager import get_provider_manager
 from app.profiles import list_profiles, get_profile_for_user
 from app.routing import get_cost_tracking_hooks, get_fallback_manager, get_provider_health_hooks
+from app.memory.fractal_memory import memory_health, recent_memories, search_memories
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -133,6 +134,10 @@ class ChatTestRequest(BaseModel):
 class ProviderTestRequest(BaseModel):
     provider: str
     message: str
+
+
+class MemorySearchRequest(BaseModel):
+    query: str
 
 
 
@@ -259,6 +264,23 @@ def health_security():
         "compromised_keys_possible": compromised_keys_possible,
         "files_at_risk": sorted(set(files_at_risk)),
     }
+
+
+@app.get("/health/memory")
+def health_memory():
+    return memory_health()
+
+
+@app.get("/memory/recent")
+def memory_recent():
+    items = recent_memories(limit=10)
+    return {"status": "ok", "count": len(items), "items": items}
+
+
+@app.post("/memory/search")
+def memory_search(req: MemorySearchRequest):
+    items = search_memories(req.query, limit=10)
+    return {"status": "ok", "count": len(items), "items": items}
 
 
 
