@@ -265,7 +265,7 @@ def _build_settings() -> Settings:
             "/"
         ),
         deepseek_api_key=(os.getenv("DEEPSEEK_API_KEY") or "").strip(),
-        deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash",
+        deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro").strip() or "deepseek-v4-pro",
         deepseek_base_url=deepseek_base,
         infomaniak_api_key=_str("INFOMANIAK_API_KEY", default=""),
         infomaniak_model=_str("INFOMANIAK_MODEL", default=""),

@@ -24,6 +24,14 @@ def _deepseek_model_live() -> str:
     return os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
 
 
+def _deepseek_model_for_task(task_type: str) -> str:
+    # V11.6 policy: simple/volume -> Flash, reasoning -> Pro.
+    t = (task_type or "").strip().lower()
+    if t in {"reasoning", "analysis", "premium_tools", "complex"}:
+        return os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro").strip() or "deepseek-v4-pro"
+    return "deepseek-v4-flash"
+
+
 def _extract_openai_response_text(data: dict) -> str:
     if not isinstance(data, dict):
         return ""
@@ -153,6 +161,7 @@ def _dispatch(
     s: Settings,
     system_prompt: str,
     user_message: str,
+    task_type: str = "",
 ) -> tuple[str, int | None, str | None]:
     if name == "openrouter":
         return _chat_completions(
@@ -166,10 +175,12 @@ def _dispatch(
     if name == "openai":
         return _openai_responses(s, system_prompt, user_message)
     if name == "deepseek":
+        if not _deepseek_api_key_live():
+            return "", None, "DEEPSEEK_API_KEY_MISSING"
         return _chat_completions(
             base_url=s.deepseek_base_url,
             api_key=_deepseek_api_key_live(),
-            model=_deepseek_model_live(),
+            model=_deepseek_model_for_task(task_type),
             system_prompt=system_prompt,
             user_message=user_message,
             log_label="deepseek",
@@ -177,7 +188,7 @@ def _dispatch(
     if name == "kimi":
         key = (s.kimi_api_key or "").strip()
         if not key:
-            return "", None, "KIMI_NOT_CONFIGURED"
+            return "", None, "KIMI_API_KEY_MISSING"
         base = (s.kimi_base_url or "").strip().rstrip("/") or "https://api.moonshot.ai/v1"
         kem = (s.kimi_model or "").strip() or "kimi-k2-0905-preview"
         return _chat_completions(
@@ -189,6 +200,12 @@ def _dispatch(
             log_label="kimi",
         )
     if name == "infomaniak":
+        if not (s.infomaniak_api_key or "").strip():
+            return "", None, "INFOMANIAK_API_KEY_MISSING"
+        if not (s.infomaniak_model or "").strip():
+            return "", None, "INFOMANIAK_MODEL_MISSING"
+        if not (s.infomaniak_base_url or "").strip():
+            return "", None, "INFOMANIAK_BASE_URL_MISSING"
         return _chat_completions(
             base_url=(s.infomaniak_base_url or "").strip().rstrip("/"),
             api_key=(s.infomaniak_api_key or "").strip(),
@@ -221,10 +238,10 @@ def _hint_order(pm, provider_hint: str) -> list[str]:
 
 def _estimate_cost(provider: str, text: str) -> tuple[int, float]:
     tokens = max(1, len(text or "") // 4)
-    cap = next((x for x in provider_capabilities.values() if x.provider == provider), None)
+    cap = next((x for x in provider_capabilities.values() if str(x.get("provider", "")) == provider), None)
     if not cap:
         return tokens, 0.0
-    estimated = (tokens / 1000.0) * cap.estimated_cost_per_1k_tokens_usd
+    estimated = (tokens / 1000.0) * float(cap.get("estimated_cost_per_1k_tokens_usd", 0.0))
     return tokens, estimated
 
 
@@ -247,13 +264,12 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
             "error": "DeepSeek API key missing",
         }
 
-    seq = pm.intelligent_order(
+    decision = pm.intelligent_decision(
         system_prompt=system_prompt,
         user_message=user_message,
         provider_hint=provider_hint,
     )
-    if not seq:
-        seq = _hint_order(pm, provider_hint)
+    seq = decision.ordered_providers
 
     if not seq:
         return {
@@ -261,7 +277,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
             "provider": "none",
             "success": False,
             "status_code": None,
-            "error": "Aucune clé API LLM configurée (DEEPSEEK, Kimi optionnel, OpenRouter ou OpenAI).",
+            "error": "Aucune clé API LLM configurée (DEEPSEEK requis par défaut, puis KIMI/OPENAI/INFOMANIAK optionnels).",
         }
 
     last_err: str | None = None
@@ -271,7 +287,13 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
     cost = get_cost_tracking_hooks()
 
     for name in seq:
-        text, code, err = _dispatch(name, s, system_prompt, user_message)
+        text, code, err = _dispatch(
+            name,
+            s,
+            system_prompt,
+            user_message,
+            task_type=decision.task_type,
+        )
         if text:
             health.mark_success(name)
             estimated_tokens, estimated_cost = _estimate_cost(name, system_prompt + user_message + text)
@@ -283,7 +305,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
                 "status_code": code,
                 "error": None,
             }
-        if err and err != "KIMI_NOT_CONFIGURED":
+        if err:
             health.mark_failure(name)
             fallback.record(name, err)
             last_err = err

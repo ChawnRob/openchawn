@@ -61,7 +61,7 @@ def build_intelligent_order(
     candidates: list[tuple[float, str]] = []
     for provider_name in configured_providers:
         for cap in provider_capabilities.values():
-            if cap.provider != provider_name:
+            if str(cap.get("provider", "")) != provider_name:
                 continue
             health_boost = health.availability_boost(provider_name)
             penalty = fallback.health_penalty(provider_name)

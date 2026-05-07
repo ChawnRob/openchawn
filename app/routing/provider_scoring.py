@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.routing.provider_capabilities import ProviderCapability
-
 
 @dataclass(frozen=True)
 class RouterContext:
@@ -13,20 +11,22 @@ class RouterContext:
     enterprise_sovereign_mode: bool = False
 
 
-def _cost_score(cap: ProviderCapability) -> float:
+def _cost_score(cap: dict[str, object]) -> float:
     # Lower cost is better: normalize into 0..100
-    return max(0.0, 100.0 - (cap.estimated_cost_per_1k_tokens_usd * 160.0))
+    raw = float(cap.get("estimated_cost_per_1k_tokens_usd", 0.4))
+    return max(0.0, 100.0 - (raw * 160.0))
 
 
-def _context_fit_score(cap: ProviderCapability, estimated_input_tokens: int) -> float:
+def _context_fit_score(cap: dict[str, object], estimated_input_tokens: int) -> float:
     if estimated_input_tokens <= 0:
         return 80.0
-    ratio = min(1.0, cap.max_context_tokens / float(estimated_input_tokens))
+    max_ctx = float(cap.get("max_context_tokens", 32000))
+    ratio = min(1.0, max_ctx / float(estimated_input_tokens))
     return 40.0 + (ratio * 60.0)
 
 
-def score_provider(cap: ProviderCapability, ctx: RouterContext, availability_boost: float = 0.0) -> float:
-    if ctx.enterprise_sovereign_mode and not cap.enterprise_sovereign_ready:
+def score_provider(cap: dict[str, object], ctx: RouterContext, availability_boost: float = 0.0) -> float:
+    if ctx.enterprise_sovereign_mode and not bool(cap.get("enterprise_sovereign_ready", False)):
         return -1.0
 
     quality_weight = 0.45 if ctx.prefer_quality else 0.30
@@ -34,10 +34,10 @@ def score_provider(cap: ProviderCapability, ctx: RouterContext, availability_boo
     context_weight = 0.20
     priority_weight = 0.10
 
-    quality = float(cap.reasoning_score)
+    quality = float(cap.get("reasoning_score", 65))
     cost = _cost_score(cap)
     context_fit = _context_fit_score(cap, ctx.estimated_input_tokens)
-    priority = float(cap.priority)
+    priority = float(cap.get("priority", 50))
 
     score = (
         quality * quality_weight
@@ -47,7 +47,8 @@ def score_provider(cap: ProviderCapability, ctx: RouterContext, availability_boo
         + availability_boost
     )
 
-    if ctx.task_type not in cap.task_profiles:
+    task_profiles = [str(x) for x in cap.get("task_profiles", [])]
+    if ctx.task_type not in task_profiles:
         score -= 6.0
     return score
 

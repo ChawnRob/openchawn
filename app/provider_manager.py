@@ -11,11 +11,26 @@ import os
 from dataclasses import dataclass
 
 from app.routing import build_intelligent_order, provider_capabilities
+from app.routing.intelligent_router import RouterDecision
 from app.settings import Settings, get_settings
 
 
 def _deepseek_key_live() -> str:
     return (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+
+def _required_env_for_provider(name: str) -> str:
+    n = _normalize_provider_name(name)
+    if n == "deepseek":
+        return "DEEPSEEK_API_KEY"
+    if n == "kimi":
+        return "KIMI_API_KEY"
+    if n == "openai":
+        return "OPENAI_API_KEY"
+    if n == "infomaniak":
+        return "INFOMANIAK_API_KEY"
+    if n == "openrouter":
+        return "OPENROUTER_API_KEY"
+    return ""
 
 
 # Ordre canonique après DEFAULT_PROVIDER (uniquement si clé configurée).
@@ -80,9 +95,7 @@ class ProviderManager:
         configured = self._resolution_order()
         if not configured:
             return []
-        decision = build_intelligent_order(
-            configured_providers=configured,
-            default_provider=_normalize_provider_name(self.settings.default_provider),
+        decision = self.intelligent_decision(
             system_prompt=system_prompt,
             user_message=user_message,
             provider_hint=provider_hint,
@@ -90,6 +103,22 @@ class ProviderManager:
         if not decision.ordered_providers:
             return configured
         return decision.ordered_providers
+
+    def intelligent_decision(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        provider_hint: str = "",
+    ) -> RouterDecision:
+        configured = self._resolution_order()
+        return build_intelligent_order(
+            configured_providers=configured,
+            default_provider=_normalize_provider_name(self.settings.default_provider),
+            system_prompt=system_prompt,
+            user_message=user_message,
+            provider_hint=provider_hint,
+        )
 
     def configured_providers(self) -> list[str]:
         return [n for n in FIXED_ORDER if self._has(n)]
@@ -104,8 +133,9 @@ class ProviderManager:
         pref = _normalize_provider_name(s.default_provider)
         missing: list[str] = []
 
-        if pref == "deepseek" and not _deepseek_key_live():
-            missing.append("DEEPSEEK_API_KEY")
+        req = _required_env_for_provider(pref)
+        if req and not self._has(pref):
+            missing.append(req)
 
         if self.resolution_order():
             return missing
@@ -136,19 +166,9 @@ class ProviderManager:
                 return False
         return True
 
-    def capabilities_snapshot(self) -> dict[str, dict[str, str | int | float | bool | tuple[str, ...]]]:
+    def capabilities_snapshot(self) -> dict[str, dict[str, object]]:
         return {
-            key: {
-                "provider": cap.provider,
-                "model": cap.model,
-                "priority": cap.priority,
-                "estimated_cost_per_1k_tokens_usd": cap.estimated_cost_per_1k_tokens_usd,
-                "max_context_tokens": cap.max_context_tokens,
-                "reasoning_score": cap.reasoning_score,
-                "availability_tier": cap.availability_tier,
-                "enterprise_sovereign_ready": cap.enterprise_sovereign_ready,
-                "task_profiles": cap.task_profiles,
-            }
+            key: dict(cap)
             for key, cap in provider_capabilities.items()
         }
 
