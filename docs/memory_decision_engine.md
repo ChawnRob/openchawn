@@ -65,6 +65,8 @@ Les résumés et chaînes exposées via API passent par `sanitize_timeline_text`
 
 ## Endpoints
 
+Les instantanés « ok » sont également conservés dans une **deque bornée** (`get_decision_history()`) pour le **Memory Reflection Engine** (`/memory/reflection/report`).
+
 | Route | Description |
 |-------|-------------|
 | `GET /memory/decision/last` | Dernier bundle produit par un passage réel retrieval→décision (ex. dernier `/api/chat` ayant chargé la mémoire). Payload « lean » (pas de `user_message` brut). |

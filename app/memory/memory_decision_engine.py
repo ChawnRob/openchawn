@@ -6,6 +6,8 @@ Sans LLM, embeddings ou vecteurs. Compatible Railway / futur Postgres.
 from __future__ import annotations
 
 import copy
+import logging
+from collections import deque
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
@@ -19,7 +21,11 @@ from app.memory.fractal_memory import (
 from app.memory.memory_index import concept_centrality_influence_maps
 from app.memory.memory_timeline import sanitize_timeline_text
 
+logger = logging.getLogger("openchawn.memory.decision_engine")
+
 _LAST_DECISION_LOCK = Lock()
+_DECISION_HISTORY_MAX = 96
+_DECISION_HISTORY: deque[dict[str, Any]] = deque(maxlen=_DECISION_HISTORY_MAX)
 _LAST_DECISION_BUNDLE: dict[str, Any] = {
     "status": "empty",
     "selected_memories": [],
@@ -277,15 +283,84 @@ def _confidence_hint_from(selected_rows: list[dict[str, Any]]) -> float:
     return round(max(0.08, min(1.0, avg / 420.0)), 3)
 
 
+def _snapshot_for_history(bundle: dict[str, Any]) -> dict[str, Any]:
+    """Instantané léger pour Memory Reflection (sans texte utilisateur brut)."""
+    if str(bundle.get("status") or "") != "ok":
+        return {}
+    conflicts_out: list[dict[str, Any]] = []
+    for c in bundle.get("conflicts_detected") or []:
+        if not isinstance(c, dict):
+            continue
+        conflicts_out.append(
+            {
+                "kind": sanitize_timeline_text(str(c.get("kind") or ""), 120),
+                "memory_ids": sorted({str(x) for x in (c.get("memory_ids") or []) if x}),
+                "detail": sanitize_timeline_text(str(c.get("detail") or ""), 280),
+                "subject": sanitize_timeline_text(str(c.get("subject") or ""), 120),
+                "terms": [sanitize_timeline_text(str(t), 80) for t in (c.get("terms") or [])][:8],
+            }
+        )
+    sel_ids = [str(m.get("id")) for m in bundle.get("selected_memories") or [] if m.get("id")]
+    rej_ids = [str(m.get("id")) for m in bundle.get("rejected_memories") or [] if m.get("id")]
+    sb = bundle.get("scoring_breakdown") or []
+    scoring_lean: list[dict[str, Any]] = []
+    for r in sb[:160]:
+        if not isinstance(r, dict):
+            continue
+        scoring_lean.append(
+            {
+                "memory_id": str(r.get("memory_id") or ""),
+                "final_decision_score": float(r.get("final_decision_score") or 0),
+                "decay_score": float(r.get("decay_score") or 0),
+                "contradiction_penalty": float(r.get("contradiction_penalty") or 0),
+            }
+        )
+    bundle_sig = ",".join(sorted(sel_ids))[:400]
+    penalties_archive = 0
+    for m in bundle.get("rejected_memories") or []:
+        dbg = m.get("_decision_debug") if isinstance(m.get("_decision_debug"), dict) else {}
+        pens = dbg.get("penalties") or []
+        if any("archived" in str(p).lower() or "inactive" in str(p).lower() for p in pens):
+            penalties_archive += 1
+    return {
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "project_slug": sanitize_timeline_text(str(bundle.get("project_slug") or ""), 120),
+        "query_preview": sanitize_timeline_text(str(bundle.get("query_preview") or ""), 240),
+        "candidate_count": int(bundle.get("candidate_count") or 0),
+        "selected_ids": sel_ids,
+        "rejected_ids": rej_ids,
+        "conflicts_detected": conflicts_out,
+        "confidence_hint": bundle.get("confidence_hint"),
+        "scoring_breakdown_lean": scoring_lean,
+        "bundle_signature": bundle_sig,
+        "archived_rejection_signals": penalties_archive,
+    }
+
+
 def set_last_decision_bundle(payload: dict[str, Any]) -> None:
     global _LAST_DECISION_BUNDLE
     with _LAST_DECISION_LOCK:
         _LAST_DECISION_BUNDLE = copy.deepcopy(payload)
+        snap = _snapshot_for_history(payload)
+        if snap:
+            _DECISION_HISTORY.append(snap)
 
 
 def get_last_decision_bundle() -> dict[str, Any]:
     with _LAST_DECISION_LOCK:
         return copy.deepcopy(_LAST_DECISION_BUNDLE)
+
+
+def get_decision_history() -> list[dict[str, Any]]:
+    """Copie immuable (liste) des derniers instantanés décision pour Reflection."""
+    with _LAST_DECISION_LOCK:
+        return list(_DECISION_HISTORY)
+
+
+def clear_decision_history_for_tests() -> None:
+    """Tests uniquement — vide la deque process-local."""
+    with _LAST_DECISION_LOCK:
+        _DECISION_HISTORY.clear()
 
 
 def build_memory_decision_bundle(

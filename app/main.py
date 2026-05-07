@@ -35,6 +35,7 @@ from app.memory.fractal_memory import (
 from app.memory import memory_timeline as mem_timeline
 from app.memory import memory_index as mem_index
 from app.memory import memory_decision_engine as mem_decision
+from app.memory import memory_reflection_engine as mem_reflect
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -146,6 +147,19 @@ class UpdateBusinessRequest(BaseModel):
 class ChatTestRequest(BaseModel):
     message: str
     model: str = "mistral:7b"
+
+
+class PredictConsequencesRequest(BaseModel):
+    proposed_action: str
+    project: str = "openchawn"
+
+    @field_validator("proposed_action")
+    @classmethod
+    def validate_action(cls, v: str) -> str:
+        s = (v or "").strip()
+        if len(s) < 2:
+            raise ValueError("proposed_action trop court")
+        return s[:8000]
 
 
 class ProviderTestRequest(BaseModel):
@@ -495,6 +509,45 @@ def memory_decision_simulate_route(
         "confidence_hint": bundle.get("confidence_hint"),
         "arbitration_summary": bundle.get("arbitration_summary"),
     }
+
+
+@app.get("/memory/reflection/report")
+def memory_reflection_report_route():
+    return mem_reflect.build_reflection_report()
+
+
+@app.post("/decision/predict-consequences")
+def decision_predict_consequences_route(req: PredictConsequencesRequest):
+    from app.decision import consequence_predictor as cp
+
+    dc = mem_decision.get_last_decision_bundle()
+    return cp.build_impact_report(
+        proposed_action=req.proposed_action,
+        project=(req.project or "").strip(),
+        related_memories=[],
+        decision_context=dc,
+    )
+
+
+@app.get("/decision/last-impact")
+def decision_last_impact_route():
+    from app.decision import consequence_predictor as cp
+
+    rep = cp.get_last_impact_report()
+    if (rep.get("status") or "") == "empty":
+        return {
+            "status": "empty",
+            "likely_benefits": [],
+            "likely_risks": [],
+            "technical_impact": "",
+            "cost_impact": "",
+            "stability_impact": "",
+            "security_impact": "",
+            "provider_impact": "",
+            "memory_impact": "",
+            "confidence_hint": None,
+        }
+    return rep
 
 
 @app.get("/profiles")
