@@ -32,6 +32,7 @@ from app.memory.fractal_memory import (
     store_indexes_snapshot,
     top_memories,
 )
+from app.memory import memory_timeline as mem_timeline
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -389,6 +390,56 @@ def memory_archive_route(
         older_than_days=older_than_days,
         limit=limit,
     )
+
+
+@app.get("/memory/timeline")
+def memory_timeline_route(
+    project: str = Query(default=""),
+    memory_type: str = Query(default=""),
+    event_type: str = Query(default=""),
+    since: str | None = Query(default=None),
+    until: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=2000),
+):
+    events = mem_timeline.filter_timeline_events(
+        project=project,
+        memory_type=memory_type,
+        event_type=event_type,
+        since=since,
+        until=until,
+        limit=limit,
+    )
+    return {"status": "ok", "count": len(events), "events": events}
+
+
+@app.get("/memory/replay")
+def memory_replay_route(
+    project: str = Query(default=""),
+    memory_type: str = Query(default=""),
+    since: str | None = Query(default=None),
+    until: str | None = Query(default=None),
+    limit: int = Query(default=250, ge=1, le=500),
+):
+    return mem_timeline.build_replay_payload(
+        project=project,
+        memory_type=memory_type,
+        since=since,
+        until=until,
+        limit=limit,
+    )
+
+
+@app.get("/memory/replay/session/{session_id}")
+def memory_replay_session_route(session_id: str, limit: int = Query(default=200, ge=1, le=500)):
+    return mem_timeline.build_session_replay(session_id, limit=limit)
+
+
+@app.get("/memory/decision-trace")
+def memory_decision_trace_route(
+    concept: str = Query(..., min_length=1),
+    project: str = Query(default=""),
+):
+    return mem_timeline.decision_trace(concept=concept, project=project)
 
 
 @app.get("/profiles")

@@ -23,6 +23,101 @@ _STORE_LOCK = Lock()
 _LAST_CONTEXT_LOCK = Lock()
 logger = logging.getLogger("openchawn.memory.fractal")
 
+
+def _timeline_emit(**kwargs: object) -> None:
+    """Append-only timeline (MVP JSON) — import paresseux pour éviter cycles."""
+    try:
+        from app.memory.memory_timeline import append_timeline_event
+
+        append_timeline_event(**kwargs)  # type: ignore[arg-type]
+    except Exception:
+        pass
+
+
+def _timeline_write_exchange(
+    bundle: list[dict],
+    *,
+    merged_into: bool,
+    canon: dict | None,
+    proj_slug: str,
+    uid: str,
+    mtype: str,
+) -> None:
+    sid = (uid or "").strip() or "anon"
+    pn0 = _normalize_project_slug(proj_slug or "")
+    flagged = any(bool(b.get("contradiction_detected")) for b in bundle)
+    for e in bundle:
+        if str(e.get("memory_level")) == "concept_memory":
+            continue
+        pn = _normalize_project_slug(str(e.get("project_name") or pn0 or ""))
+        _timeline_emit(
+            event_type="memory_created",
+            memory_id=str(e.get("id") or ""),
+            memory_type=str(e.get("memory_type") or mtype),
+            project_name=pn,
+            summary=str(e.get("summary") or ""),
+            importance_score=float(e.get("importance_score") or 0.0),
+            decay_score=float(e.get("decay_score") or 0.0),
+            lifecycle_status=str(e.get("lifecycle_status") or "active"),
+            contradiction_detected=bool(e.get("contradiction_detected")),
+            user_key=sid,
+            session_id=sid,
+        )
+    if merged_into and canon:
+        md = canon.get("metadata") if isinstance(canon.get("metadata"), dict) else {}
+        aliases = md.get("aliases") if isinstance(md.get("aliases"), list) else []
+        _timeline_emit(
+            event_type="concept_merged",
+            memory_id=str(canon.get("id") or ""),
+            memory_type=str(canon.get("memory_type") or ""),
+            project_name=_normalize_project_slug(str(canon.get("project_name") or pn0 or "")),
+            summary=str(canon.get("summary") or "")[:400],
+            importance_score=float(canon.get("importance_score") or 0.0),
+            decay_score=float(canon.get("decay_score") or 0.0),
+            lifecycle_status=str(canon.get("lifecycle_status") or "active"),
+            concept_ids=[str(canon.get("id") or "")],
+            metadata={"merge_aliases_count": len(aliases)},
+            user_key=sid,
+            session_id=sid,
+        )
+    else:
+        for e in bundle:
+            if str(e.get("memory_level")) != "concept_memory":
+                continue
+            pn = _normalize_project_slug(str(e.get("project_name") or pn0 or ""))
+            cid = str(e.get("id") or "")
+            _timeline_emit(
+                event_type="concept_created",
+                memory_id=cid,
+                memory_type=str(e.get("memory_type") or ""),
+                project_name=pn,
+                summary=str(e.get("summary") or ""),
+                importance_score=float(e.get("importance_score") or 0.0),
+                decay_score=float(e.get("decay_score") or 0.0),
+                lifecycle_status=str(e.get("lifecycle_status") or "active"),
+                concept_ids=[cid] if cid else [],
+                user_key=sid,
+                session_id=sid,
+            )
+    if flagged:
+        pivot = next(
+            (str(b.get("summary") or "") for b in bundle if b.get("contradiction_detected")),
+            "contradiction",
+        )
+        mids = [str(b.get("id")) for b in bundle if b.get("id")]
+        _timeline_emit(
+            event_type="contradiction_detected",
+            memory_id=mids[0] if mids else "",
+            memory_type=mtype,
+            project_name=pn0,
+            summary=f"provider polarity conflict near: {pivot[:160]}",
+            contradiction_detected=True,
+            concept_ids=mids[:8],
+            user_key=sid,
+            session_id=sid,
+        )
+
+
 # Dernier retrieval injecté (debug / introspection — best-effort multi-workers)
 _FUTURE_OBS_UI_NOTE = (
     "Futur: timeline UI, memory graph UI, semantic explorer (non implémentés)."
@@ -365,10 +460,17 @@ def _increment_concept_canon_merge(canon: dict, merged_phrase: str) -> None:
     md["last_seen"] = _now_iso()
 
 
-def apply_archive_rules(entries: list[dict]) -> int:
+def apply_archive_rules(
+    entries: list[dict],
+    *,
+    timeline_user_key: str = "",
+    timeline_session_id: str = "",
+) -> int:
     """Archive les entrées bruit faible sans accès réel."""
     archived = 0
     now = _now_iso()
+    t_uk = (timeline_user_key or "").strip()
+    t_sid = (timeline_session_id or "").strip()
     for e in entries:
         if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED:
             continue
@@ -392,12 +494,35 @@ def apply_archive_rules(entries: list[dict]) -> int:
             if isinstance(md, dict):
                 md.setdefault("archived_at", now)
             archived += 1
+            if t_uk or t_sid:
+                pn = _normalize_project_slug(str(e.get("project_name") or ""))
+                _timeline_emit(
+                    event_type="memory_archived",
+                    memory_id=str(e.get("id") or ""),
+                    memory_type=str(e.get("memory_type") or ""),
+                    project_name=pn,
+                    summary=str(e.get("summary") or ""),
+                    importance_score=float(e.get("importance_score") or 0.0),
+                    decay_score=float(e.get("decay_score") or 0.0),
+                    lifecycle_status=MEMORY_LIFECYCLE_ARCHIVED,
+                    concept_ids=[str(x) for x in (e.get("children_ids") or []) if x][:12],
+                    user_key=t_uk,
+                    session_id=t_sid or t_uk,
+                )
     return archived
 
 
-def reinforce_entries(entries: list[dict], ids: Iterable[str]) -> None:
+def reinforce_entries(
+    entries: list[dict],
+    ids: Iterable[str],
+    *,
+    timeline_user_key: str = "",
+    timeline_session_id: str = "",
+) -> None:
     want = {str(i) for i in ids if i}
     now = _now_iso()
+    t_uk = (timeline_user_key or "").strip()
+    t_sid = (timeline_session_id or "").strip()
     for e in entries:
         eid = str(e.get("id", ""))
         if eid not in want:
@@ -436,6 +561,20 @@ def reinforce_entries(entries: list[dict], ids: Iterable[str]) -> None:
                     "reason": "reinforcement",
                 },
                 _MAX_DECAY_HISTORY,
+            )
+        if t_uk or t_sid:
+            pn = _normalize_project_slug(str(e.get("project_name") or ""))
+            _timeline_emit(
+                event_type="memory_reinforced",
+                memory_id=eid,
+                memory_type=str(e.get("memory_type") or ""),
+                project_name=pn,
+                summary=str(e.get("summary") or ""),
+                importance_score=float(e.get("importance_score") or 0.0),
+                decay_score=float(e.get("decay_score") or 0.0),
+                lifecycle_status=str(e.get("lifecycle_status") or MEMORY_LIFECYCLE_ACTIVE),
+                user_key=t_uk,
+                session_id=t_sid or t_uk,
             )
 
 
@@ -828,10 +967,15 @@ def build_layered_memory_context(
         return "", []
 
     with _STORE_LOCK:
+        tl_key = (user_key or "").strip() or "anon"
         entries = _load_entries()
         entries = [_ensure_entry_defaults(e) for e in entries]
         refresh_lifecycle_decay(entries)
-        apply_archive_rules(entries)
+        apply_archive_rules(
+            entries,
+            timeline_user_key=tl_key,
+            timeline_session_id=tl_key,
+        )
 
         def _lines_for_label(label: str, items: list[dict]) -> str:
             if not items:
@@ -973,10 +1117,50 @@ def build_layered_memory_context(
                     rd["retrieval_rank"] = rnk
                 all_mem.append(it)
 
+        for it in all_mem:
+            rd = it.get("_retrieval_debug")
+            why = ""
+            if isinstance(rd, dict):
+                why = str(rd.get("why_selected") or "")
+            pn_it = _normalize_project_slug(str(it.get("project_name") or project_slug or ""))
+            _timeline_emit(
+                event_type="memory_retrieved",
+                memory_id=str(it.get("id") or ""),
+                memory_type=str(it.get("memory_type") or ""),
+                project_name=pn_it,
+                summary=str(it.get("summary") or ""),
+                importance_score=float(it.get("importance_score") or 0.0),
+                decay_score=float(it.get("decay_score") or 0.0),
+                lifecycle_status=str(it.get("lifecycle_status") or MEMORY_LIFECYCLE_ACTIVE),
+                metadata={"why_selected": why[:260]},
+                user_key=tl_key,
+                session_id=tl_key,
+            )
+
         reinforced_ids = [str(it.get("id")) for it in all_mem if it.get("id")]
-        reinforce_entries(entries, reinforced_ids)
+        reinforce_entries(
+            entries,
+            reinforced_ids,
+            timeline_user_key=tl_key,
+            timeline_session_id=tl_key,
+        )
         refresh_lifecycle_decay(entries)
         _save_entries(entries)
+
+    summaries_ordered = [
+        str(it.get("summary") or "").strip() for it in all_mem if str(it.get("summary") or "").strip()
+    ]
+    _timeline_emit(
+        event_type="context_injected",
+        project_name=project_slug or "",
+        summary=f"injected_snippets={len(summaries_ordered)} query_len={len(q)}",
+        metadata={
+            "summaries_ordered": summaries_ordered[:40],
+            "query_preview": q[:220],
+        },
+        user_key=(user_key or "").strip() or "anon",
+        session_id=(user_key or "").strip() or "anon",
+    )
 
     _remember_last_context_snapshot(q, user_key, all_mem)
 
@@ -1260,6 +1444,7 @@ def write_exchange(
     concept_summ = _concept_summary(user_message, assistant_response, tags)
 
     merged_into = False
+    canon_merged: dict | None = None
     with _STORE_LOCK:
         entries = _load_entries()
         entries = [_ensure_entry_defaults(e) for e in entries]
@@ -1302,6 +1487,7 @@ def write_exchange(
 
         if canon:
             merged_into = True
+            canon_merged = canon
             _increment_concept_canon_merge(canon, concept_summ)
             canon["decay_score"] = round(max(0.0, float(canon.get("decay_score") or 0.0) - 5.5), 2)
             s_md = summary_entry.setdefault("metadata", {})
@@ -1336,8 +1522,21 @@ def write_exchange(
         )
         entries.extend(bundle)
         refresh_lifecycle_decay(entries)
-        apply_archive_rules(entries)
+        apply_archive_rules(
+            entries,
+            timeline_user_key=uid or "anon",
+            timeline_session_id=uid or "anon",
+        )
         _save_entries(entries)
+
+    _timeline_write_exchange(
+        bundle,
+        merged_into=merged_into,
+        canon=canon_merged if merged_into else None,
+        proj_slug=proj_slug or "",
+        uid=uid,
+        mtype=mtype,
+    )
 
     logger.info(
         "memory write saved entries=%s memory_type=%s project=%s user=%s source=%s merged=%s",
