@@ -202,6 +202,13 @@ def compute_concept_influence(entries: list[dict], centrality: dict[str, float] 
     return out
 
 
+def concept_centrality_influence_maps(entries: list[dict]) -> tuple[dict[str, float], dict[str, float]]:
+    """Maps concept_id → scores pour enrichissement décisionnel (sans round-trip store)."""
+    cen = compute_concept_centrality(entries)
+    infl = compute_concept_influence(entries, cen)
+    return cen, infl
+
+
 def percentile_threshold(vals: list[float], q: float) -> float:
     if not vals:
         return 0.0

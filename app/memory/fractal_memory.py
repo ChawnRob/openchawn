@@ -949,6 +949,145 @@ def _pick_layer_entries(
     return out
 
 
+def gather_layered_candidates(
+    entries: list[dict],
+    query: str,
+    *,
+    user_key: str = "",
+    project_name_hint: str = "",
+    is_guest: bool = True,
+) -> list[dict]:
+    """
+    Même logique de retrieval que build_layered_memory_context (sans timeline/reinforce/save).
+    Retourne les mémoires annotées avec _retrieval_debug et retrieval_rank global.
+    """
+    q_strip = (query or "").strip()
+    keys = _keywords(q_strip)
+    project_slug = _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(q_strip)
+
+    session_pick = _pick_layer_entries(
+        entries,
+        memory_type="session",
+        query_keys=keys,
+        user_key=user_key,
+        project_slug=project_slug,
+        limit=5,
+        prefer_recency=True,
+    )
+    project_pick = _pick_layer_entries(
+        entries,
+        memory_type="project",
+        query_keys=keys,
+        user_key=user_key,
+        project_slug=project_slug,
+        limit=3,
+        prefer_recency=False,
+    )
+    user_pick: list[dict] = []
+    if user_key and not is_guest:
+        user_pick = _pick_layer_entries(
+            entries,
+            memory_type="user",
+            query_keys=keys,
+            user_key=user_key,
+            project_slug=project_slug,
+            limit=2,
+            prefer_recency=False,
+        )
+
+    system_pick = sorted(
+        [
+            e
+            for e in entries
+            if str(e.get("memory_type")) == "system"
+            and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
+            and is_active_memory(e)
+        ],
+        key=lambda x: (
+            layered_sort_key(
+                0,
+                float(x.get("importance_score", 0.0)),
+                float(x.get("decay_score", 0.0)),
+                str(x.get("timestamp", "")),
+            )[0],
+            str(x.get("timestamp", "")),
+        ),
+        reverse=True,
+    )[:2]
+    if len(system_pick) < 2:
+        for e in entries:
+            if (
+                str(e.get("memory_type")) == "system"
+                and e not in system_pick
+                and is_active_memory(e)
+            ):
+                system_pick.append(e)
+            if len(system_pick) >= 2:
+                break
+
+    seen_keys: set[str] = set()
+
+    def _dedupe(lst: list[dict]) -> list[dict]:
+        out_d: list[dict] = []
+        for item in lst:
+            k = _norm_summary_key(str(item.get("summary", "")))
+            if k and k in seen_keys:
+                continue
+            if k:
+                seen_keys.add(k)
+            out_d.append(item)
+        return out_d
+
+    system_pick = _dedupe(system_pick)
+    user_pick = _dedupe(user_pick)
+    project_pick = _dedupe(project_pick)
+    session_pick = _dedupe(session_pick)
+
+    def _annotate_layer(layer: str, picks: list[dict], *, prefer_recency: bool) -> list[dict]:
+        out_a: list[dict] = []
+        for i, src in enumerate(picks):
+            rel = _score_relevance(keys, src) if layer != "system" else 0
+            imp = float(src.get("importance_score", 0.0))
+            decay = float(src.get("decay_score", 0.0))
+            composite = _composite_retrieval_score(rel, imp, decay)
+            if layer == "system":
+                why = "layer:system;strategy:importance_decay;deduped_pick"
+            elif layer == "user":
+                why = "layer:user;keyword_overlap_with_query;user_scope"
+            elif layer == "project":
+                why = "layer:project;keyword_overlap_with_query;project_scope"
+            else:
+                why = "layer:session;keyword_overlap_with_query;session_user_scope"
+            dbg: dict[str, object] = {
+                "why_selected": f"{why};layer_rank={i + 1};prefer_recency={prefer_recency}",
+                "relevance_score": rel,
+                "importance_score": imp,
+                "decay_score": decay,
+                "memory_type": str(src.get("memory_type", "")),
+                "retrieval_rank": 0,
+                "composite_score": round(composite, 2),
+            }
+            c = dict(src)
+            c["_retrieval_debug"] = dbg
+            out_a.append(c)
+        return out_a
+
+    sys_ex = _annotate_layer("system", system_pick, prefer_recency=False)
+    usr_ex = _annotate_layer("user", user_pick, prefer_recency=False)
+    proj_ex = _annotate_layer("project", project_pick, prefer_recency=False)
+    sess_ex = _annotate_layer("session", session_pick, prefer_recency=True)
+    all_mem: list[dict] = []
+    rnk = 0
+    for block in (sys_ex, usr_ex, proj_ex, sess_ex):
+        for it in block:
+            rnk += 1
+            rd = it.get("_retrieval_debug")
+            if isinstance(rd, dict):
+                rd["retrieval_rank"] = rnk
+            all_mem.append(it)
+    return all_mem
+
+
 def build_layered_memory_context(
     query: str,
     *,
@@ -957,7 +1096,6 @@ def build_layered_memory_context(
     is_guest: bool = True,
 ) -> tuple[str, list[dict]]:
     q = (query or "").strip()
-    keys = _keywords(q)
     project_slug = _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(q)
 
     try:
@@ -965,6 +1103,8 @@ def build_layered_memory_context(
     except MemoryBackendConfigError as e:
         logger.warning("layered memory skipped reason=backend_config_error detail=%s", e)
         return "", []
+
+    from app.memory import memory_decision_engine as mde
 
     with _STORE_LOCK:
         tl_key = (user_key or "").strip() or "anon"
@@ -977,147 +1117,24 @@ def build_layered_memory_context(
             timeline_session_id=tl_key,
         )
 
-        def _lines_for_label(label: str, items: list[dict]) -> str:
-            if not items:
-                return ""
-            lines_l = [f"── {label} ──"]
-            for it in items:
-                summ = str(it.get("summary", "")).strip()
-                if not summ:
-                    continue
-                lines_l.append(f"• {summ}")
-            return "\n".join(lines_l)
-
-        session_pick = _pick_layer_entries(
+        all_candidates = gather_layered_candidates(
             entries,
-            memory_type="session",
-            query_keys=keys,
+            query,
             user_key=user_key,
-            project_slug=project_slug,
-            limit=5,
-            prefer_recency=True,
+            project_name_hint=project_name_hint,
+            is_guest=is_guest,
         )
-        project_pick = _pick_layer_entries(
-            entries,
-            memory_type="project",
-            query_keys=keys,
-            user_key=user_key,
+
+        bundle = mde.build_memory_decision_bundle(
+            query=q,
+            candidates=all_candidates,
+            entries_snapshot=entries,
             project_slug=project_slug,
-            limit=3,
-            prefer_recency=False,
         )
-        user_pick: list[dict] = []
-        if user_key and not is_guest:
-            user_pick = _pick_layer_entries(
-                entries,
-                memory_type="user",
-                query_keys=keys,
-                user_key=user_key,
-                project_slug=project_slug,
-                limit=2,
-                prefer_recency=False,
-            )
 
-        system_pick = sorted(
-            [
-                e
-                for e in entries
-                if str(e.get("memory_type")) == "system"
-                and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
-                and is_active_memory(e)
-            ],
-            key=lambda x: (
-                layered_sort_key(
-                    0,
-                    float(x.get("importance_score", 0.0)),
-                    float(x.get("decay_score", 0.0)),
-                    str(x.get("timestamp", "")),
-                )[0],
-                str(x.get("timestamp", "")),
-            ),
-            reverse=True,
-        )[:2]
-        if len(system_pick) < 2:
-            for e in entries:
-                if (
-                    str(e.get("memory_type")) == "system"
-                    and e not in system_pick
-                    and is_active_memory(e)
-                ):
-                    system_pick.append(e)
-                if len(system_pick) >= 2:
-                    break
+        selected = bundle["selected_memories"]
 
-        seen_keys: set[str] = set()
-
-        def _dedupe(lst: list[dict]) -> list[dict]:
-            out_d: list[dict] = []
-            for item in lst:
-                k = _norm_summary_key(str(item.get("summary", "")))
-                if k and k in seen_keys:
-                    continue
-                if k:
-                    seen_keys.add(k)
-                out_d.append(item)
-            return out_d
-
-        system_pick = _dedupe(system_pick)
-        user_pick = _dedupe(user_pick)
-        project_pick = _dedupe(project_pick)
-        session_pick = _dedupe(session_pick)
-
-        parts = [
-            _lines_for_label("MÉMOIRE SYSTÈME (règles globales OpenChawn)", system_pick),
-            _lines_for_label("PRÉFÉRENCES UTILISATEUR", user_pick),
-            _lines_for_label("MÉMOIRE PROJET", project_pick),
-            _lines_for_label("CONTEXTE SESSION (court terme)", session_pick),
-        ]
-        body = "\n\n".join(p for p in parts if p)
-
-        def _annotate_layer(layer: str, picks: list[dict], *, prefer_recency: bool) -> list[dict]:
-            out_a: list[dict] = []
-            for i, src in enumerate(picks):
-                rel = _score_relevance(keys, src) if layer != "system" else 0
-                imp = float(src.get("importance_score", 0.0))
-                decay = float(src.get("decay_score", 0.0))
-                composite = _composite_retrieval_score(rel, imp, decay)
-                if layer == "system":
-                    why = "layer:system;strategy:importance_decay;deduped_pick"
-                elif layer == "user":
-                    why = "layer:user;keyword_overlap_with_query;user_scope"
-                elif layer == "project":
-                    why = "layer:project;keyword_overlap_with_query;project_scope"
-                else:
-                    why = "layer:session;keyword_overlap_with_query;session_user_scope"
-                dbg: dict[str, object] = {
-                    "why_selected": f"{why};layer_rank={i + 1};prefer_recency={prefer_recency}",
-                    "relevance_score": rel,
-                    "importance_score": imp,
-                    "decay_score": decay,
-                    "memory_type": str(src.get("memory_type", "")),
-                    "retrieval_rank": 0,
-                    "composite_score": round(composite, 2),
-                }
-                c = dict(src)
-                c["_retrieval_debug"] = dbg
-                out_a.append(c)
-            return out_a
-
-        sys_ex = _annotate_layer("system", system_pick, prefer_recency=False)
-        usr_ex = _annotate_layer("user", user_pick, prefer_recency=False)
-        proj_ex = _annotate_layer("project", project_pick, prefer_recency=False)
-        sess_ex = _annotate_layer("session", session_pick, prefer_recency=True)
-        all_mem: list[dict] = []
-        rnk = 0
-        for block in (sys_ex, usr_ex, proj_ex, sess_ex):
-            for it in block:
-                rnk += 1
-                rd = it.get("_retrieval_debug")
-                if isinstance(rd, dict):
-                    rd["retrieval_rank"] = rnk
-                all_mem.append(it)
-
-        for it in all_mem:
+        for it in selected:
             rd = it.get("_retrieval_debug")
             why = ""
             if isinstance(rd, dict):
@@ -1137,7 +1154,7 @@ def build_layered_memory_context(
                 session_id=tl_key,
             )
 
-        reinforced_ids = [str(it.get("id")) for it in all_mem if it.get("id")]
+        reinforced_ids = [str(it.get("id")) for it in selected if it.get("id")]
         reinforce_entries(
             entries,
             reinforced_ids,
@@ -1147,8 +1164,14 @@ def build_layered_memory_context(
         refresh_lifecycle_decay(entries)
         _save_entries(entries)
 
+        body = str(bundle.get("final_context_preview") or "")
+        system_pick = [x for x in selected if str(x.get("memory_type")) == "system"]
+        user_pick = [x for x in selected if str(x.get("memory_type")) == "user"]
+        project_pick = [x for x in selected if str(x.get("memory_type")) == "project"]
+        session_pick = [x for x in selected if str(x.get("memory_type")) == "session"]
+
     summaries_ordered = [
-        str(it.get("summary") or "").strip() for it in all_mem if str(it.get("summary") or "").strip()
+        str(it.get("summary") or "").strip() for it in selected if str(it.get("summary") or "").strip()
     ]
     _timeline_emit(
         event_type="context_injected",
@@ -1162,17 +1185,17 @@ def build_layered_memory_context(
         session_id=(user_key or "").strip() or "anon",
     )
 
-    _remember_last_context_snapshot(q, user_key, all_mem)
+    _remember_last_context_snapshot(q, user_key, selected)
 
     logger.info(
-        "layered memory counts system=%s user=%s project=%s session=%s query_len=%s",
+        "layered memory decision_engine counts system=%s user=%s project=%s session=%s query_len=%s",
         len(system_pick),
         len(user_pick),
         len(project_pick),
         len(session_pick),
         len(q),
     )
-    return body, all_mem
+    return body, selected
 
 
 def memories_by_type(

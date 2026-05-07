@@ -34,6 +34,7 @@ from app.memory.fractal_memory import (
 )
 from app.memory import memory_timeline as mem_timeline
 from app.memory import memory_index as mem_index
+from app.memory import memory_decision_engine as mem_decision
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -461,6 +462,39 @@ def memory_graph_stats_route():
 @app.get("/memory/projects/gravity")
 def memory_projects_gravity_route():
     return mem_index.projects_gravity_board()
+
+
+@app.get("/memory/decision/last")
+def memory_decision_last_route():
+    return mem_decision.lean_decision_payload(mem_decision.get_last_decision_bundle())
+
+
+@app.get("/memory/decision/simulate")
+def memory_decision_simulate_route(
+    query: str = Query(..., min_length=1),
+    project: str = Query(default=""),
+    user_key: str = Query(default=""),
+    as_guest: bool = Query(default=True),
+):
+    bundle = mem_decision.simulate_memory_decision(
+        query=query,
+        project=project,
+        user_key=user_key,
+        is_guest=as_guest,
+    )
+    lean = mem_decision.lean_decision_payload(bundle)
+    return {
+        "status": "ok",
+        "simulate": True,
+        "candidate_count": bundle.get("candidate_count"),
+        "selected": lean.get("selected_memories"),
+        "rejected": lean.get("rejected_memories"),
+        "scoring_breakdown": bundle.get("scoring_breakdown"),
+        "conflicts_detected": bundle.get("conflicts_detected"),
+        "final_context_preview": lean.get("final_context_preview"),
+        "confidence_hint": bundle.get("confidence_hint"),
+        "arbitration_summary": bundle.get("arbitration_summary"),
+    }
 
 
 @app.get("/profiles")
