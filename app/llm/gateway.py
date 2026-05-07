@@ -5,6 +5,12 @@ import os
 import requests as http_requests
 
 from app.provider_manager import FIXED_ORDER, get_provider_manager
+from app.routing import (
+    get_cost_tracking_hooks,
+    get_fallback_manager,
+    get_provider_health_hooks,
+)
+from app.routing.provider_capabilities import provider_capabilities
 from app.settings import Settings, get_settings
 
 logger = logging.getLogger("openchawn.gateway")
@@ -182,6 +188,15 @@ def _dispatch(
             user_message=user_message,
             log_label="kimi",
         )
+    if name == "infomaniak":
+        return _chat_completions(
+            base_url=(s.infomaniak_base_url or "").strip().rstrip("/"),
+            api_key=(s.infomaniak_api_key or "").strip(),
+            model=(s.infomaniak_model or "").strip(),
+            system_prompt=system_prompt,
+            user_message=user_message,
+            log_label="infomaniak",
+        )
     return "", None, "UNKNOWN_PROVIDER"
 
 
@@ -197,16 +212,26 @@ def _hint_order(pm, provider_hint: str) -> list[str]:
             or (h == "kimi" and bool((extra.kimi_api_key or "").strip()))
             or (h == "openrouter" and bool((extra.openrouter_api_key or "").strip()))
             or (h == "openai" and bool((extra.openai_api_key or "").strip()))
+            or (h == "infomaniak" and bool((extra.infomaniak_api_key or "").strip()))
         )
         if hint_ok:
             return [h] + [x for x in base if x != h]
     return base
 
 
+def _estimate_cost(provider: str, text: str) -> tuple[int, float]:
+    tokens = max(1, len(text or "") // 4)
+    cap = next((x for x in provider_capabilities.values() if x.provider == provider), None)
+    if not cap:
+        return tokens, 0.0
+    estimated = (tokens / 1000.0) * cap.estimated_cost_per_1k_tokens_usd
+    return tokens, estimated
+
+
 def generate_response(*, system_prompt: str, user_message: str, provider_hint: str = "") -> dict[str, str | bool | int | None]:
     """
     Chaîne **explicite uniquement parmi providers configurés** :
-    DeepSeek → Kimi → OpenRouter → OpenAI (voir ProviderManager).
+    ordre intelligent DeepSeek/Kimi/OpenAI/Infomaniak (avec OpenRouter en compat).
 
     Pas d’Ollama. Pas de tentative si DEFAULT_PROVIDER=deepseek sans DEEPSEEK_API_KEY.
     """
@@ -222,7 +247,13 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
             "error": "DeepSeek API key missing",
         }
 
-    seq = _hint_order(pm, provider_hint)
+    seq = pm.intelligent_order(
+        system_prompt=system_prompt,
+        user_message=user_message,
+        provider_hint=provider_hint,
+    )
+    if not seq:
+        seq = _hint_order(pm, provider_hint)
 
     if not seq:
         return {
@@ -235,10 +266,16 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
 
     last_err: str | None = None
     last_code: int | None = None
+    fallback = get_fallback_manager()
+    health = get_provider_health_hooks()
+    cost = get_cost_tracking_hooks()
 
     for name in seq:
         text, code, err = _dispatch(name, s, system_prompt, user_message)
         if text:
+            health.mark_success(name)
+            estimated_tokens, estimated_cost = _estimate_cost(name, system_prompt + user_message + text)
+            cost.track(name, estimated_tokens, estimated_cost)
             return {
                 "output": text,
                 "provider": name,
@@ -247,6 +284,8 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
                 "error": None,
             }
         if err and err != "KIMI_NOT_CONFIGURED":
+            health.mark_failure(name)
+            fallback.record(name, err)
             last_err = err
             last_code = code
             logger.info(f"provider_fail name={name} err={err}")

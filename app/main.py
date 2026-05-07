@@ -16,6 +16,7 @@ from app.config import (
 )
 from app.provider_manager import get_provider_manager
 from app.profiles import list_profiles, get_profile_for_user
+from app.routing import get_cost_tracking_hooks, get_fallback_manager, get_provider_health_hooks
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -206,11 +207,21 @@ def health():
 def health_providers():
     """État des providers LLM (Railway / ops) — sans secrets."""
     pm = get_provider_manager()
+    health = get_provider_health_hooks()
+    cost = get_cost_tracking_hooks()
+    fallback = get_fallback_manager()
     return {
         "active_provider": pm.active_provider() or None,
         "configured_providers": pm.configured_providers(),
         "missing_keys": pm.missing_keys(),
         "production_safe": pm.production_safe(),
+        "capabilities": pm.capabilities_snapshot(),
+        "provider_health": health.snapshot(),
+        "cost_tracking": cost.snapshot(),
+        "fallback_recent": [
+            {"provider": ev.provider, "reason": ev.reason, "timestamp": ev.timestamp}
+            for ev in fallback.recent(limit=10)
+        ],
     }
 
 

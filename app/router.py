@@ -18,8 +18,9 @@ def get_registry():
 
     _load_provider("deepseek", "app.providers.deepseek_provider", "DeepSeekProvider")
     _load_provider("kimi", "app.providers.kimi_provider", "KimiProvider")
-    _load_provider("openrouter", "app.providers.openrouter_provider", "OpenRouterProvider")
     _load_provider("openai", "app.providers.openai_provider", "OpenAIProvider")
+    _load_provider("infomaniak", "app.providers.infomaniak_provider", "InfomaniakProvider")
+    _load_provider("openrouter", "app.providers.openrouter_provider", "OpenRouterProvider")
 
     return _REGISTRY
 

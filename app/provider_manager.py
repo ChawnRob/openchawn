@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.routing import build_intelligent_order, provider_capabilities
 from app.settings import Settings, get_settings
 
 
@@ -21,8 +22,9 @@ def _deepseek_key_live() -> str:
 FIXED_ORDER: tuple[str, ...] = (
     "deepseek",
     "kimi",
-    "openrouter",
     "openai",
+    "infomaniak",
+    "openrouter",
 )
 
 
@@ -46,6 +48,8 @@ class ProviderManager:
             return bool((s.openrouter_api_key or "").strip())
         if n == "openai":
             return bool((s.openai_api_key or "").strip())
+        if n == "infomaniak":
+            return bool((s.infomaniak_api_key or "").strip())
         return False
 
     def _resolution_order(self) -> list[str]:
@@ -65,6 +69,27 @@ class ProviderManager:
 
     def resolution_order(self) -> list[str]:
         return list(self._resolution_order())
+
+    def intelligent_order(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        provider_hint: str = "",
+    ) -> list[str]:
+        configured = self._resolution_order()
+        if not configured:
+            return []
+        decision = build_intelligent_order(
+            configured_providers=configured,
+            default_provider=_normalize_provider_name(self.settings.default_provider),
+            system_prompt=system_prompt,
+            user_message=user_message,
+            provider_hint=provider_hint,
+        )
+        if not decision.ordered_providers:
+            return configured
+        return decision.ordered_providers
 
     def configured_providers(self) -> list[str]:
         return [n for n in FIXED_ORDER if self._has(n)]
@@ -88,7 +113,7 @@ class ProviderManager:
         if not missing:
             return [
                 "Configurer au moins une clé : DEEPSEEK_API_KEY "
-                "(recommandée), puis optionnellement KIMI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY."
+                "(recommandée), puis optionnellement KIMI_API_KEY, OPENAI_API_KEY, INFOMANIAK_API_KEY, OPENROUTER_API_KEY."
             ]
 
         return missing
@@ -110,6 +135,22 @@ class ProviderManager:
             if "localhost:11434" in ul or "127.0.0.1:11434" in ul:
                 return False
         return True
+
+    def capabilities_snapshot(self) -> dict[str, dict[str, str | int | float | bool | tuple[str, ...]]]:
+        return {
+            key: {
+                "provider": cap.provider,
+                "model": cap.model,
+                "priority": cap.priority,
+                "estimated_cost_per_1k_tokens_usd": cap.estimated_cost_per_1k_tokens_usd,
+                "max_context_tokens": cap.max_context_tokens,
+                "reasoning_score": cap.reasoning_score,
+                "availability_tier": cap.availability_tier,
+                "enterprise_sovereign_ready": cap.enterprise_sovereign_ready,
+                "task_profiles": cap.task_profiles,
+            }
+            for key, cap in provider_capabilities.items()
+        }
 
 
 _manager: ProviderManager | None = None
