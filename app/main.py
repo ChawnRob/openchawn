@@ -33,6 +33,7 @@ from app.memory.fractal_memory import (
     top_memories,
 )
 from app.memory import memory_timeline as mem_timeline
+from app.memory import memory_index as mem_index
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -440,6 +441,26 @@ def memory_decision_trace_route(
     project: str = Query(default=""),
 ):
     return mem_timeline.decision_trace(concept=concept, project=project)
+
+
+@app.get("/memory/index")
+def memory_index_route():
+    return mem_index.build_memory_index()
+
+
+@app.get("/memory/concepts/top")
+def memory_concepts_top_route(limit: int = Query(default=12, ge=1, le=80)):
+    return mem_index.top_concepts_response(limit)
+
+
+@app.get("/memory/graph/stats")
+def memory_graph_stats_route():
+    return mem_index.graph_statistics()
+
+
+@app.get("/memory/projects/gravity")
+def memory_projects_gravity_route():
+    return mem_index.projects_gravity_board()
 
 
 @app.get("/profiles")
