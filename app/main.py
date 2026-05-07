@@ -21,6 +21,7 @@ from app.memory.fractal_memory import (
     concept_memories,
     memories_by_type,
     memory_health,
+    memory_lifecycle_health,
     recent_memories,
     search_memories,
     store_indexes_snapshot,
@@ -279,6 +280,11 @@ def health_memory():
     return memory_health()
 
 
+@app.get("/health/memory/lifecycle")
+def health_memory_lifecycle():
+    return memory_lifecycle_health()
+
+
 @app.get("/memory/recent")
 def memory_recent():
     items = recent_memories(limit=10)
@@ -309,7 +315,7 @@ def memory_system():
     return {
         "status": "ok",
         "indexes": idx.get("system_concepts"),
-        "entries": memories_by_type("system", 80),
+        "entries": memories_by_type("system", 80, include_archived=True),
     }
 
 
@@ -319,7 +325,7 @@ def memory_projects_view():
     return {
         "status": "ok",
         "indexes": idx.get("project_concepts"),
-        "entries": memories_by_type("project", 120),
+        "entries": memories_by_type("project", 120, include_archived=True),
     }
 
 
@@ -329,7 +335,7 @@ def memory_user_view():
     return {
         "status": "ok",
         "indexes": idx.get("user_preferences"),
-        "entries": memories_by_type("user", 120),
+        "entries": memories_by_type("user", 120, include_archived=True),
     }
 
 
@@ -338,7 +344,7 @@ def memory_session_view():
     return {
         "status": "ok",
         "indexes": [],
-        "entries": memories_by_type("session", 100),
+        "entries": memories_by_type("session", 100, include_archived=True),
     }
 
 

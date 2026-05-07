@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -25,9 +27,50 @@ KNOWN_PROJECT_SLUGS = frozenset(
     {"openchawn", "fluxorca", "weetao", "illhu", "luthor"}
 )
 
-# Futur memory_decay / archival / aging — données réservées, non utilisées encore
+# Métadonnées réservées (compat JSON existant + futur scheduler / LTM / retrieval sémantique)
 MEMORY_DECAY_FIELDS = frozenset(
-    {"archived_at", "decayed_at", "last_access_ts", "age_weight"}
+    {
+        "archived_at",
+        "decayed_at",
+        "last_access_ts",
+        "age_weight",
+        # Prévu V11.6+ (non implémenté côté runtime)
+        "memory_decay_scheduler",
+        "long_term_memory",
+        "semantic_retrieval",
+        "semantic_vector_ref",
+        "embedded_at",
+    }
+)
+
+MEMORY_LIFECYCLE_ACTIVE = "active"
+MEMORY_LIFECYCLE_ARCHIVED = "archived"
+MEMORY_LIFECYCLE_STATUSES = frozenset({MEMORY_LIFECYCLE_ACTIVE, MEMORY_LIFECYCLE_ARCHIVED})
+
+# Archivage : faible importance, ancien, jamais relu (ni raw ni summary ni concept)
+_MIN_ARCHIVE_AGE_DAYS = 21
+_MAX_ARCHIVE_IMPORTANCE = 0.34
+_CONCEPT_MERGE_STOPWORDS = frozenset(
+    {
+        "le",
+        "la",
+        "les",
+        "un",
+        "une",
+        "de",
+        "du",
+        "des",
+        "est",
+        "et",
+        "ou",
+        "en",
+        "a",
+        "à",
+        "the",
+        "son",
+        "sa",
+        "ses",
+    }
 )
 
 # Indexes logiques séparés (concepts / préférences) — synchro depuis les entrées
@@ -80,6 +123,259 @@ class MemoryBackendConfigError(RuntimeError):
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+def _parse_iso_ts(ts: str | None) -> datetime | None:
+    if not (ts or "").strip():
+        return None
+    s = ts.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (ValueError, TypeError, OSError):
+        return None
+
+
+def _memory_type_decay_weight(mt: str) -> float:
+    return {"system": 0.22, "project": 0.55, "user": 0.72, "session": 1.0}.get(
+        (mt or "session").strip().lower(),
+        1.0,
+    )
+
+
+def _entry_age_days(entry: dict) -> float:
+    base = (
+        _parse_iso_ts(str(entry.get("created_at") or ""))
+        or _parse_iso_ts(str(entry.get("timestamp") or ""))
+    )
+    if not base:
+        return 0.0
+    delta = datetime.now(timezone.utc) - base
+    return max(0.0, delta.total_seconds() / 86400.0)
+
+
+def recompute_decay_score(entry: dict) -> float:
+    """Score 0–100 : plus élevé = mémoire moins prioritaire dans le classement."""
+    mt = str(entry.get("memory_type", "session"))
+    age_d = _entry_age_days(entry)
+    acc = int(entry.get("access_count") or 0)
+    imp = float(entry.get("importance_score") or 0.0)
+    wt = _memory_type_decay_weight(mt)
+    age_boost = min(92.0, age_d * wt * 1.65)
+    use_relief = min(52.0, math.log1p(max(0, acc)) * 13.5)
+    importance_relief = imp * 38.0
+    if str(entry.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED:
+        age_boost *= 1.08
+    d = age_boost - use_relief - importance_relief
+    return round(max(0.0, min(100.0, d)), 2)
+
+
+def concept_merge_key(summary: str) -> str:
+    words = re.findall(
+        r"[a-zA-ZÀ-ÖØ-öø-ÿ0-9]{2,}",
+        (summary or "").lower(),
+        flags=re.UNICODE,
+    )
+    tokens = sorted(w for w in words if w not in _CONCEPT_MERGE_STOPWORDS)
+    return "|".join(tokens) if tokens else re.sub(r"[^a-z0-9àâäéèêëîïôùûüç]+", "", (summary or "").lower())
+
+
+def _find_canon_for_concept_merge(
+    entries: list[dict],
+    *,
+    concept_summary: str,
+    memory_type: str,
+    project_name: str,
+    user_id: str,
+) -> dict | None:
+    key = concept_merge_key(concept_summary)
+    if not key:
+        return None
+    mtype = (memory_type or "").strip().lower()
+    pn = _normalize_project_slug(project_name or "")
+    uid = (user_id or "").strip()
+
+    def _scope_ok(e: dict) -> bool:
+        if mtype == "system":
+            return True
+        if mtype == "project":
+            return _normalize_project_slug(str(e.get("project_name") or "")) == pn
+        # user / session : même utilisateur
+        if str(e.get("user_id", "")).strip() != uid:
+            return False
+        if mtype == "user":
+            return True
+        # session : même projet si renseigné
+        ep = _normalize_project_slug(str(e.get("project_name") or ""))
+        return not pn or not ep or ep == pn
+
+    candidates: list[dict] = []
+    for e in entries:
+        if str(e.get("memory_level")) != "concept_memory":
+            continue
+        if str(e.get("memory_type")) != mtype:
+            continue
+        if str(e.get("lifecycle_status", MEMORY_LIFECYCLE_ACTIVE)) != MEMORY_LIFECYCLE_ACTIVE:
+            continue
+        if not _scope_ok(e):
+            continue
+        if concept_merge_key(str(e.get("summary", ""))) != key:
+            continue
+        candidates.append(e)
+    if not candidates:
+        return None
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+
+    def _created(x: dict) -> datetime:
+        return _parse_iso_ts(str(x.get("created_at") or "")) or _parse_iso_ts(str(x.get("timestamp") or "")) or epoch
+
+    candidates.sort(key=_created)
+    return candidates[0]
+
+
+def _concept_sentiment_signals(text: str) -> tuple[str | None, str | None]:
+    """Retourne (sujet, polarité). Polarité forbid | allow."""
+    lowered = (text or "").lower()
+    subject = None
+    if "ollama" in lowered:
+        subject = "ollama"
+    elif "deepseek" in lowered:
+        subject = "deepseek"
+
+    polarity = None
+    if subject:
+        if re.search(
+            r"interdit|forbidden|désactivé|desactivé|désactiv|ban",
+            lowered,
+            re.IGNORECASE,
+        ):
+            polarity = "forbid"
+        elif re.search(
+            r"principal|défaut|defaut|production|prioritaire|priorite|prefer",
+            lowered,
+            re.IGNORECASE,
+        ):
+            polarity = "allow"
+    return subject, polarity
+
+
+def apply_provider_contradiction_flags(
+    existing: list[dict],
+    *,
+    pivot_summary: str,
+    new_entries: list[dict],
+) -> bool:
+    """Marque les entrées en contradiction (signaux simples). Ne résout rien."""
+    ns, npol = _concept_sentiment_signals(pivot_summary)
+    if not ns or not npol:
+        return False
+    conflict = False
+    for e in existing:
+        if str(e.get("memory_level")) != "concept_memory":
+            continue
+        if not is_active_memory(e):
+            continue
+        summ = str(e.get("summary", ""))
+        os, opol = _concept_sentiment_signals(summ)
+        if os != ns:
+            continue
+        if opol and npol and opol != npol:
+            e["contradiction_detected"] = True
+            conflict = True
+    if conflict:
+        for ne in new_entries:
+            ne["contradiction_detected"] = True
+    return conflict
+
+
+def refresh_lifecycle_decay(entries: list[dict]) -> None:
+    for e in entries:
+        e["decay_score"] = recompute_decay_score(e)
+
+
+def _attach_concept_canon_metadata(concept_entry: dict, summary_text: str) -> None:
+    md = concept_entry.setdefault("metadata", {})
+    if not isinstance(md, dict):
+        return
+    md.setdefault("aliases", [summary_text])
+    md.setdefault("merge_count", 1)
+    md.setdefault("last_seen", concept_entry.get("timestamp") or _now_iso())
+    md.setdefault("concept_merge_key", concept_merge_key(summary_text))
+
+
+def _increment_concept_canon_merge(canon: dict, merged_phrase: str) -> None:
+    md = canon.setdefault("metadata", {})
+    if not isinstance(md, dict):
+        return
+    base_summ = str(canon.get("summary", "")).strip()
+    prev_aliases = md.get("aliases")
+    aliases = list(prev_aliases) if isinstance(prev_aliases, list) else []
+    if base_summ and base_summ not in aliases:
+        aliases.insert(0, base_summ)
+    merged = merged_phrase.strip()
+    if merged and merged not in aliases:
+        aliases.append(merged[:500])
+    md["aliases"] = aliases
+    md["merge_count"] = int(md.get("merge_count") or 1) + 1
+    md["last_seen"] = _now_iso()
+
+
+def apply_archive_rules(entries: list[dict]) -> int:
+    """Archive les entrées bruit faible sans accès réel."""
+    archived = 0
+    now = _now_iso()
+    for e in entries:
+        if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED:
+            continue
+        uid = str(e.get("access_count") or 0).strip()
+        try:
+            acc = int(uid)
+        except (TypeError, ValueError):
+            acc = 0
+        imp = float(e.get("importance_score") or 0.0)
+        age = _entry_age_days(e)
+
+        eligible = (
+            acc == 0
+            and age >= float(_MIN_ARCHIVE_AGE_DAYS)
+            and imp <= _MAX_ARCHIVE_IMPORTANCE + 1e-9
+            and float(e.get("decay_score", 50)) >= 38.0
+        )
+        if eligible:
+            e["lifecycle_status"] = MEMORY_LIFECYCLE_ARCHIVED
+            md = e.setdefault("metadata", {})
+            if isinstance(md, dict):
+                md.setdefault("archived_at", now)
+            archived += 1
+    return archived
+
+
+def reinforce_entries(entries: list[dict], ids: Iterable[str]) -> None:
+    want = {str(i) for i in ids if i}
+    now = _now_iso()
+    for e in entries:
+        eid = str(e.get("id", ""))
+        if eid not in want:
+            continue
+        if str(e.get("lifecycle_status", MEMORY_LIFECYCLE_ACTIVE)) != MEMORY_LIFECYCLE_ACTIVE:
+            continue
+        e["access_count"] = int(e.get("access_count") or 0) + 1
+        e["last_accessed_at"] = now
+        imp = float(e.get("importance_score") or 0.0)
+        prev = float(e.get("decay_score") or 0.0)
+        reduction = 6.0 + imp * 18.0
+        e["decay_score"] = round(max(0.0, prev - reduction), 2)
+
+
+def is_active_memory(entry: dict) -> bool:
+    return str(entry.get("lifecycle_status", MEMORY_LIFECYCLE_ACTIVE)) == MEMORY_LIFECYCLE_ACTIVE
+
+
+def layered_sort_key(rel: int, importance: float, decay: float, ts: str) -> tuple[float, int, float, str]:
+    """Décroissant : valeur composite forte d'abord (on trie reverse plus bas)."""
+    composite = importance * 110.0 + float(rel) * 15.0 - decay * 0.85
+    return composite, rel, importance, ts
 
 class MemoryBackend(ABC):
     name = "base"
@@ -176,7 +472,7 @@ def serialize_store_document(entries: list[dict], indexes: dict[str, object]) ->
         "system_concepts": list(indexes.get("system_concepts", [])),
         "project_concepts": dict(indexes.get("project_concepts", {})),
         "user_preferences": dict(indexes.get("user_preferences", {})),
-        "reserved_decay": {},  # futur decay / archival
+        "reserved_decay": {},  # futur: memory_decay_scheduler, LTM, semantic_retrieval
     }
 
 
@@ -186,6 +482,8 @@ def rebuild_logical_indexes(entries: list[dict]) -> dict[str, object]:
     user_preferences: dict[str, list[str]] = {}
     for e in entries:
         if str(e.get("memory_level", "")) != "concept_memory":
+            continue
+        if not is_active_memory(e):
             continue
         summary = str(e.get("summary", "")).strip()
         if not summary:
@@ -245,6 +543,31 @@ def _ensure_entry_defaults(e: dict) -> dict:
         e["metadata"].setdefault(k, None)
     if "project" not in e:
         e["project"] = e.get("project_name", "")
+    ts_fallback = str(e.get("timestamp") or _now_iso())
+    created = str(e.get("created_at") or "").strip() or ts_fallback
+    e["created_at"] = created
+    if not str(e.get("last_accessed_at") or "").strip():
+        e["last_accessed_at"] = created
+    try:
+        e["access_count"] = max(0, int(e.get("access_count") or 0))
+    except (TypeError, ValueError):
+        e["access_count"] = 0
+    st = str(e.get("lifecycle_status", MEMORY_LIFECYCLE_ACTIVE)).strip().lower()
+    e["lifecycle_status"] = st if st in MEMORY_LIFECYCLE_STATUSES else MEMORY_LIFECYCLE_ACTIVE
+    cd = e.get("contradiction_detected")
+    if isinstance(cd, str):
+        e["contradiction_detected"] = cd.strip().lower() in ("1", "true", "yes")
+    else:
+        e["contradiction_detected"] = bool(cd)
+    try:
+        ds = e.get("decay_score")
+        if ds is None or ds == "":
+            raise ValueError
+        e["decay_score"] = float(ds)
+    except (TypeError, ValueError):
+        e["decay_score"] = recompute_decay_score(e)
+    else:
+        e["decay_score"] = round(max(0.0, min(100.0, float(e["decay_score"]))), 2)
     return e
 
 
@@ -335,11 +658,16 @@ def _pick_layer_entries(
         for e in entries
         if str(e.get("memory_type", "")) == memory_type
         and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
+        and is_active_memory(e)
     ]
     if not pool:
-        pool = [e for e in entries if str(e.get("memory_type", "")) == memory_type]
+        pool = [
+            e
+            for e in entries
+            if str(e.get("memory_type", "")) == memory_type and is_active_memory(e)
+        ]
 
-    scored: list[tuple[int, float, str, dict]] = []
+    scored: list[tuple[tuple[float, str], dict, int, float, str]] = []
     for e in pool:
         if memory_type == "session" and user_key:
             uid_e = str(e.get("user_id", "") or "").strip()
@@ -348,15 +676,17 @@ def _pick_layer_entries(
         rel = _score_relevance(query_keys, e) if query_keys else 0
         imp = float(e.get("importance_score", 0.0))
         ts = str(e.get("timestamp", ""))
-        scored.append((rel, imp, ts, e))
+        decay = float(e.get("decay_score", 0.0))
+        comp = layered_sort_key(rel, imp, decay, ts)[0]
+        if prefer_recency:
+            scored.append(((ts, comp), e, rel, imp, ts))
+        else:
+            scored.append(((comp, ts), e, rel, imp, ts))
 
-    if prefer_recency:
-        scored.sort(key=lambda x: (x[2], x[0], x[1]), reverse=True)
-    else:
-        scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+    scored.sort(key=lambda x: x[0], reverse=True)
 
     out: list[dict] = []
-    for rel, imp, ts, e in scored:
+    for _k, e, rel, imp, ts in scored:
         if memory_type == "user" and user_key and str(e.get("user_id", "")) != user_key:
             continue
         if memory_type == "project" and project_slug:
@@ -389,91 +719,112 @@ def build_layered_memory_context(
 
     with _STORE_LOCK:
         entries = _load_entries()
+        entries = [_ensure_entry_defaults(e) for e in entries]
+        refresh_lifecycle_decay(entries)
+        apply_archive_rules(entries)
 
-    session_pick = _pick_layer_entries(
-        entries,
-        memory_type="session",
-        query_keys=keys,
-        user_key=user_key,
-        project_slug=project_slug,
-        limit=5,
-        prefer_recency=True,
-    )
-    project_pick = _pick_layer_entries(
-        entries,
-        memory_type="project",
-        query_keys=keys,
-        user_key=user_key,
-        project_slug=project_slug,
-        limit=3,
-        prefer_recency=False,
-    )
-    user_pick: list[dict] = []
-    if user_key and not is_guest:
-        user_pick = _pick_layer_entries(
+        def _lines_for_label(label: str, items: list[dict]) -> str:
+            if not items:
+                return ""
+            lines_l = [f"── {label} ──"]
+            for it in items:
+                summ = str(it.get("summary", "")).strip()
+                if not summ:
+                    continue
+                lines_l.append(f"• {summ}")
+            return "\n".join(lines_l)
+
+        session_pick = _pick_layer_entries(
             entries,
-            memory_type="user",
+            memory_type="session",
             query_keys=keys,
             user_key=user_key,
             project_slug=project_slug,
-            limit=2,
+            limit=5,
+            prefer_recency=True,
+        )
+        project_pick = _pick_layer_entries(
+            entries,
+            memory_type="project",
+            query_keys=keys,
+            user_key=user_key,
+            project_slug=project_slug,
+            limit=3,
             prefer_recency=False,
         )
+        user_pick: list[dict] = []
+        if user_key and not is_guest:
+            user_pick = _pick_layer_entries(
+                entries,
+                memory_type="user",
+                query_keys=keys,
+                user_key=user_key,
+                project_slug=project_slug,
+                limit=2,
+                prefer_recency=False,
+            )
 
-    system_pick = sorted(
-        [
-            e
-            for e in entries
-            if str(e.get("memory_type")) == "system"
-            and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
-        ],
-        key=lambda x: (float(x.get("importance_score", 0.0)), str(x.get("timestamp", ""))),
-        reverse=True,
-    )[:2]
-    if len(system_pick) < 2:
-        for e in entries:
-            if str(e.get("memory_type")) == "system" and e not in system_pick:
-                system_pick.append(e)
-            if len(system_pick) >= 2:
-                break
+        system_pick = sorted(
+            [
+                e
+                for e in entries
+                if str(e.get("memory_type")) == "system"
+                and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
+                and is_active_memory(e)
+            ],
+            key=lambda x: (
+                layered_sort_key(
+                    0,
+                    float(x.get("importance_score", 0.0)),
+                    float(x.get("decay_score", 0.0)),
+                    str(x.get("timestamp", "")),
+                )[0],
+                str(x.get("timestamp", "")),
+            ),
+            reverse=True,
+        )[:2]
+        if len(system_pick) < 2:
+            for e in entries:
+                if (
+                    str(e.get("memory_type")) == "system"
+                    and e not in system_pick
+                    and is_active_memory(e)
+                ):
+                    system_pick.append(e)
+                if len(system_pick) >= 2:
+                    break
 
-    seen_keys: set[str] = set()
+        seen_keys: set[str] = set()
 
-    def _dedupe(lst: list[dict]) -> list[dict]:
-        out: list[dict] = []
-        for item in lst:
-            k = _norm_summary_key(str(item.get("summary", "")))
-            if k and k in seen_keys:
-                continue
-            if k:
-                seen_keys.add(k)
-            out.append(item)
-        return out
+        def _dedupe(lst: list[dict]) -> list[dict]:
+            out_d: list[dict] = []
+            for item in lst:
+                k = _norm_summary_key(str(item.get("summary", "")))
+                if k and k in seen_keys:
+                    continue
+                if k:
+                    seen_keys.add(k)
+                out_d.append(item)
+            return out_d
 
-    system_pick = _dedupe(system_pick)
-    user_pick = _dedupe(user_pick)
-    project_pick = _dedupe(project_pick)
-    session_pick = _dedupe(session_pick)
+        system_pick = _dedupe(system_pick)
+        user_pick = _dedupe(user_pick)
+        project_pick = _dedupe(project_pick)
+        session_pick = _dedupe(session_pick)
 
-    def _lines(label: str, items: list[dict]) -> str:
-        if not items:
-            return ""
-        lines = [f"── {label} ──"]
-        for it in items:
-            summ = str(it.get("summary", "")).strip()
-            if not summ:
-                continue
-            lines.append(f"• {summ}")
-        return "\n".join(lines)
+        parts = [
+            _lines_for_label("MÉMOIRE SYSTÈME (règles globales OpenChawn)", system_pick),
+            _lines_for_label("PRÉFÉRENCES UTILISATEUR", user_pick),
+            _lines_for_label("MÉMOIRE PROJET", project_pick),
+            _lines_for_label("CONTEXTE SESSION (court terme)", session_pick),
+        ]
+        body = "\n\n".join(p for p in parts if p)
+        all_mem = system_pick + user_pick + project_pick + session_pick
+        reinforced_ids = [str(it.get("id")) for it in all_mem if it.get("id")]
+        reinforce_entries(entries, reinforced_ids)
+        refresh_lifecycle_decay(entries)
+        _save_entries(entries)
 
-    parts = [
-        _lines("MÉMOIRE SYSTÈME (règles globales OpenChawn)", system_pick),
-        _lines("PRÉFÉRENCES UTILISATEUR", user_pick),
-        _lines("MÉMOIRE PROJET", project_pick),
-        _lines("CONTEXTE SESSION (court terme)", session_pick),
-    ]
-    body = "\n\n".join(p for p in parts if p)
-    all_mem = system_pick + user_pick + project_pick + session_pick
     logger.info(
         "layered memory counts system=%s user=%s project=%s session=%s query_len=%s",
         len(system_pick),
@@ -485,7 +836,12 @@ def build_layered_memory_context(
     return body, all_mem
 
 
-def memories_by_type(memory_type: str, limit: int = 50) -> list[dict]:
+def memories_by_type(
+    memory_type: str,
+    limit: int = 50,
+    *,
+    include_archived: bool = False,
+) -> list[dict]:
     mt = (memory_type or "").strip().lower()
     if mt not in MEMORY_TYPES:
         return []
@@ -494,10 +850,12 @@ def memories_by_type(memory_type: str, limit: int = 50) -> list[dict]:
     except MemoryBackendConfigError:
         return []
     with _STORE_LOCK:
-        entries = _load_entries()
-    pool = [e for e in entries if str(e.get("memory_type")) == mt]
-    pool.sort(key=lambda e: str(e.get("timestamp", "")), reverse=True)
-    return pool[: max(1, min(limit, 200))]
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+        pool = [e for e in entries if str(e.get("memory_type")) == mt]
+        if not include_archived:
+            pool = [e for e in pool if is_active_memory(e)]
+        pool.sort(key=lambda e: str(e.get("timestamp", "")), reverse=True)
+        return pool[: max(1, min(limit, 200))]
 
 
 def store_indexes_snapshot() -> dict[str, object]:
@@ -511,7 +869,8 @@ def store_indexes_snapshot() -> dict[str, object]:
 class PostgresMemoryBackend(MemoryBackend):
     name = "postgres"
 
-    # Colonnes futures alignées V11.6 (migration à activer avec DATABASE_URL)
+    # Colonnes futures alignées V11.6 lifecycle (migration à activer avec DATABASE_URL) :
+    # created_at, last_accessed_at, access_count, decay_score, lifecycle_status, contradiction_detected
     CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS fractal_memories (
         id TEXT PRIMARY KEY,
@@ -666,9 +1025,11 @@ def _mk_entry(
     memory_level: str = "raw_memory",
 ) -> dict:
     slug = _normalize_project_slug(project_name or project)
-    return {
+    now = _now_iso()
+    meta: dict[str, object] = {}
+    e = {
         "id": f"mem_{uuid.uuid4().hex[:12]}",
-        "timestamp": _now_iso(),
+        "timestamp": now,
         "memory_type": memory_type,
         "project_name": slug,
         "user_id": user_id or "",
@@ -682,8 +1043,15 @@ def _mk_entry(
         "parent_id": parent_id,
         "children_ids": children_ids or [],
         "memory_level": memory_level,
-        "metadata": {},
+        "metadata": meta,
+        "created_at": now,
+        "last_accessed_at": now,
+        "access_count": 0,
+        "lifecycle_status": MEMORY_LIFECYCLE_ACTIVE,
+        "contradiction_detected": False,
     }
+    e["decay_score"] = recompute_decay_score(e)
+    return e
 
 
 def write_exchange(
@@ -724,74 +1092,111 @@ def write_exchange(
     if mtype == "system":
         importance = max(importance, 0.85)
     summary = _summary_text(user_message, assistant_response)
+    concept_summ = _concept_summary(user_message, assistant_response, tags)
 
-    raw_entry = _mk_entry(
-        source=source,
-        user_message=user_message,
-        assistant_response=assistant_response,
-        summary=summary,
-        tags=tags,
-        importance_score=importance,
-        project=project or proj_slug,
-        memory_type=mtype,
-        project_name=proj_slug,
-        user_id=uid,
-        memory_level="raw_memory",
-    )
-    summary_entry = _mk_entry(
-        source=source,
-        user_message=user_message[:280],
-        assistant_response="",
-        summary=summary,
-        tags=tags,
-        importance_score=max(0.35, round(importance - 0.1, 2)),
-        project=project or proj_slug,
-        memory_type=mtype,
-        project_name=proj_slug,
-        user_id=uid,
-        parent_id=raw_entry["id"],
-        memory_level="summary_memory",
-    )
-    concept_entry = _mk_entry(
-        source=source,
-        user_message="",
-        assistant_response="",
-        summary=_concept_summary(user_message, assistant_response, tags),
-        tags=sorted(set(tags + ["concept"])),
-        importance_score=max(0.5, round(importance, 2)),
-        project=project or proj_slug,
-        memory_type=mtype,
-        project_name=proj_slug,
-        user_id=uid,
-        parent_id=raw_entry["id"],
-        memory_level="concept_memory",
-    )
-    raw_entry["children_ids"] = [summary_entry["id"], concept_entry["id"]]
-
+    merged_into = False
     with _STORE_LOCK:
         entries = _load_entries()
-        entries.extend([raw_entry, summary_entry, concept_entry])
+        entries = [_ensure_entry_defaults(e) for e in entries]
+
+        canon = _find_canon_for_concept_merge(
+            entries,
+            concept_summary=concept_summ,
+            memory_type=mtype,
+            project_name=proj_slug,
+            user_id=uid,
+        )
+
+        raw_entry = _mk_entry(
+            source=source,
+            user_message=user_message,
+            assistant_response=assistant_response,
+            summary=summary,
+            tags=tags,
+            importance_score=importance,
+            project=project or proj_slug,
+            memory_type=mtype,
+            project_name=proj_slug,
+            user_id=uid,
+            memory_level="raw_memory",
+        )
+        summary_entry = _mk_entry(
+            source=source,
+            user_message=user_message[:280],
+            assistant_response="",
+            summary=summary,
+            tags=tags,
+            importance_score=max(0.35, round(importance - 0.1, 2)),
+            project=project or proj_slug,
+            memory_type=mtype,
+            project_name=proj_slug,
+            user_id=uid,
+            parent_id=raw_entry["id"],
+            memory_level="summary_memory",
+        )
+
+        if canon:
+            merged_into = True
+            _increment_concept_canon_merge(canon, concept_summ)
+            canon["decay_score"] = round(max(0.0, float(canon.get("decay_score") or 0.0) - 5.5), 2)
+            s_md = summary_entry.setdefault("metadata", {})
+            if isinstance(s_md, dict):
+                s_md["linked_concept_id"] = canon["id"]
+                s_md["concept_merge"] = True
+            raw_entry["children_ids"] = [summary_entry["id"]]
+            bundle = [raw_entry, summary_entry]
+            entry_ids: tuple[str, ...] = (raw_entry["id"], summary_entry["id"])
+        else:
+            concept_entry = _mk_entry(
+                source=source,
+                user_message="",
+                assistant_response="",
+                summary=concept_summ,
+                tags=sorted(set(tags + ["concept"])),
+                importance_score=max(0.5, round(importance, 2)),
+                project=project or proj_slug,
+                memory_type=mtype,
+                project_name=proj_slug,
+                user_id=uid,
+                parent_id=raw_entry["id"],
+                memory_level="concept_memory",
+            )
+            _attach_concept_canon_metadata(concept_entry, concept_summ)
+            raw_entry["children_ids"] = [summary_entry["id"], concept_entry["id"]]
+            bundle = [raw_entry, summary_entry, concept_entry]
+            entry_ids = (raw_entry["id"], summary_entry["id"], concept_entry["id"])
+
+        apply_provider_contradiction_flags(
+            entries, pivot_summary=concept_summ, new_entries=bundle
+        )
+        entries.extend(bundle)
+        refresh_lifecycle_decay(entries)
+        apply_archive_rules(entries)
         _save_entries(entries)
+
     logger.info(
-        "memory write saved entries=%s memory_type=%s project=%s user=%s source=%s",
-        3,
+        "memory write saved entries=%s memory_type=%s project=%s user=%s source=%s merged=%s",
+        len(bundle),
         mtype,
         proj_slug or "",
         "guest" if is_guest else (uid or "unknown"),
         source or "chat",
+        merged_into,
     )
 
-    return MemoryWriteResult(
-        saved=True,
-        entry_ids=(raw_entry["id"], summary_entry["id"], concept_entry["id"]),
-    )
+    return MemoryWriteResult(saved=True, entry_ids=entry_ids)
 
 
 def _keywords(text: str) -> set[str]:
     return {x for x in re.findall(r"[a-zA-Z0-9_]{3,}", (text or "").lower())}
 
 
-def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]:
+def search_memories(
+    query: str,
+    limit: int = MAX_CONTEXT_MEMORIES,
+    *,
+    include_archived: bool = True,
+) -> list[dict]:
     q = (query or "").strip()
     if not q:
         return []
@@ -802,10 +1207,12 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
         logger.warning("memory retrieval skipped reason=backend_config_error detail=%s", e)
         return []
     with _STORE_LOCK:
-        entries = _load_entries()
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
 
     scored: list[tuple[int, float, str, dict]] = []
     for e in entries:
+        if not include_archived and not is_active_memory(e):
+            continue
         bucket = " ".join(
             [
                 str(e.get("user_message", "")),
@@ -849,14 +1256,16 @@ def build_memory_context(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> tuple
     return ctx, memories
 
 
-def top_memories(limit: int = 10) -> list[dict]:
+def top_memories(limit: int = 10, *, include_archived: bool = True) -> list[dict]:
     try:
         _ = _get_backend()
     except MemoryBackendConfigError as e:
         logger.warning("memory top skipped reason=backend_config_error detail=%s", e)
         return []
     with _STORE_LOCK:
-        entries = _load_entries()
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+    if not include_archived:
+        entries = [e for e in entries if is_active_memory(e)]
     entries.sort(
         key=lambda e: (float(e.get("importance_score", 0.0)), str(e.get("timestamp", ""))),
         reverse=True,
@@ -864,22 +1273,82 @@ def top_memories(limit: int = 10) -> list[dict]:
     return entries[: max(1, min(limit, 50))]
 
 
-def concept_memories(limit: int = 20) -> list[dict]:
-    tops = top_memories(limit=100)
+def concept_memories(limit: int = 20, *, include_archived: bool = True) -> list[dict]:
+    tops = top_memories(limit=100, include_archived=include_archived)
     concepts = [m for m in tops if str(m.get("memory_level", "")) == "concept_memory"]
     return concepts[: max(1, min(limit, 50))]
 
 
-def recent_memories(limit: int = 10) -> list[dict]:
+def recent_memories(limit: int = 10, *, include_archived: bool = True) -> list[dict]:
     try:
         _ = _get_backend()
     except MemoryBackendConfigError as e:
         logger.warning("memory recent skipped reason=backend_config_error detail=%s", e)
         return []
     with _STORE_LOCK:
-        entries = _load_entries()
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+    if not include_archived:
+        entries = [e for e in entries if is_active_memory(e)]
     entries.sort(key=lambda e: str(e.get("timestamp", "")), reverse=True)
     return entries[: max(1, min(limit, 50))]
+
+
+def memory_lifecycle_health() -> dict[str, object]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        return {
+            "status": "error",
+            "config_error": str(e),
+            "active_memories": 0,
+            "archived_memories": 0,
+            "merged_concepts": 0,
+            "contradictions_detected": 0,
+            "average_decay_score": None,
+            "memory_health_score": None,
+        }
+
+    with _STORE_LOCK:
+        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
+
+    active_memories = sum(1 for e in entries if is_active_memory(e))
+    archived_memories = sum(
+        1 for e in entries if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED
+    )
+
+    merged_concepts = 0
+    for e in entries:
+        if str(e.get("memory_level")) != "concept_memory":
+            continue
+        md = e.get("metadata")
+        mc = int((md or {}).get("merge_count") or 1) if isinstance(md, dict) else 1
+        if mc > 1:
+            merged_concepts += 1
+
+    contradictions_detected = sum(1 for e in entries if e.get("contradiction_detected"))
+
+    decay_vals = [float(e.get("decay_score") or 0.0) for e in entries if is_active_memory(e)]
+    average_decay_score = (
+        round(sum(decay_vals) / len(decay_vals), 2) if decay_vals else None
+    )
+
+    pen_arch = min(28.0, archived_memories * 0.2)
+    pen_contrad = min(30.0, contradictions_detected * 11.5)
+    base = average_decay_score or 0.0
+    memory_health_score = round(
+        max(0.0, min(100.0, 100.0 - base * 0.62 - pen_arch - pen_contrad)),
+        1,
+    )
+
+    return {
+        "status": "ok",
+        "active_memories": active_memories,
+        "archived_memories": archived_memories,
+        "merged_concepts": merged_concepts,
+        "contradictions_detected": contradictions_detected,
+        "average_decay_score": average_decay_score,
+        "memory_health_score": memory_health_score,
+    }
 
 
 def memory_health() -> dict[str, object]:
