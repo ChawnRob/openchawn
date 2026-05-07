@@ -1,14 +1,21 @@
 """
 Providers LLM : DeepSeek (par défaut), Kimi optionnel, OpenRouter, OpenAI.
 Pas d’Ollama, pas de chaînage localhost:11434.
+
+DeepSeek lit toujours la clé depuis os.environ au moment de la résolution :
+`DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` (autres providers inchangés).
 """
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from typing import Iterable
+from dataclasses import dataclass
 
 from app.settings import Settings, get_settings
+
+
+def _deepseek_key_live() -> str:
+    return (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+
 
 # Ordre canonique après DEFAULT_PROVIDER (uniquement si clé configurée).
 FIXED_ORDER: tuple[str, ...] = (
@@ -23,29 +30,16 @@ def _normalize_provider_name(name: str) -> str:
     return (name or "").strip().lower()
 
 
-def _key_var_env(name: str) -> str:
-    return {
-        "deepseek": "DEEPSEEK_API_KEY",
-        "kimi": "KIMI_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "openai": "OPENAI_API_KEY",
-    }.get(name, "")
-
-
 @dataclass
 class ProviderManager:
     settings: Settings
-    _memo_order: list[str] = field(default_factory=list, repr=False)
-
-    def __post_init__(self) -> None:
-        self._memo_order = list(self._resolution_order())
 
     def _has(self, name: str) -> bool:
         """Présence d’une clé configurée pour ce provider."""
         n = _normalize_provider_name(name)
         s = self.settings
         if n == "deepseek":
-            return bool((s.deepseek_api_key or "").strip())
+            return bool(_deepseek_key_live())
         if n == "kimi":
             return bool((s.kimi_api_key or "").strip())
         if n == "openrouter":
@@ -54,7 +48,7 @@ class ProviderManager:
             return bool((s.openai_api_key or "").strip())
         return False
 
-    def _resolution_order(self) -> Iterable[str]:
+    def _resolution_order(self) -> list[str]:
         """DEFAULT_PROVIDER avec clé en tête puis FIXED_ORDER avec clés présentes uniquement."""
         s = self.settings
         pref = _normalize_provider_name(s.default_provider)
@@ -70,30 +64,25 @@ class ProviderManager:
         return ordered
 
     def resolution_order(self) -> list[str]:
-        return list(self._memo_order)
+        return list(self._resolution_order())
 
     def configured_providers(self) -> list[str]:
-        """Providers avec au moins une clé configurée (ordre de secours prévu)."""
-        return [
-            n for n in FIXED_ORDER if self._has(n)
-        ]
+        return [n for n in FIXED_ORDER if self._has(n)]
 
     def active_provider(self) -> str:
-        """Premier utilisé après résolution (= premier avec clé, default en premier si valide)."""
-        if self._memo_order:
-            return self._memo_order[0]
-        return ""
+        ro = self.resolution_order()
+        return ro[0] if ro else ""
 
     def missing_keys(self) -> list[str]:
-        """Variables Railway pertinentes encore absentes (diagnostic, sans valeurs sensibles)."""
+        """Diagnostic Railway (sans secrets)."""
         s = self.settings
         pref = _normalize_provider_name(s.default_provider)
         missing: list[str] = []
 
-        if pref == "deepseek" and not (s.deepseek_api_key or "").strip():
+        if pref == "deepseek" and not _deepseek_key_live():
             missing.append("DEEPSEEK_API_KEY")
 
-        if self._memo_order:
+        if self.resolution_order():
             return missing
 
         if not missing:
@@ -133,5 +122,4 @@ def get_provider_manager() -> ProviderManager:
     return _manager
 
 
-# Legacy export pour références dans le code
 PROVIDER_PRIORITY: tuple[str, ...] = FIXED_ORDER

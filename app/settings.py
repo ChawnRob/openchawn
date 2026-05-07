@@ -264,8 +264,8 @@ def _build_settings() -> Settings:
         anthropic_base_url=_str("ANTHROPIC_BASE_URL", default="https://api.anthropic.com/v1").rstrip(
             "/"
         ),
-        deepseek_api_key=_str("DEEPSEEK_API_KEY", default=""),
-        deepseek_model=_str("DEEPSEEK_MODEL", default="deepseek-v4-flash"),
+        deepseek_api_key=(os.getenv("DEEPSEEK_API_KEY") or "").strip(),
+        deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash",
         deepseek_base_url=deepseek_base,
         infomaniak_api_key=_str("INFOMANIAK_API_KEY", default=""),
         infomaniak_model=_str("INFOMANIAK_MODEL", default=""),

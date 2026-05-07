@@ -1,20 +1,26 @@
 import logging
+import os
+
 import httpx
 
-from app.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from app.settings import _deepseek_base_normalize
+
 from app.providers.base import BaseProvider
 from app.providers.http_client import post_with_retry
 
 logger = logging.getLogger("openchawn.provider.deepseek")
 
+_DEEPSEEK_DEFAULT_BASE = "https://api.deepseek.com"
+
 
 class DeepSeekProvider(BaseProvider):
-    """DeepSeek — client compatible OpenAI (POST …/chat/completions, sans /v1 dans la base)."""
+    """DeepSeek — client compatible OpenAI (clé/modèle via os.environ Railway)."""
 
     def __init__(self) -> None:
-        self.api_key = (DEEPSEEK_API_KEY or "").strip()
-        self.model = (DEEPSEEK_MODEL or "").strip() or "deepseek-v4-flash"
-        self.base_url = (DEEPSEEK_BASE_URL or "").strip().rstrip("/")
+        self.api_key = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+        self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
+        raw_base = os.getenv("DEEPSEEK_BASE_URL") or _DEEPSEEK_DEFAULT_BASE
+        self.base_url = _deepseek_base_normalize(raw_base).rstrip("/")
 
     def generate(self, prompt: str, user_id: str = "", system_prompt: str = "") -> str:
         sp = system_prompt or (
@@ -57,4 +63,4 @@ class DeepSeekProvider(BaseProvider):
             return f"[ERREUR] {str(e)}"
 
     def is_available(self) -> bool:
-        return bool(self.api_key)
+        return bool((os.getenv("DEEPSEEK_API_KEY") or "").strip())

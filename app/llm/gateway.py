@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import logging
+import os
 import requests as http_requests
 
 from app.provider_manager import FIXED_ORDER, get_provider_manager
 from app.settings import Settings, get_settings
 
 logger = logging.getLogger("openchawn.gateway")
+
+
+def _deepseek_api_key_live() -> str:
+    return (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+
+
+def _deepseek_model_live() -> str:
+    return os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
 
 
 def _extract_openai_response_text(data: dict) -> str:
@@ -153,8 +162,8 @@ def _dispatch(
     if name == "deepseek":
         return _chat_completions(
             base_url=s.deepseek_base_url,
-            api_key=(s.deepseek_api_key or "").strip(),
-            model=(s.deepseek_model or "").strip() or "deepseek-v4-flash",
+            api_key=_deepseek_api_key_live(),
+            model=_deepseek_model_live(),
             system_prompt=system_prompt,
             user_message=user_message,
             log_label="deepseek",
@@ -184,7 +193,7 @@ def _hint_order(pm, provider_hint: str) -> list[str]:
     if h in FIXED_ORDER:
         extra = pm.settings
         hint_ok = (
-            (h == "deepseek" and bool((extra.deepseek_api_key or "").strip()))
+            (h == "deepseek" and bool(_deepseek_api_key_live()))
             or (h == "kimi" and bool((extra.kimi_api_key or "").strip()))
             or (h == "openrouter" and bool((extra.openrouter_api_key or "").strip()))
             or (h == "openai" and bool((extra.openai_api_key or "").strip()))
@@ -204,7 +213,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
     s = get_settings()
     pm = get_provider_manager()
 
-    if _normalize_pref(s.default_provider) == "deepseek" and not (s.deepseek_api_key or "").strip():
+    if _normalize_pref(s.default_provider) == "deepseek" and not _deepseek_api_key_live():
         return {
             "output": "",
             "provider": "none",
