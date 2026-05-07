@@ -5,10 +5,13 @@ import logging
 import os
 import re
 import uuid
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
+
+from app.settings import get_settings
 
 STORE_PATH = Path("data/memory/fractal_memory.json")
 MAX_CONTEXT_MEMORIES = 5
@@ -37,28 +40,148 @@ class MemoryWriteResult:
     entry_ids: tuple[str, ...] = ()
 
 
+class MemoryBackendConfigError(RuntimeError):
+    pass
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _load_entries() -> list[dict]:
-    if not STORE_PATH.exists():
+class MemoryBackend(ABC):
+    name = "base"
+
+    @abstractmethod
+    def load_entries(self) -> list[dict]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_entries(self, entries: list[dict]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def persistent_storage(self) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def storage_path(self) -> str:
+        raise NotImplementedError
+
+    def backend_warning(self) -> str:
+        return ""
+
+    def backend_status(self) -> str:
+        return "ok"
+
+
+class LocalJsonMemoryBackend(MemoryBackend):
+    name = "json"
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def load_entries(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [x for x in data if isinstance(x, dict)]
+
+    def save_entries(self, entries: list[dict]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            json.dumps(entries, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def persistent_storage(self) -> bool:
+        # Railway filesystem is ephemeral across redeploys/restarts.
+        return not (os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"))
+
+    def storage_path(self) -> str:
+        return str(self.path)
+
+    def backend_warning(self) -> str:
+        if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+            return "local JSON memory is ephemeral on Railway"
+        return ""
+
+
+class PostgresMemoryBackend(MemoryBackend):
+    name = "postgres"
+
+    CREATE_TABLE_SQL = """
+    CREATE TABLE IF NOT EXISTS fractal_memories (
+        id TEXT PRIMARY KEY,
+        timestamp TIMESTAMPTZ NOT NULL,
+        source TEXT NOT NULL,
+        user_message TEXT NOT NULL,
+        assistant_response TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        tags JSONB NOT NULL,
+        importance_score DOUBLE PRECISION NOT NULL,
+        project TEXT NOT NULL,
+        parent_id TEXT NULL,
+        children_ids JSONB NOT NULL,
+        metadata JSONB NOT NULL
+    );
+    """
+
+    def __init__(self, database_url: str) -> None:
+        self.database_url = (database_url or "").strip()
+        if not self.database_url:
+            raise MemoryBackendConfigError(
+                "MEMORY_BACKEND=postgres requires DATABASE_URL (or MEMORY_DB_URL)."
+            )
+
+    def load_entries(self) -> list[dict]:
+        # Prepared for future Railway persistent storage; no migration yet.
+        logger.info("postgres memory backend selected (read path prepared, no migration executed yet)")
         return []
+
+    def save_entries(self, entries: list[dict]) -> None:
+        _ = entries
+        logger.info("postgres memory backend selected (write path prepared, no migration executed yet)")
+
+    def persistent_storage(self) -> bool:
+        return True
+
+    def storage_path(self) -> str:
+        return "postgres://fractal_memories"
+
+    def backend_status(self) -> str:
+        return "prepared_not_migrated"
+
+
+def _build_backend() -> MemoryBackend:
+    s = get_settings()
+    backend = (s.memory_backend or "json").strip().lower() or "json"
+    if backend == "postgres":
+        return PostgresMemoryBackend(database_url=s.memory_db_url)
+    return LocalJsonMemoryBackend(STORE_PATH)
+
+
+def _get_backend() -> MemoryBackend:
     try:
-        data = json.loads(STORE_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, ValueError):
-        return []
-    if not isinstance(data, list):
-        return []
-    return [x for x in data if isinstance(x, dict)]
+        return _build_backend()
+    except MemoryBackendConfigError:
+        raise
+    except Exception as e:
+        raise MemoryBackendConfigError(f"Memory backend initialization failed: {e}") from e
+
+
+def _load_entries() -> list[dict]:
+    backend = _get_backend()
+    return backend.load_entries()
 
 
 def _save_entries(entries: list[dict]) -> None:
-    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STORE_PATH.write_text(
-        json.dumps(entries, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    backend = _get_backend()
+    backend.save_entries(entries)
 
 
 def _contains_sensitive_text(*parts: str) -> bool:
@@ -133,6 +256,12 @@ def write_exchange(
     assistant_response: str,
     project: str = "",
 ) -> MemoryWriteResult:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        logger.warning("memory write skipped reason=backend_config_error detail=%s", e)
+        return MemoryWriteResult(saved=False, reason=str(e))
+
     if _contains_sensitive_text(user_message, assistant_response):
         logger.info("memory write skipped reason=sensitive_content_detected")
         return MemoryWriteResult(saved=False, reason="sensitive_content_detected")
@@ -201,6 +330,11 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
     if not q:
         return []
     keys = _keywords(q)
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        logger.warning("memory retrieval skipped reason=backend_config_error detail=%s", e)
+        return []
     with _STORE_LOCK:
         entries = _load_entries()
 
@@ -242,6 +376,11 @@ def build_memory_context(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> tuple
 
 
 def recent_memories(limit: int = 10) -> list[dict]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        logger.warning("memory recent skipped reason=backend_config_error detail=%s", e)
+        return []
     with _STORE_LOCK:
         entries = _load_entries()
     entries.sort(key=lambda e: str(e.get("timestamp", "")), reverse=True)
@@ -249,17 +388,39 @@ def recent_memories(limit: int = 10) -> list[dict]:
 
 
 def memory_health() -> dict[str, object]:
-    with _STORE_LOCK:
-        entries = _load_entries()
+    settings = get_settings()
+    backend_name = (settings.memory_backend or "json").strip().lower() or "json"
+    persistent = False
+    status = "ok"
     warning = ""
-    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
-        warning = "local JSON memory is ephemeral on Railway"
+    config_error = ""
+    entries: list[dict] = []
+    storage = str(STORE_PATH)
+
+    try:
+        backend = _get_backend()
+        backend_name = backend.name
+        persistent = backend.persistent_storage()
+        status = backend.backend_status()
+        warning = backend.backend_warning()
+        storage = backend.storage_path()
+        with _STORE_LOCK:
+            entries = backend.load_entries()
+    except MemoryBackendConfigError as e:
+        status = "error"
+        config_error = str(e)
+    except Exception as e:
+        status = "error"
+        config_error = f"memory health error: {e}"
+
     return {
         "memory_enabled": True,
-        "memory_backend": "local_json",
+        "memory_backend": backend_name,
+        "persistent_storage": persistent,
+        "railway_ephemeral_warning": warning,
         "entries_count": len(entries),
-        "storage_path": str(STORE_PATH),
-        "status": "ok",
-        "warning": warning,
+        "storage_path": storage,
+        "status": status,
+        "config_error": config_error,
     }
 
