@@ -63,6 +63,7 @@ def chat(
     if memory_context:
         context = memory_context
         memory_used = True
+    logger.info("chat memory retrieval count=%s used=%s", len(memories), memory_used)
 
     if context:
         final_prompt = f"Contexte mémoire:\n{context}\n\nQuestion: {req.message}"
@@ -125,6 +126,10 @@ def chat(
         assistant_response=response_text,
         project=req.project_name,
     )
+    if write_result.saved:
+        logger.info("chat memory writeback status=saved entries=%s", len(write_result.entry_ids))
+    else:
+        logger.info("chat memory writeback status=skipped reason=%s", write_result.reason or "unknown")
 
     result = {
         "output": response_text,

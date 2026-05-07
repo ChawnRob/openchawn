@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import uuid
@@ -12,6 +13,7 @@ from threading import Lock
 STORE_PATH = Path("data/memory/fractal_memory.json")
 MAX_CONTEXT_MEMORIES = 5
 _STORE_LOCK = Lock()
+logger = logging.getLogger("openchawn.memory.fractal")
 
 _SENSITIVE_RE = re.compile(
     r"(api[_-]?key|sk-[a-z0-9_-]{8,}|token|secret|password)",
@@ -132,6 +134,7 @@ def write_exchange(
     project: str = "",
 ) -> MemoryWriteResult:
     if _contains_sensitive_text(user_message, assistant_response):
+        logger.info("memory write skipped reason=sensitive_content_detected")
         return MemoryWriteResult(saved=False, reason="sensitive_content_detected")
 
     tags = _detect_tags(user_message, assistant_response, project)
@@ -176,6 +179,12 @@ def write_exchange(
         entries = _load_entries()
         entries.extend([raw_entry, summary_entry, concept_entry])
         _save_entries(entries)
+    logger.info(
+        "memory write saved entries=%s project=%s source=%s",
+        3,
+        project or "",
+        source or "chat",
+    )
 
     return MemoryWriteResult(
         saved=True,
@@ -220,6 +229,7 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
 
 def build_memory_context(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> tuple[str, list[dict]]:
     memories = search_memories(query, limit=limit)
+    logger.info("memory retrieval query_len=%s count=%s", len(query or ""), len(memories))
     if not memories:
         return "", []
     lines = []
