@@ -17,7 +17,13 @@ from app.config import (
 from app.provider_manager import get_provider_manager
 from app.profiles import list_profiles, get_profile_for_user
 from app.routing import get_cost_tracking_hooks, get_fallback_manager, get_provider_health_hooks
-from app.memory.fractal_memory import memory_health, recent_memories, search_memories
+from app.memory.fractal_memory import (
+    concept_memories,
+    memory_health,
+    recent_memories,
+    search_memories,
+    top_memories,
+)
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
@@ -280,6 +286,18 @@ def memory_recent():
 @app.post("/memory/search")
 def memory_search(req: MemorySearchRequest):
     items = search_memories(req.query, limit=10)
+    return {"status": "ok", "count": len(items), "items": items}
+
+
+@app.get("/memory/concepts")
+def memory_concepts():
+    items = concept_memories(limit=20)
+    return {"status": "ok", "count": len(items), "items": items}
+
+
+@app.get("/memory/top")
+def memory_top():
+    items = top_memories(limit=10)
     return {"status": "ok", "count": len(items), "items": items}
 
 

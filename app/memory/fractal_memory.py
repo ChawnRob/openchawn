@@ -31,6 +31,20 @@ _TAG_HINTS = (
     "ui",
     "architecture",
 )
+_PROJECT_KEYWORDS = {
+    "openchawn",
+    "provider",
+    "providers",
+    "railway",
+    "memory",
+    "security",
+    "architecture",
+    "deepseek",
+    "kimi",
+    "openai",
+    "infomaniak",
+    "ollama",
+}
 
 
 @dataclass(frozen=True)
@@ -196,14 +210,23 @@ def _detect_tags(*parts: str) -> list[str]:
 
 
 def _summary_text(user_message: str, assistant_response: str) -> str:
-    raw = f"Q: {(user_message or '').strip()} | R: {(assistant_response or '').strip()}"
-    short = re.sub(r"\s+", " ", raw).strip()
-    if len(short) <= 220:
-        return short
-    return short[:217].rstrip() + "..."
+    uq = re.sub(r"\s+", " ", (user_message or "").strip())
+    ar = re.sub(r"\s+", " ", (assistant_response or "").strip())
+    first = f"Demande: {uq[:110]}".rstrip(" .,;:")
+    second = f"Action: {ar[:110]}".rstrip(" .,;:")
+    summary = f"{first}. {second}."
+    return summary[:240].rstrip()
 
 
 def _concept_summary(user_message: str, assistant_response: str, tags: list[str]) -> str:
+    merged = f"{user_message} {assistant_response}".lower()
+    if "deepseek" in merged and ("default" in merged or "par défaut" in merged or "principal" in merged):
+        return "DeepSeek est provider principal"
+    if "railway" in merged and ("production" in merged or "prod" in merged):
+        return "Railway = backend production"
+    if "ollama" in merged and any(x in merged for x in ("interdit", "disabled", "désactivé", "forbidden")):
+        return "Ollama interdit production"
+
     important = [t for t in tags if t in {"architecture", "security", "provider", "memory", "railway"}]
     if important:
         return f"Decision/Concept: {', '.join(sorted(set(important)))}"
@@ -212,12 +235,31 @@ def _concept_summary(user_message: str, assistant_response: str, tags: list[str]
 
 
 def _importance_score(user_message: str, assistant_response: str, tags: list[str]) -> float:
-    score = 0.45
-    length_bonus = min(0.25, (len(user_message) + len(assistant_response)) / 4000.0)
-    tag_bonus = min(0.20, len(tags) * 0.05)
-    if any(t in tags for t in ("architecture", "security", "provider")):
-        tag_bonus += 0.08
-    return round(min(0.98, score + length_bonus + tag_bonus), 2)
+    text = f"{user_message} {assistant_response}".lower()
+    words = _keywords(text)
+    score = 0.20
+
+    project_hits = len(words.intersection(_PROJECT_KEYWORDS))
+    score += min(0.30, project_hits * 0.05)
+
+    if any(k in text for k in ("decision", "choix", "adopter", "utiliser", "standard")):
+        score += 0.12
+    if any(k in text for k in ("architecture", "pattern", "orchestration", "routing")):
+        score += 0.14
+    if any(k in text for k in ("security", "sécurité", "secret", "token", "api key")):
+        score += 0.16
+    if any(k in text for k in ("provider", "deepseek", "kimi", "openai", "infomaniak")):
+        score += 0.14
+    if any(k in text for k in ("memory", "memoire", "mémoire")):
+        score += 0.10
+    if "railway" in text:
+        score += 0.12
+    if "openchawn" in text:
+        score += 0.10
+
+    tag_bonus = min(0.10, len(tags) * 0.02)
+    score += tag_bonus
+    return round(max(0.0, min(1.0, score)), 2)
 
 
 def _mk_entry(
@@ -338,7 +380,7 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
     with _STORE_LOCK:
         entries = _load_entries()
 
-    scored: list[tuple[float, dict]] = []
+    scored: list[tuple[int, float, str, dict]] = []
     for e in entries:
         bucket = " ".join(
             [
@@ -354,15 +396,22 @@ def search_memories(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> list[dict]
         overlap = len(keys.intersection(_keywords(bucket)))
         if overlap == 0 and q.lower() not in bucket:
             continue
-        score = float(overlap) + float(e.get("importance_score", 0.0))
-        scored.append((score, e))
+        relevance = overlap if overlap > 0 else (1 if q.lower() in bucket else 0)
+        importance = float(e.get("importance_score", 0.0))
+        timestamp = str(e.get("timestamp", ""))
+        scored.append((relevance, importance, timestamp, e))
 
-    scored.sort(key=lambda item: (item[0], item[1].get("timestamp", "")), reverse=True)
-    return [e for _, e in scored[: max(1, min(limit, 10))]]
+    # ranking: pertinence -> importance -> recence
+    scored.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    return [e for _, _, _, e in scored[: max(1, min(limit, 10))]]
 
 
 def build_memory_context(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> tuple[str, list[dict]]:
-    memories = search_memories(query, limit=limit)
+    ranked = search_memories(query, limit=20)
+    important = [m for m in ranked if float(m.get("importance_score", 0.0)) >= 0.6][:3]
+    recent = recent_memories(limit=8)
+    recent = [m for m in recent if m.get("id") not in {x.get("id") for x in important}][:2]
+    memories = (important + recent)[: max(1, min(limit, 5))]
     logger.info("memory retrieval query_len=%s count=%s", len(query or ""), len(memories))
     if not memories:
         return "", []
@@ -373,6 +422,27 @@ def build_memory_context(query: str, limit: int = MAX_CONTEXT_MEMORIES) -> tuple
         tags = ", ".join([str(t) for t in mem.get("tags", [])][:4])
         lines.append(f"{idx}. [{level}] {summary} | tags: {tags}")
     return "\n".join(lines), memories
+
+
+def top_memories(limit: int = 10) -> list[dict]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        logger.warning("memory top skipped reason=backend_config_error detail=%s", e)
+        return []
+    with _STORE_LOCK:
+        entries = _load_entries()
+    entries.sort(
+        key=lambda e: (float(e.get("importance_score", 0.0)), str(e.get("timestamp", ""))),
+        reverse=True,
+    )
+    return entries[: max(1, min(limit, 50))]
+
+
+def concept_memories(limit: int = 20) -> list[dict]:
+    tops = top_memories(limit=100)
+    concepts = [m for m in tops if str(m.get("memory_level", "")) == "concept_memory"]
+    return concepts[: max(1, min(limit, 50))]
 
 
 def recent_memories(limit: int = 10) -> list[dict]:
