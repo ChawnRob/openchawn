@@ -1099,6 +1099,16 @@ def _save_entries(entries: list[dict]) -> None:
     backend.save_entries(entries)
 
 
+def entries_snapshot_for_tests() -> list[dict]:
+    """Snapshots normalisé sous verrou — usage scripts smoke / introspection locales."""
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError:
+        return []
+    with _STORE_LOCK:
+        return [_ensure_entry_defaults(e) for e in _load_entries()]
+
+
 def _contains_sensitive_text(*parts: str) -> bool:
     text = " ".join([(p or "") for p in parts])
     return bool(_SENSITIVE_RE.search(text))
