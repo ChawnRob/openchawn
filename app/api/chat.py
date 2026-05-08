@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
+from app.core.language_policy import build_language_instruction
 from app.llm import generate_response
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
 
@@ -90,10 +91,14 @@ def chat(
     if extra_parts:
         final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
 
+    lang_instruction = build_language_instruction(req.message)
+    final_prompt = f"{lang_instruction}\n\n{final_prompt}"
+
     system_prompt = (
         "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
         "RÈGLES STRICTES : "
-        "1. Réponds UNIQUEMENT en français. Jamais de chinois, anglais ou autre langue. "
+        "1. Respecte impérativement la consigne de langue indiquée dans la première ligne du message utilisateur "
+        "(répondre dans la même langue que le dernier message de l'utilisateur). "
         "2. Réponds brièvement et directement. "
         "3. Ne mentionne jamais Mistral, OpenAI, Qwen ou un autre provider. "
         "4. Tu es OpenChawn, point final."

@@ -307,6 +307,17 @@ def health_memory_lifecycle():
     return memory_lifecycle_health()
 
 
+@app.get("/health/language")
+def health_language():
+    from app.core import language_policy as lp
+
+    return {
+        "language_policy_enabled": lp.LANGUAGE_POLICY_ENABLED,
+        "fallback_language": lp.FALLBACK_LANGUAGE,
+        "rule": lp.LANGUAGE_POLICY_RULE_PUBLIC,
+    }
+
+
 @app.get("/memory/recent")
 def memory_recent():
     items = recent_memories(limit=10)
