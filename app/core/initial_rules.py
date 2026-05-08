@@ -11,6 +11,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.core.runtime_language_guard import line_contains_forced_french_pattern
+
 logger = logging.getLogger("openchawn.initial_rules")
 
 _LOCK = Lock()
@@ -19,13 +21,6 @@ _LAST_AUDIT: dict[str, Any] = {
     "forced_french_rule_removed": False,
     "rule_sources_checked": [],
 }
-
-_FORCED_FRENCH_PATTERNS = (
-    "uniquement en français",
-    "répondre uniquement en français",
-    "toujours répondre en français",
-    "assistant français",
-)
 
 _NEUTRAL_LANGUAGE_POLICY = (
     "Language policy:\n"
@@ -94,8 +89,7 @@ def neutralize_forced_french_rule(text: str) -> dict[str, Any]:
     kept: list[str] = []
     found = False
     for ln in lines:
-        low = ln.lower()
-        if any(p in low for p in _FORCED_FRENCH_PATTERNS):
+        if line_contains_forced_french_pattern(ln):
             found = True
             continue
         kept.append(ln)

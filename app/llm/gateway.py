@@ -4,6 +4,7 @@ import logging
 import os
 import requests as http_requests
 
+from app.core.runtime_language_guard import prompt_contains_forced_french, sanitize_provider_prompts
 from app.provider_manager import FIXED_ORDER, get_provider_manager
 from app.routing import (
     get_cost_tracking_hooks,
@@ -252,6 +253,16 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
 
     Pas d’Ollama. Pas de tentative si DEFAULT_PROVIDER=deepseek sans DEEPSEEK_API_KEY.
     """
+    pre_ff = prompt_contains_forced_french((system_prompt or "") + "\n" + (user_message or ""))
+    system_prompt, user_message, ff_runtime_removed = sanitize_provider_prompts(
+        system_prompt or "", user_message or ""
+    )
+
+    ff_debug: dict[str, bool | str] = {
+        "prompt_contains_forced_french_before_sanitize": bool(pre_ff),
+        "forced_french_runtime_removed": bool(ff_runtime_removed),
+    }
+
     s = get_settings()
     pm = get_provider_manager()
 
@@ -262,6 +273,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
             "success": False,
             "status_code": None,
             "error": "DeepSeek API key missing",
+            **ff_debug,
         }
 
     decision = pm.intelligent_decision(
@@ -278,6 +290,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
             "success": False,
             "status_code": None,
             "error": "Aucune clé API LLM configurée (DEEPSEEK requis par défaut, puis KIMI/OPENAI/INFOMANIAK optionnels).",
+            **ff_debug,
         }
 
     last_err: str | None = None
@@ -304,6 +317,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
                 "success": True,
                 "status_code": code,
                 "error": None,
+                **ff_debug,
             }
         if err:
             health.mark_failure(name)
@@ -319,6 +333,7 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
         "success": False,
         "status_code": last_code,
         "error": detail,
+        **ff_debug,
     }
 
 

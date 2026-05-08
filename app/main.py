@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from app.config import (
     ALLOWED_ORIGINS,
     IS_PROD,
@@ -351,6 +351,34 @@ def health_language():
             "latest_user_message_language",
             "fallback",
         ],
+    }
+
+
+class ChatLanguageDryRunRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    profile: str = ""
+
+
+@app.post("/health/language/chat-dry-run")
+def health_language_chat_dry_run(req: ChatLanguageDryRunRequest):
+    """Simule l'assemblage du chemin /chat sans appel LLM ni effets de persistance mémoire."""
+    from app.api.chat import ChatRequest, assemble_chat_generation_inputs
+
+    stub_user = {
+        "is_guest": True,
+        "guest_session_id": "dry-run",
+        "ip": "127.0.0.1",
+    }
+    cr = ChatRequest(message=req.message.strip(), profile=(req.profile or "").strip())
+    b = assemble_chat_generation_inputs(cr, user=stub_user, persist_memory_side_effects=False)
+    return {
+        "route_used": "POST /chat",
+        "profile_used": b["profile_used"],
+        "detected_language": b["detected_language"],
+        "final_language": b["final_language_hint"],
+        "forced_french_runtime_detected": b["forced_french_runtime_detected"],
+        "forced_french_runtime_removed": b["forced_french_runtime_removed_preview"],
+        "forced_french_source_type": b["forced_french_source_type"],
     }
 
 

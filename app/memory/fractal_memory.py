@@ -15,6 +15,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
+from app.core.runtime_language_guard import (
+    memory_entry_requires_forced_french_deprecation,
+    skip_memory_entry_for_context_injection,
+)
 from app.settings import get_settings
 
 STORE_PATH = Path("data/memory/fractal_memory.json")
@@ -23,6 +27,21 @@ STORE_VERSION = 2
 _STORE_LOCK = Lock()
 _LAST_CONTEXT_LOCK = Lock()
 logger = logging.getLogger("openchawn.memory.fractal")
+
+
+def _deprecate_forced_french_runtime_memories(entries: list[dict]) -> int:
+    """Archive memories that impose French-only replies; keep history, block future injection."""
+    n = 0
+    for e in entries:
+        if not memory_entry_requires_forced_french_deprecation(e):
+            continue
+        md = e.setdefault("metadata", {})
+        md["forced_french_runtime_rule_removed"] = True
+        md["forced_french_deprecation_reason"] = "forced_french_runtime_rule_removed"
+        e["lifecycle_status"] = MEMORY_LIFECYCLE_ARCHIVED
+        e["contradiction_resolution_status"] = "deprecated"
+        n += 1
+    return n
 
 
 def _timeline_emit(**kwargs: object) -> None:
@@ -1342,6 +1361,7 @@ def build_layered_memory_context(
     user_key: str = "",
     project_name_hint: str = "",
     is_guest: bool = True,
+    persist_memory_side_effects: bool = True,
 ) -> tuple[str, list[dict]]:
     q = (query or "").strip()
     project_slug = _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(q)
@@ -1369,6 +1389,12 @@ def build_layered_memory_context(
         except Exception:
             pass
 
+        ff_dep = 0
+        if persist_memory_side_effects:
+            ff_dep = _deprecate_forced_french_runtime_memories(entries)
+            if ff_dep:
+                logger.warning("forced_french_memory_deprecated count=%s", ff_dep)
+
         def _lines_for_label(label: str, items: list[dict]) -> str:
             if not items:
                 return ""
@@ -1376,6 +1402,8 @@ def build_layered_memory_context(
             for it in items:
                 summ = str(it.get("summary", "")).strip()
                 if not summ:
+                    continue
+                if skip_memory_entry_for_context_injection(it):
                     continue
                 lines_l.append(f"• {summ}")
             return "\n".join(lines_l)
@@ -1433,6 +1461,8 @@ def build_layered_memory_context(
         seen_ids = {str(x.get("id") or "") for x in all_mem if x.get("id")}
         seen_summary = {_norm_summary_key(str(x.get("summary", ""))) for x in all_mem if str(x.get("summary", ""))}
         for sem in semantic_add:
+            if skip_memory_entry_for_context_injection(sem):
+                continue
             sid = str(sem.get("id") or "")
             if sid and sid in seen_ids:
                 semantic_duplicates += 1
@@ -1571,18 +1601,25 @@ def build_layered_memory_context(
                 session_id=tl_key,
             )
 
-        reinforced_ids = [str(it.get("id")) for it in all_mem if it.get("id")]
-        reinforce_entries(
-            entries,
-            reinforced_ids,
-            timeline_user_key=tl_key,
-            timeline_session_id=tl_key,
-        )
-        refresh_lifecycle_decay(entries)
-        _save_entries(entries)
+        reinforced_ids = [
+            str(it.get("id"))
+            for it in all_mem
+            if it.get("id") and not skip_memory_entry_for_context_injection(it)
+        ]
+        if persist_memory_side_effects:
+            reinforce_entries(
+                entries,
+                reinforced_ids,
+                timeline_user_key=tl_key,
+                timeline_session_id=tl_key,
+            )
+            refresh_lifecycle_decay(entries)
+            _save_entries(entries)
 
     summaries_ordered = [
-        str(it.get("summary") or "").strip() for it in all_mem if str(it.get("summary") or "").strip()
+        str(it.get("summary") or "").strip()
+        for it in all_mem
+        if str(it.get("summary") or "").strip() and not skip_memory_entry_for_context_injection(it)
     ]
     _timeline_emit(
         event_type="context_injected",
