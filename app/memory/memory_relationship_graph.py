@@ -264,6 +264,7 @@ def build_memory_relationship_graph(entries: list[dict] | None = None) -> dict[s
         e["cluster_id"] = clusters.get(mid, "cluster_0")
         e["graph_degree"] = int(deg_map.get(mid, 0))
         e["graph_centrality"] = round(float(cent_map.get(mid, 0.0)), 4)
+        e["temporal_status"] = str(e.get("temporal_status") or "")
         e["relationship_updated_at"] = _now_iso()
 
     return {

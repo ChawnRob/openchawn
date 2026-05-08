@@ -1287,8 +1287,9 @@ def gather_layered_candidates(
         for i, src in enumerate(picks):
             rel = _score_relevance(keys, src) if layer != "system" else 0
             imp = float(src.get("importance_score", 0.0))
+            trend = float(src.get("trend_score") or 0.0)
             decay = float(src.get("decay_score", 0.0))
-            composite = _composite_retrieval_score(rel, imp, decay)
+            composite = _composite_retrieval_score(rel, imp, decay) + max(-12.0, min(12.0, trend * 14.0))
             if layer == "system":
                 why = "layer:system;strategy:importance_decay;deduped_pick"
             elif layer == "user":
@@ -1307,6 +1308,7 @@ def gather_layered_candidates(
                 "why_selected": f"{why};layer_rank={i + 1};prefer_recency={prefer_recency}",
                 "relevance_score": rel,
                 "importance_score": imp,
+                "trend_score": trend,
                 "decay_score": decay,
                 "graph_centrality": float(src.get("graph_centrality") or 0.0),
                 "memory_type": str(src.get("memory_type", "")),

@@ -819,6 +819,55 @@ def memory_graph_explain_route(memory_id: str):
     return out
 
 
+@app.get("/memory/temporal/snapshot")
+def memory_temporal_snapshot_route():
+    from app.memory import memory_temporal_evolution as mte
+
+    snap = mte.build_temporal_snapshot()
+    return {
+        "status": "ok",
+        "updated": snap.get("updated"),
+        "rising_count": len(snap.get("rising_concepts") or []),
+        "declining_count": len(snap.get("declining_concepts") or []),
+        "stale_decisions_count": len(snap.get("stale_decisions") or []),
+        "growing_contradictions_count": len(snap.get("growing_contradictions") or []),
+        "cluster_evolution": snap.get("cluster_evolution") or [],
+    }
+
+
+@app.post("/memory/temporal/refresh")
+def memory_temporal_refresh_route():
+    from app.memory import memory_temporal_evolution as mte
+
+    return mte.refresh_temporal_evolution()
+
+
+@app.get("/memory/temporal/rising")
+def memory_temporal_rising_route(limit: int = Query(default=20, ge=1, le=100)):
+    from app.memory import memory_temporal_evolution as mte
+
+    rows = mte.detect_rising_concepts(mte.build_temporal_snapshot().get("entries") or [])
+    return {"status": "ok", "items": rows[:limit]}
+
+
+@app.get("/memory/temporal/declining")
+def memory_temporal_declining_route(limit: int = Query(default=20, ge=1, le=100)):
+    from app.memory import memory_temporal_evolution as mte
+
+    rows = mte.detect_declining_concepts(mte.build_temporal_snapshot().get("entries") or [])
+    return {"status": "ok", "items": rows[:limit]}
+
+
+@app.get("/memory/temporal/explain/{memory_id}")
+def memory_temporal_explain_route(memory_id: str):
+    from app.memory import memory_temporal_evolution as mte
+
+    out = mte.explain_temporal_evolution(memory_id)
+    if str(out.get("status") or "") != "ok":
+        raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    return out
+
+
 @app.post("/decision/predict-consequences")
 def decision_predict_consequences_route(req: PredictConsequencesRequest):
     from app.decision import consequence_predictor as cp

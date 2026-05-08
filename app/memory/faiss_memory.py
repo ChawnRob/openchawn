@@ -181,6 +181,7 @@ def build_faiss_index(entries: list[dict] | None = None) -> dict[str, Any]:
         pool = [fm._ensure_entry_defaults(dict(e)) for e in (entries or [])]  # noqa: SLF001
         pool.sort(
             key=lambda e: (
+                1.0 if str(e.get("temporal_status") or "") in ("rising", "stable") else 0.0,
                 float(e.get("long_term_value") or 0.0),
                 float(e.get("importance_score") or 0.0),
                 str(e.get("timestamp") or ""),

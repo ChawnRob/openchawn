@@ -16,6 +16,7 @@ from app.decision import consequence_predictor as cp
 from app.memory import fractal_memory as fm
 from app.memory import graph_persistence as gp
 from app.memory import memory_importance as mimp
+from app.memory import memory_temporal_evolution as mte
 from app.memory import memory_compression as mc
 from app.memory import memory_decision_engine as mde
 from app.memory import memory_index as mi
@@ -112,6 +113,9 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
     comp_c = _compression_candidate_count(entries)
     gstats = gp.graph_stats()
     stable_clusters = int(gstats.get("clusters_count") or 0)
+    temp = mte.build_temporal_snapshot(entries)
+    stale_decisions_n = len(temp.get("stale_decisions") or [])
+    rising_clusters_n = len([x for x in (temp.get("cluster_evolution") or []) if str(x.get("temporal_status")) == "rising"])
 
     snap_cog = cse.get_last_cognitive_state()
     state = str(snap_cog.get("state") or "stable").lower()
@@ -132,6 +136,10 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         reasons.append("archive_backlog")
     if stable_clusters >= 2:
         reasons.append("stable_clusters")
+    if stale_decisions_n >= 2:
+        reasons.append("stale_decisions")
+    if rising_clusters_n >= 1:
+        reasons.append("rising_clusters")
 
     should_run = bool(
         dup >= 32.0
@@ -141,6 +149,8 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         or (comp_c >= 1 and len(entries) >= 12)
         or arch_c >= 6
         or stable_clusters >= 3
+        or stale_decisions_n >= 3
+        or rising_clusters_n >= 2
     )
 
     mode = "light" if should_run else "idle"
@@ -172,6 +182,8 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         "archive_candidates": arch_c,
         "compression_candidates": comp_c,
         "stable_clusters": stable_clusters,
+        "stale_decisions": stale_decisions_n,
+        "rising_clusters": rising_clusters_n,
         "estimated_impact": est,
         "safety_notes": safety,
         "cognitive_state": state,
