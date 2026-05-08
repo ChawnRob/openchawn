@@ -27,6 +27,7 @@ _LABELS: Final[dict[str, str]] = {
     "pt": "portugais",
     "de": "allemand",
     "it": "italien",
+    "und": "non déterminée",
 }
 
 # Paires (regex sur texte lower), langue cible si correspondance.
@@ -126,6 +127,10 @@ _FR_WORDS: Final[frozenset[str]] = frozenset(
         "sommes",
         "faire",
         "fait",
+        "explique",
+        "expliquez",
+        "décris",
+        "decris",
         "voir",
         "bien",
         "mal",
@@ -214,14 +219,28 @@ _EN_WORDS: Final[frozenset[str]] = frozenset(
         "most",
         "here",
         "there",
+        "and",
+        "name",
+        "my",
+        "me",
+        "or",
+        "we",
+        "it",
+        "she",
+        "her",
+        "him",
+        "his",
+        "its",
+        "get",
+        "got",
     }
 )
 
 
 def normalize_language_code(code: str | None) -> str:
-    """Normalise un code ou alias utilisateur (fallback ``fr``)."""
+    """Normalise un code ou alias utilisateur ; entrée inconnue → ``und`` (pas de forçage français)."""
     if not code:
-        return FALLBACK_LANGUAGE
+        return "und"
     c = str(code).strip().lower().replace("_", "-")
     if c == "en" or c.startswith("en-"):
         return "en"
@@ -243,7 +262,7 @@ def normalize_language_code(code: str | None) -> str:
         return "de"
     if c == "it" or c.startswith("it-") or c in ("ita", "italian", "italien"):
         return "it"
-    return FALLBACK_LANGUAGE
+    return "und"
 
 
 def _explicit_language_override(text: str) -> str | None:
@@ -295,20 +314,22 @@ def detect_explicit_language_request(text: str) -> dict[str, str] | None:
 
 def detect_user_language(text: str) -> str:
     """
-    Détection heuristique ``fr`` / ``en``.
+    Détection heuristique multilingue (priorité explicite puis scores lexicaux).
 
-    Priorité aux demandes explicites (traduction incluse) ; sinon scores lexicaux + accents FR ;
-    égalité ou absence de signal → ``FALLBACK_LANGUAGE`` (français).
+    Pas de forçage français sur égalité ou texte ASCII : ``en`` par défaut si aucun signal clair,
+    ou ``fr`` si accents français dominants sans contre-signal anglais fort.
     """
     raw = (text or "").strip()
     if not raw:
-        return FALLBACK_LANGUAGE
+        return "und"
 
     req = detect_explicit_language_request(raw)
     if req:
         return normalize_language_code(req.get("language"))
 
-    lower = raw.lower()
+    # Normalise apostrophes (what's → what s) pour tokenizer les formes courtes anglaises
+    norm = raw.replace("\u2019", " ").replace("'", " ").replace("`", " ")
+    lower = norm.lower()
     tokens = re.findall(r"[a-zàâäéèêëïîôùûç]+", lower, flags=re.IGNORECASE)
     fr_score = 0
     en_score = 0
@@ -325,7 +346,16 @@ def detect_user_language(text: str) -> str:
         return "fr"
     if en_score > fr_score:
         return "en"
-    return FALLBACK_LANGUAGE
+    # Égalité : ne pas retomber sur le français par défaut si signal anglais présent
+    if en_score > 0 and fr_score > 0:
+        return "en"
+    if en_score == 0 and fr_score == 0:
+        if re.search(r"[àâäéèêëïîôùûç]", raw):
+            return "fr"
+        return "en"
+    if en_score > 0:
+        return "en"
+    return "fr"
 
 
 def build_language_instruction(user_message: str) -> str:
@@ -336,7 +366,7 @@ def build_language_instruction(user_message: str) -> str:
     """
     req = detect_explicit_language_request(user_message)
     code = normalize_language_code((req or {}).get("language") or detect_user_language(user_message))
-    label = _LABELS.get(code, _LABELS[FALLBACK_LANGUAGE])
+    label = _LABELS.get(code) or _LABELS.get(FALLBACK_LANGUAGE, "français")
     if req and req.get("kind") == "translation_target":
         return (
             "Réponds obligatoirement dans la langue du dernier message utilisateur. "

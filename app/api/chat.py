@@ -17,6 +17,7 @@ from app.core.language_policy import (
     normalize_language_code,
 )
 from app.core.runtime_language_guard import (
+    assistant_reply_violates_english_user_expectation,
     prompt_contains_forced_french,
     sanitize_provider_prompts,
 )
@@ -28,6 +29,13 @@ from app.profiles import PROFILES, get_profile
 logger = logging.getLogger("openchawn.chat")
 
 router = APIRouter(tags=["openchawn"])
+
+# Renfort LLM si le modèle produit une excuse « français uniquement » (ne pas persister cette variante).
+_EN_VIOLATION_RETRY_SYSTEM_SUFFIX = (
+    "\n\nCRITICAL LANGUAGE_ENFORCEMENT: The user's last message is in English. "
+    "You MUST answer entirely in English. Never claim you can only express yourself in French. "
+    "Never cite strict rules requiring French only."
+)
 
 
 class ChatRequest(BaseModel):
@@ -184,6 +192,7 @@ def chat(
     debug: bool = Query(default=False),
 ):
     is_guest = user.get("is_guest", False)
+    violation_retry = False
 
     if is_guest:
         quota = check_guest_quota(user["guest_session_id"], user["ip"])
@@ -200,9 +209,14 @@ def chat(
     bundle = assemble_chat_generation_inputs(req, user=user, persist_memory_side_effects=True)
     provider_hint = (req.provider or "").strip().lower()
 
+    # Prompts passés au provider : versions **déjà** nettoyées par sanitize_provider_prompts
+    # (le gateway refait un passage défensif sans effet si déjà propre).
+    sp_in = bundle["sanitized_system_prompt"]
+    um_in = bundle["sanitized_user_message"]
+
     llm_result = generate_response(
-        system_prompt=bundle["system_prompt"],
-        user_message=bundle["user_message"],
+        system_prompt=sp_in,
+        user_message=um_in,
         provider_hint=provider_hint,
     )
     response_text = llm_result.get("output", "")
@@ -213,10 +227,32 @@ def chat(
     ff_removed = bool(llm_result.get("forced_french_runtime_removed", False))
     pre_ff = bool(llm_result.get("prompt_contains_forced_french_before_sanitize", False))
 
+    if (
+        success
+        and response_text
+        and detect_user_language(req.message) == "en"
+        and assistant_reply_violates_english_user_expectation(response_text)
+    ):
+        violation_retry = True
+        logger.warning("language_policy_violation: regenerating with English enforcement (first reply discarded)")
+        llm_result = generate_response(
+            system_prompt=sp_in + _EN_VIOLATION_RETRY_SYSTEM_SUFFIX,
+            user_message=um_in,
+            provider_hint=provider_hint,
+        )
+        response_text = llm_result.get("output", "") or ""
+        provider_used = llm_result.get("provider", provider_used)
+        success = bool(llm_result.get("success", bool(response_text)))
+        provider_error = llm_result.get("error", None)
+        provider_status = llm_result.get("status_code", None)
+        ff_removed = ff_removed or bool(llm_result.get("forced_french_runtime_removed", False))
+        pre_ff = pre_ff or bool(llm_result.get("prompt_contains_forced_french_before_sanitize", False))
+
     logger.info(
         f"chat provider={provider_used} success={success} "
         f"status={provider_status} guest={is_guest} "
-        f"forced_french_before={pre_ff} runtime_removed={ff_removed}"
+        f"forced_french_before={pre_ff} runtime_removed={ff_removed} "
+        f"en_violation_retry={violation_retry}"
     )
 
     if not success or not response_text:
@@ -273,5 +309,6 @@ def chat(
             "forced_french_runtime_removed": ff_removed,
             "forced_french_source_type": bundle.get("forced_french_source_type"),
             "prompt_contains_forced_french": bool(bundle.get("prompt_contains_forced_french")),
+            "english_violation_regenerated": violation_retry,
         }
     return result

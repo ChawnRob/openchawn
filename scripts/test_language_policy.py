@@ -70,13 +70,14 @@ def main() -> int:
     assert detect_user_language("Explain OpenChawn") == "en"
     assert "anglais" in build_language_instruction("Explain OpenChawn")
 
-    assert detect_user_language("xyz abc 12345 !!!") == "fr"
-    assert "français" in build_language_instruction("@@@")
+    assert detect_user_language("xyz abc 12345 !!!") == "en"
+    assert detect_user_language("@@@") == "en"
+    assert "anglais" in build_language_instruction("@@@").lower()
 
     assert normalize_language_code("EN-us") == "en"
     assert normalize_language_code("FR") == "fr"
     assert normalize_language_code("anglais") == "en"
-    assert normalize_language_code("???") == "fr"
+    assert normalize_language_code("???") == "und"
 
     client = TestClient(app)
     r = client.get("/health/language")

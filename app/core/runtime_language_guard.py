@@ -24,13 +24,34 @@ FORCED_FRENCH_LINE_SUBSTRINGS: tuple[str, ...] = (
     "parle uniquement en francais",
     "mes regles actuelles m'imposent",
     "fidele aux regles strictes",
+    "regles strictes",
     "/etc/openchawn/initial_rules.json",
 )
 
 NEUTRAL_LANGUAGE_REPLACEMENT_LINE = (
     "Answer in the dominant language of the latest user message, "
-    "except explicit translation/language requests."
+    "except explicit translation or explicit language requests."
 )
+
+# Détection réponse modèle (politique langue violée) — accent-insensitive via _normalize_for_match
+RESPONSE_FORCED_FRENCH_SUBSTRINGS: tuple[str, ...] = (
+    "je ne peux m'exprimer qu'en francais",
+    "ne peux m'exprimer qu'en francais",
+    "uniquement en francais",
+    "repondre uniquement en francais",
+    "toujours repondre en francais",
+    "assistant francais",
+    "desole, je ne peux",
+    "regles strictes",
+)
+
+
+def assistant_reply_violates_english_user_expectation(text: str | None) -> bool:
+    """Réponses indésirables quand l'utilisateur écrit en anglais (excuses / contrainte français uniquement)."""
+    if not text or not str(text).strip():
+        return False
+    low = _normalize_for_match(str(text))
+    return any(pat in low for pat in RESPONSE_FORCED_FRENCH_SUBSTRINGS)
 
 
 def _normalize_for_match(text: str) -> str:
