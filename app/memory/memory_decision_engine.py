@@ -208,6 +208,8 @@ def arbitrate_context_bundle(
     for row in ranked:
         mem = row["memory"]
         mt = str(mem.get("memory_type") or "session").strip().lower()
+        if mt == "compressed":
+            mt = "project"
         if mt not in caps:
             mt = "session"
         if not is_active_memory(mem):
@@ -268,6 +270,8 @@ def _assemble_context_preview(memories: list[dict]) -> str:
     by_mt: dict[str, list[dict]] = {k: [] for k in MAX_LAYER}
     for m in memories:
         mt = str(m.get("memory_type") or "session").strip().lower()
+        if mt == "compressed":
+            mt = "project"
         if mt not in by_mt:
             mt = "session"
         by_mt[mt].append(m)

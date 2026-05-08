@@ -134,7 +134,7 @@ _MAX_REINFORCEMENT_HISTORY = 40
 _MAX_DECAY_HISTORY = 28
 
 # Types mémoire multi-couches (V11.6)
-MEMORY_TYPES = frozenset({"system", "project", "user", "session"})
+MEMORY_TYPES = frozenset({"system", "project", "user", "session", "compressed"})
 KNOWN_PROJECT_SLUGS = frozenset(
     {"openchawn", "fluxorca", "weetao", "illhu", "luthor"}
 )
@@ -250,7 +250,7 @@ def _parse_iso_ts(ts: str | None) -> datetime | None:
 
 
 def _memory_type_decay_weight(mt: str) -> float:
-    return {"system": 0.22, "project": 0.55, "user": 0.72, "session": 1.0}.get(
+    return {"system": 0.22, "project": 0.55, "user": 0.72, "session": 1.0, "compressed": 0.36}.get(
         (mt or "session").strip().lower(),
         1.0,
     )
@@ -892,6 +892,127 @@ def _score_relevance(keys: set[str], entry: dict) -> int:
     return len(keys.intersection(_keywords(bucket))) if keys else 0
 
 
+def _contradiction_retrieval_ok(entry: dict, contradiction_mode: str) -> bool:
+    if not bool(entry.get("contradiction_detected")):
+        return True
+    return str(contradiction_mode or "off").strip().lower() == "include_flagged"
+
+
+def _cognitive_hint_state() -> str:
+    try:
+        from app.cognition import cognitive_state_engine as cse
+
+        return str((cse.get_last_cognitive_state() or {}).get("state") or "stable")
+    except Exception:
+        return "stable"
+
+
+def _project_dup_pressure(entries: list[dict], project_slug: str) -> int:
+    ps = _normalize_project_slug(project_slug or "")
+    if not ps:
+        return 0
+    c = 0
+    for e in entries:
+        if str(e.get("memory_type")) == "compressed":
+            continue
+        if str(e.get("memory_level", "")) not in ("summary_memory", "concept_memory"):
+            continue
+        if not is_active_memory(e):
+            continue
+        if _normalize_project_slug(str(e.get("project_name") or e.get("project") or "")) != ps:
+            continue
+        c += 1
+    return c
+
+
+def _global_summary_dup_pressure(entries: list[dict]) -> int:
+    c = 0
+    for e in entries:
+        if str(e.get("memory_type")) == "compressed":
+            continue
+        if str(e.get("memory_level", "")) not in ("summary_memory", "concept_memory"):
+            continue
+        if not is_active_memory(e):
+            continue
+        c += 1
+    return c
+
+
+def _compressed_pick_budget(
+    proj_limit: int,
+    *,
+    compression_level: str,
+    cog_state: str,
+    dup_pressure: int,
+) -> int:
+    if proj_limit <= 0:
+        return 0
+    comp_l = (compression_level or "none").strip().lower()
+    cog = (cog_state or "stable").strip().lower()
+    want = 0
+    if comp_l == "aggressive" or cog == "overloaded":
+        want = max(want, min(2, proj_limit))
+    if comp_l == "light" and dup_pressure >= 14:
+        want = max(want, min(1, proj_limit))
+    if cog in ("stable", "high_confidence") and dup_pressure >= 22:
+        want = max(want, min(1, proj_limit))
+    if dup_pressure >= 42:
+        want = max(want, min(2, proj_limit))
+    return max(0, min(proj_limit, want))
+
+
+def _pick_compressed_entries(
+    entries: list[dict],
+    *,
+    query_keys: set[str],
+    project_slug: str,
+    limit: int,
+    contradiction_mode: str,
+) -> list[dict]:
+    if limit <= 0:
+        return []
+    pool = [
+        e
+        for e in entries
+        if str(e.get("memory_type")) == "compressed"
+        and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
+        and is_active_memory(e)
+        and _contradiction_retrieval_ok(e, contradiction_mode)
+    ]
+    if not pool:
+        pool = [
+            e
+            for e in entries
+            if str(e.get("memory_type")) == "compressed"
+            and is_active_memory(e)
+            and _contradiction_retrieval_ok(e, contradiction_mode)
+        ]
+    scored: list[tuple[tuple[float, str], dict, int]] = []
+    ps = _normalize_project_slug(project_slug or "")
+    for e in pool:
+        rel = _score_relevance(query_keys, e) if query_keys else 0
+        md = e.get("metadata") if isinstance(e.get("metadata"), dict) else {}
+        cbonus = float((md or {}).get("compression_score") or 0.0)
+        imp = float(e.get("importance_score", 0.0))
+        ts = str(e.get("timestamp", ""))
+        decay = float(e.get("decay_score", 0.0))
+        comp = layered_sort_key(rel, imp, decay, ts)[0] + min(62.0, cbonus * 48.0)
+        scored.append(((comp, ts), e, rel))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    out: list[dict] = []
+    for _rk, e, rel in scored:
+        ep = _normalize_project_slug(str(e.get("project_name") or e.get("project") or "")).lower()
+        if ps:
+            slug_l = ps.lower()
+            if ep and ep != slug_l and slug_l not in ep:
+                if rel == 0:
+                    continue
+        out.append(e)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _pick_layer_entries(
     entries: list[dict],
     *,
@@ -901,6 +1022,9 @@ def _pick_layer_entries(
     project_slug: str,
     limit: int,
     prefer_recency: bool,
+    contradiction_mode: str = "off",
+    importance_floor_session: float = 0.0,
+    max_decay_session_keep: float = 100.0,
 ) -> list[dict]:
     pool = [
         e
@@ -908,12 +1032,15 @@ def _pick_layer_entries(
         if str(e.get("memory_type", "")) == memory_type
         and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
         and is_active_memory(e)
+        and _contradiction_retrieval_ok(e, contradiction_mode)
     ]
     if not pool:
         pool = [
             e
             for e in entries
-            if str(e.get("memory_type", "")) == memory_type and is_active_memory(e)
+            if str(e.get("memory_type", "")) == memory_type
+            and is_active_memory(e)
+            and _contradiction_retrieval_ok(e, contradiction_mode)
         ]
 
     scored: list[tuple[tuple[float, str], dict, int, float, str]] = []
@@ -921,6 +1048,11 @@ def _pick_layer_entries(
         if memory_type == "session" and user_key:
             uid_e = str(e.get("user_id", "") or "").strip()
             if uid_e and uid_e != user_key:
+                continue
+            imp_s = float(e.get("importance_score", 0.0))
+            if imp_s < float(importance_floor_session):
+                continue
+            if float(e.get("decay_score", 0.0)) > float(max_decay_session_keep):
                 continue
         rel = _score_relevance(query_keys, e) if query_keys else 0
         imp = float(e.get("importance_score", 0.0))
@@ -999,7 +1131,7 @@ def _contradiction_boost_picks(
         if not is_active_memory(e) or not e.get("contradiction_detected"):
             continue
         mt = str(e.get("memory_type") or "")
-        if mt not in ("session", "project", "user", "system"):
+        if mt not in ("session", "project", "user", "system", "compressed"):
             continue
         raw = re.sub(r"\s+", " ", str(e.get("summary", "")).strip().lower())
         nk = raw[:cap] if raw else ""
@@ -1055,6 +1187,7 @@ def gather_layered_candidates(
             if str(e.get("memory_type")) == "system"
             and str(e.get("memory_level", "")) in ("summary_memory", "concept_memory")
             and is_active_memory(e)
+            and _contradiction_retrieval_ok(e, str(contradiction_mode or "off"))
         ],
         key=lambda x: (
             layered_sort_key(
@@ -1073,6 +1206,7 @@ def gather_layered_candidates(
                 str(e.get("memory_type")) == "system"
                 and e not in system_pick
                 and is_active_memory(e)
+                and _contradiction_retrieval_ok(e, str(contradiction_mode or "off"))
             ):
                 system_pick.append(e)
             if len(system_pick) >= max_sys:
@@ -1088,6 +1222,7 @@ def gather_layered_candidates(
             project_slug=project_slug,
             limit=lims["user"],
             prefer_recency=False,
+            contradiction_mode=str(contradiction_mode or "off"),
         )
 
     project_pick: list[dict] = []
@@ -1104,6 +1239,7 @@ def gather_layered_candidates(
                 project_slug=project_slug,
                 limit=n_loc,
                 prefer_recency=False,
+            contradiction_mode=str(contradiction_mode or "off"),
             )
             if n_any > 0:
                 project_pick.extend(
@@ -1115,6 +1251,7 @@ def gather_layered_candidates(
                         project_slug="",
                         limit=n_any,
                         prefer_recency=False,
+                        contradiction_mode=str(contradiction_mode or "off"),
                     )
                 )
         else:
@@ -1126,7 +1263,30 @@ def gather_layered_candidates(
                 project_slug=project_slug,
                 limit=lims["project"],
                 prefer_recency=False,
+            contradiction_mode=str(contradiction_mode or "off"),
             )
+
+    cog_state = _cognitive_hint_state()
+    comp_budget = 0
+    if lims["project"] > 0:
+        if project_slug:
+            dup_pressure = _project_dup_pressure(entries, project_slug)
+        else:
+            dup_pressure = min(640, _global_summary_dup_pressure(entries)) // max(4, len(KNOWN_PROJECT_SLUGS))
+        comp_budget = _compressed_pick_budget(
+            lims["project"],
+            compression_level=str(compression_level or "none"),
+            cog_state=cog_state,
+            dup_pressure=dup_pressure,
+        )
+        comp_pre = _pick_compressed_entries(
+            entries,
+            query_keys=keys,
+            project_slug=project_slug or "",
+            limit=min(comp_budget, lims["project"]),
+            contradiction_mode=str(contradiction_mode or "off"),
+        )
+        project_pick = (comp_pre + project_pick)[: lims["project"]]
 
     session_pick: list[dict] = []
     if lims["session"] > 0:
@@ -1138,6 +1298,9 @@ def gather_layered_candidates(
             project_slug=project_slug,
             limit=lims["session"],
             prefer_recency=True,
+            contradiction_mode=str(contradiction_mode or "off"),
+            importance_floor_session=float(importance_floor_session or 0.0),
+            max_decay_session_keep=float(max_decay_session_keep or 100.0),
         )
         session_pick = _session_quality_filter(
             session_pick,
@@ -1189,7 +1352,13 @@ def gather_layered_candidates(
             elif layer == "user":
                 why = "layer:user;keyword_overlap_with_query;user_scope"
             elif layer == "project":
-                why = "layer:project;keyword_overlap_with_query;project_scope"
+                if str(src.get("memory_type")) == "compressed":
+                    why = (
+                        "layer:project;memory_compressed;dup_or_overload_budget;"
+                        f"cognitive_hint={cog_state};slots={comp_budget}"
+                    )
+                else:
+                    why = "layer:project;keyword_overlap_with_query;project_scope"
             else:
                 why = "layer:session;keyword_overlap_with_query;session_user_scope"
             dbg: dict[str, object] = {
@@ -1334,7 +1503,7 @@ def build_layered_memory_context(
         body = str(bundle.get("final_context_preview") or "")
         system_pick = [x for x in selected if str(x.get("memory_type")) == "system"]
         user_pick = [x for x in selected if str(x.get("memory_type")) == "user"]
-        project_pick = [x for x in selected if str(x.get("memory_type")) == "project"]
+        project_pick = [x for x in selected if str(x.get("memory_type")) in ("project", "compressed")]
         session_pick = [x for x in selected if str(x.get("memory_type")) == "session"]
 
     summaries_ordered = [

@@ -171,6 +171,11 @@ class MemorySearchRequest(BaseModel):
     query: str
 
 
+class MemoryCompressionRunRequest(BaseModel):
+    dry_run: bool = False
+    include_archived: bool = False
+    project: str = ""
+
 
 @app.get("/")
 def serve_frontend():
@@ -581,6 +586,45 @@ def memory_retrieval_policy_simulate_route(state: str = Query(default="stable"))
     from app.memory import retrieval_policy as rp
 
     return rp.simulate_policy_for_state(state)
+
+
+@app.get("/memory/compression/candidates")
+def memory_compression_candidates_route(include_archived: bool = Query(default=False)):
+    from app.memory import memory_compression as mc
+    from app.memory.fractal_memory import entries_snapshot_for_tests
+
+    return mc.find_compression_candidates(entries_snapshot_for_tests(), include_archived=include_archived)
+
+
+@app.post("/memory/compression/run")
+def memory_compression_run_route(req: MemoryCompressionRunRequest):
+    from app.memory import memory_compression as mc
+
+    proj = str(req.project or "").strip()
+    return mc.run_memory_compression_job(
+        include_archived=bool(req.include_archived),
+        dry_run=bool(req.dry_run),
+        project=(proj if proj else None),
+    )
+
+
+@app.get("/memory/compression/health")
+def memory_compression_health_route():
+    from app.memory import memory_compression as mc
+
+    return mc.compression_health_report()
+
+
+@app.get("/memory/compression/{compressed_id}")
+def memory_compression_get_route(compressed_id: str):
+    from app.memory import memory_compression as mc
+
+    out = mc.get_compressed_memory_by_id(compressed_id)
+    if str(out.get("detail") or "") == "not_compressed_type":
+        raise HTTPException(status_code=400, detail="Ce n’est pas une entrée mémoire de type compressed")
+    if str(out.get("status") or "") != "ok":
+        raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    return out
 
 
 @app.post("/decision/predict-consequences")
