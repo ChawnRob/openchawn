@@ -79,7 +79,7 @@ def infer_forced_french_source_type(*, memory_body: str, profile_prompt: str, sy
 
 def build_openchawn_base_system_prompt() -> str:
     return (
-        "You are OpenChawn, an AI orchestration system created by Robert. "
+        "You are OpenChawn, an AI orchestration system created by Robert L. "
         "STRICT RULES: "
         "1. Follow the language instruction injected at the top of the user message with highest priority "
         "(including translation and explicit-language exceptions). "
