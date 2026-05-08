@@ -39,6 +39,38 @@ def main() -> int:
     r3 = classify_result(endpoint="/health", method="GET", status_code=500, elapsed_ms=20.0, payload={})
     assert r3["status"] == STATUS_FAILED
 
+    rg = classify_result(
+        endpoint="/guest/session",
+        method="POST",
+        status_code=200,
+        elapsed_ms=5.0,
+        payload={"session_id": "guest_abc", "quota_remaining": 5},
+    )
+    assert rg["status"] == STATUS_GREEN
+
+    rdry = classify_result(
+        endpoint="/health/language/chat-dry-run",
+        method="POST",
+        status_code=200,
+        elapsed_ms=8.0,
+        payload={
+            "route_used": "POST /chat",
+            "profile_used": "fluxorca",
+            "detected_language": "en",
+            "forced_french_runtime_detected": False,
+        },
+    )
+    assert rdry["status"] == STATUS_GREEN
+
+    rchat = classify_result(
+        endpoint="/chat",
+        method="POST",
+        status_code=200,
+        elapsed_ms=900.0,
+        payload={"output": "OpenChawn is an AI orchestration layer.", "lang": "en"},
+    )
+    assert rchat["status"] == STATUS_GREEN
+
     summary = build_summary(
         [
             {"method": "GET", "endpoint": "/a", "status": STATUS_GREEN, "elapsed_ms": 10.0},

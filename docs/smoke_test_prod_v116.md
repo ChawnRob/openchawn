@@ -19,22 +19,24 @@ Le script execute des checks HTTP reels avec timeout court et classe chaque endp
 - fallback automatique: `https://www.openchawn.com`
 
 ## Endpoints testés
-1. `GET /health`
-2. `GET /health/providers`
-3. `GET /health/language`
-4. `GET /memory/semantic/health`
-5. `GET /memory/semantic/stats`
-6. `GET /memory/importance/health`
-7. `GET /memory/importance/top`
-8. `GET /memory/graph/stats`
-9. `GET /memory/graph/hubs`
-10. `GET /memory/temporal/snapshot`
-11. `GET /memory/temporal/rising`
-12. `GET /memory/contradictions/report`
-13. `GET /decision/arbitration/report`
-14. `GET /decision/arbitration/last`
-15. `POST /decision/arbitration/simulate`
-16. `POST /api/chat`
+1. `POST /guest/session` (prépare le header `X-Guest-Session` pour `/chat`)
+2. `GET /health`
+3. `GET /health/providers`
+4. `GET /health/language`
+5. `GET /memory/semantic/health`
+6. `GET /memory/semantic/stats`
+7. `GET /memory/importance/health`
+8. `GET /memory/importance/top`
+9. `GET /memory/graph/stats`
+10. `GET /memory/graph/hubs`
+11. `GET /memory/temporal/snapshot`
+12. `GET /memory/temporal/rising`
+13. `GET /memory/contradictions/report`
+14. `GET /decision/arbitration/report`
+15. `GET /decision/arbitration/last`
+16. `POST /decision/arbitration/simulate`
+17. `POST /health/language/chat-dry-run` (assemblage prompt sans LLM; profil `fluxorca` attendu)
+18. `POST /chat` (corps aligné sur l’UI: `project_name`, session invité)
 
 ## Sortie et résumé
 Exemples:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Production smoke test pack for OpenChawn V11.6."""
+"""Production smoke test pack for OpenChawn V11.6 (guest session + chat + language dry-run)."""
 
 from __future__ import annotations
 
@@ -48,6 +48,15 @@ def classify_result(
             "elapsed_ms": round(elapsed_ms, 2),
         }
 
+    if method == "POST" and endpoint == "/guest/session":
+        if not isinstance(payload, dict) or not str(payload.get("session_id") or "").strip():
+            return {
+                "status": STATUS_FAILED,
+                "reason": "missing_session_id",
+                "code": status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }
+
     if method == "GET" and endpoint in ("/decision/arbitration/last", "/decision/arbitration/report"):
         if isinstance(payload, dict) and str(payload.get("status") or "") in ("empty", "no_viable_option"):
             return {
@@ -71,6 +80,63 @@ def classify_result(
                     "code": status_code,
                     "elapsed_ms": round(elapsed_ms, 2),
                 }
+
+    if method == "POST" and endpoint == "/health/language/chat-dry-run":
+        if not isinstance(payload, dict):
+            return {
+                "status": STATUS_FAILED,
+                "reason": "invalid_dry_run_payload",
+                "code": status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }
+        if str(payload.get("route_used") or "") != "POST /chat":
+            return {
+                "status": STATUS_FAILED,
+                "reason": f"unexpected_route_used:{sanitize_output(str(payload.get('route_used')))}",
+                "code": status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }
+        if payload.get("forced_french_runtime_detected") is True:
+            return {
+                "status": STATUS_WARNING,
+                "reason": "forced_french_runtime_detected_in_dry_run",
+                "code": status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }
+        if str(payload.get("profile_used") or "") != "fluxorca":
+            return {
+                "status": STATUS_WARNING,
+                "reason": f"profile_expected_fluxorca_got:{sanitize_output(str(payload.get('profile_used')))}",
+                "code": status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }
+
+    if method == "POST" and endpoint == "/chat":
+        if not isinstance(payload, dict):
+            return {
+                "status": STATUS_FAILED,
+                "reason": "invalid_chat_payload",
+                "code": status_code,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }
+        out_txt = str(payload.get("output") or "").strip()
+        if out_txt:
+            return {"status": STATUS_GREEN, "reason": "ok", "code": status_code, "elapsed_ms": round(elapsed_ms, 2)}
+        detail = payload.get("detail")
+        hint = ""
+        if isinstance(detail, list) and detail:
+            hint = sanitize_output(str(detail[0].get("msg") if isinstance(detail[0], dict) else detail[0]))
+        elif isinstance(detail, dict):
+            hint = sanitize_output(str(detail))
+        elif detail is not None:
+            hint = sanitize_output(str(detail))
+        reason = hint or "empty_chat_output"
+        return {
+            "status": STATUS_FAILED,
+            "reason": reason,
+            "code": status_code,
+            "elapsed_ms": round(elapsed_ms, 2),
+        }
 
     return {"status": STATUS_GREEN, "reason": "ok", "code": status_code, "elapsed_ms": round(elapsed_ms, 2)}
 
@@ -107,7 +173,7 @@ def _check(
     endpoint: str,
     payload: dict[str, Any] | None = None,
     timeout_s: float = DEFAULT_TIMEOUT_S,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], Any]:
     url = f"{base_url.rstrip('/')}{endpoint}"
     t0 = time.perf_counter()
     status_code = None
@@ -122,7 +188,12 @@ def _check(
         try:
             parsed = resp.json()
         except Exception:
-            if method == "GET" or endpoint in ("/decision/arbitration/simulate", "/api/chat"):
+            if method == "GET" or endpoint in (
+                "/decision/arbitration/simulate",
+                "/health/language/chat-dry-run",
+                "/chat",
+                "/guest/session",
+            ):
                 error = "invalid_json_response"
     except requests.Timeout:
         error = "timeout"
@@ -138,14 +209,17 @@ def _check(
         payload=parsed,
         error=error,
     )
-    return {
-        "method": method,
-        "endpoint": endpoint,
-        "status_code": status_code,
-        "elapsed_ms": c["elapsed_ms"],
-        "status": c["status"],
-        "reason": c["reason"],
-    }
+    return (
+        {
+            "method": method,
+            "endpoint": endpoint,
+            "status_code": status_code,
+            "elapsed_ms": c["elapsed_ms"],
+            "status": c["status"],
+            "reason": c["reason"],
+        },
+        parsed,
+    )
 
 
 def _print_result(r: dict[str, Any]) -> None:
@@ -154,6 +228,7 @@ def _print_result(r: dict[str, Any]) -> None:
 
 def run_smoke(*, base_url: str, fail_fast: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     checks = [
+        ("POST", "/guest/session", {}),
         ("GET", "/health", None),
         ("GET", "/health/providers", None),
         ("GET", "/health/language", None),
@@ -182,17 +257,32 @@ def run_smoke(*, base_url: str, fail_fast: bool = False) -> tuple[list[dict[str,
         ),
         (
             "POST",
-            "/api/chat",
+            "/health/language/chat-dry-run",
+            {
+                "message": "hello how are you and what's your name?",
+                "profile": "fluxorca",
+            },
+        ),
+        (
+            "POST",
+            "/chat",
             {
                 "message": "Explain OpenChawn in English in one short sentence.",
-                "project": "openchawn",
+                "project_name": "openchawn",
             },
         ),
     ]
     out: list[dict[str, Any]] = []
     with requests.Session() as s:
         for method, endpoint, payload in checks:
-            r = _check(s, base_url=base_url, method=method, endpoint=endpoint, payload=payload)
+            r, body = _check(s, base_url=base_url, method=method, endpoint=endpoint, payload=payload)
+            if (
+                endpoint == "/guest/session"
+                and r.get("status") == STATUS_GREEN
+                and isinstance(body, dict)
+                and str(body.get("session_id") or "").strip()
+            ):
+                s.headers["X-Guest-Session"] = str(body["session_id"]).strip()
             out.append(r)
             _print_result(r)
             if fail_fast and r.get("status") == STATUS_FAILED:
