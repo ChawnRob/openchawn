@@ -194,19 +194,25 @@ def arbitrate_context_bundle(
     scored_rows: list[dict[str, Any]],
     *,
     conflicts: list[dict[str, Any]],
+    max_layer: dict[str, int] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    caps = dict(MAX_LAYER)
+    if max_layer:
+        for k in caps:
+            if k in max_layer:
+                caps[k] = max(0, int(max_layer[k]))
     ranked = sorted(scored_rows, key=_sort_key)
     selected: list[dict[str, Any]] = []
-    counts = {k: 0 for k in MAX_LAYER}
+    counts = {k: 0 for k in caps}
 
     for row in ranked:
         mem = row["memory"]
         mt = str(mem.get("memory_type") or "session").strip().lower()
-        if mt not in MAX_LAYER:
+        if mt not in caps:
             mt = "session"
         if not is_active_memory(mem):
             continue
-        if counts[mt] >= MAX_LAYER[mt]:
+        if counts[mt] >= caps[mt]:
             continue
         counts[mt] += 1
         selected.append(row)
@@ -370,6 +376,9 @@ def build_memory_decision_bundle(
     entries_snapshot: list[dict],
     project_slug: str,
     capture_last: bool = True,
+    max_layer_override: dict[str, int] | None = None,
+    conflict_penalty_scale: float = 1.0,
+    confidence_scale: float = 1.0,
 ) -> dict[str, Any]:
     cen_map, infl_map = concept_centrality_influence_maps(entries_snapshot)
 
@@ -416,7 +425,7 @@ def build_memory_decision_bundle(
     for mem in work_candidates:
         dbg = mem.get("_retrieval_debug") if isinstance(mem.get("_retrieval_debug"), dict) else {}
         mid = str(mem.get("id") or "")
-        pen = _conflict_penalty_for(mid, conflicts_detected)
+        pen = _conflict_penalty_for(mid, conflicts_detected) * float(conflict_penalty_scale)
         bd = score_memory_candidate(mem, dbg, cen_map, infl_map, extra_penalty=pen)
         reasons = [
             f"layer:{dbg.get('memory_type','')}",
@@ -435,7 +444,11 @@ def build_memory_decision_bundle(
         scored_rows.append({"memory": mem, "breakdown": bd, "reasons": reasons, "penalties_list": penalties_list})
         scoring_breakdown.append({"memory_id": mid, **bd})
 
-    selected_rows, rejected_rows = arbitrate_context_bundle(scored_rows, conflicts=conflicts_detected)
+    selected_rows, rejected_rows = arbitrate_context_bundle(
+        scored_rows,
+        conflicts=conflicts_detected,
+        max_layer=max_layer_override,
+    )
 
     selected_memories: list[dict] = []
     for rank, row in enumerate(selected_rows, start=1):
@@ -474,6 +487,7 @@ def build_memory_decision_bundle(
         360,
     )
     confidence = _confidence_hint_from(selected_rows)
+    confidence = round(max(0.05, min(1.0, float(confidence) * float(confidence_scale))), 3)
 
     bundle = {
         "status": "ok",

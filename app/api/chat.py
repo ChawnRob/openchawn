@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
+from app.cognition import cognitive_state_engine as cse
 from app.core.language_policy import build_language_instruction
 from app.llm import generate_response
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
@@ -92,7 +93,11 @@ def chat(
         final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
 
     lang_instruction = build_language_instruction(req.message)
-    final_prompt = f"{lang_instruction}\n\n{final_prompt}"
+    cw = cse.get_confidence_wording_line()
+    if cw:
+        final_prompt = f"{lang_instruction}\n\n{cw}\n\n{final_prompt}"
+    else:
+        final_prompt = f"{lang_instruction}\n\n{final_prompt}"
 
     system_prompt = (
         "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "

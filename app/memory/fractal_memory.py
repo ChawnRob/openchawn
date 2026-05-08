@@ -1104,7 +1104,11 @@ def build_layered_memory_context(
         logger.warning("layered memory skipped reason=backend_config_error detail=%s", e)
         return "", []
 
+    from app.cognition import cognitive_state_engine as cse
     from app.memory import memory_decision_engine as mde
+
+    candidate_count_for_turn = 0
+    bundle: dict = {}
 
     with _STORE_LOCK:
         tl_key = (user_key or "").strip() or "anon"
@@ -1124,12 +1128,18 @@ def build_layered_memory_context(
             project_name_hint=project_name_hint,
             is_guest=is_guest,
         )
+        candidate_count_for_turn = len(all_candidates)
+
+        mods = cse.memory_modifiers_for_retrieval_pass(candidate_count_for_turn, entries=entries)
 
         bundle = mde.build_memory_decision_bundle(
             query=q,
             candidates=all_candidates,
             entries_snapshot=entries,
             project_slug=project_slug,
+            max_layer_override=mods.get("max_layer_override"),
+            conflict_penalty_scale=float(mods.get("conflict_penalty_scale", 1.0)),
+            confidence_scale=float(mods.get("confidence_scale", 1.0)),
         )
 
         selected = bundle["selected_memories"]
@@ -1186,6 +1196,16 @@ def build_layered_memory_context(
     )
 
     _remember_last_context_snapshot(q, user_key, selected)
+
+    try:
+        cse.record_post_turn_snapshot(
+            query=q,
+            project_slug=project_slug or "",
+            bundle=bundle,
+            candidate_count=candidate_count_for_turn,
+        )
+    except Exception:
+        logger.debug("cognitive snapshot skipped", exc_info=True)
 
     logger.info(
         "layered memory decision_engine counts system=%s user=%s project=%s session=%s query_len=%s",
@@ -1952,31 +1972,17 @@ def list_archived_memories(
     }
 
 
-def memory_lifecycle_health() -> dict[str, object]:
-    try:
-        _ = _get_backend()
-    except MemoryBackendConfigError as e:
-        return {
-            "status": "error",
-            "config_error": str(e),
-            "active_memories": 0,
-            "archived_memories": 0,
-            "merged_concepts": 0,
-            "contradictions_detected": 0,
-            "average_decay_score": None,
-            "memory_health_score": None,
-        }
+def lifecycle_metrics_from_entries(entries: list[dict]) -> dict[str, object]:
+    """Résumé lifecycle depuis entrées déjà en mémoire (sans verrou store)."""
+    entries_work = [_ensure_entry_defaults(e) for e in entries]
 
-    with _STORE_LOCK:
-        entries = [_ensure_entry_defaults(e) for e in _load_entries()]
-
-    active_memories = sum(1 for e in entries if is_active_memory(e))
+    active_memories = sum(1 for e in entries_work if is_active_memory(e))
     archived_memories = sum(
-        1 for e in entries if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED
+        1 for e in entries_work if str(e.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED
     )
 
     merged_concepts = 0
-    for e in entries:
+    for e in entries_work:
         if str(e.get("memory_level")) != "concept_memory":
             continue
         md = e.get("metadata")
@@ -1984,9 +1990,9 @@ def memory_lifecycle_health() -> dict[str, object]:
         if mc > 1:
             merged_concepts += 1
 
-    contradictions_detected = sum(1 for e in entries if e.get("contradiction_detected"))
+    contradictions_detected = sum(1 for e in entries_work if e.get("contradiction_detected"))
 
-    decay_vals = [float(e.get("decay_score") or 0.0) for e in entries if is_active_memory(e)]
+    decay_vals = [float(e.get("decay_score") or 0.0) for e in entries_work if is_active_memory(e)]
     average_decay_score = (
         round(sum(decay_vals) / len(decay_vals), 2) if decay_vals else None
     )
@@ -2008,6 +2014,26 @@ def memory_lifecycle_health() -> dict[str, object]:
         "average_decay_score": average_decay_score,
         "memory_health_score": memory_health_score,
     }
+
+
+def memory_lifecycle_health() -> dict[str, object]:
+    try:
+        _ = _get_backend()
+    except MemoryBackendConfigError as e:
+        return {
+            "status": "error",
+            "config_error": str(e),
+            "active_memories": 0,
+            "archived_memories": 0,
+            "merged_concepts": 0,
+            "contradictions_detected": 0,
+            "average_decay_score": None,
+            "memory_health_score": None,
+        }
+
+    with _STORE_LOCK:
+        raw_entries = _load_entries()
+    return lifecycle_metrics_from_entries(raw_entries)
 
 
 def memory_health() -> dict[str, object]:

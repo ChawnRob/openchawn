@@ -318,6 +318,45 @@ def health_language():
     }
 
 
+def _cognition_public_payload(snap: dict) -> dict:
+    return {
+        "status": snap.get("status"),
+        "state": snap.get("state"),
+        "pressure_score": snap.get("pressure_score"),
+        "primary_project": snap.get("primary_project"),
+        "primary_concepts": snap.get("primary_concepts"),
+        "contradiction_level": snap.get("contradiction_level"),
+        "provider_stability": snap.get("provider_stability"),
+        "retrieval_health": snap.get("retrieval_health"),
+        "memory_health": snap.get("memory_health"),
+        "confidence_level": snap.get("confidence_level"),
+    }
+
+
+@app.get("/cognition/state")
+def cognition_state_route():
+    from app.cognition import cognitive_state_engine as cse
+
+    snap = cse.build_cognitive_snapshot()
+    return _cognition_public_payload(snap)
+
+
+@app.get("/cognition/pressure")
+def cognition_pressure_route():
+    from app.cognition import cognitive_state_engine as cse
+
+    snap = cse.build_cognitive_snapshot()
+    return _cognition_public_payload(snap)
+
+
+@app.get("/cognition/focus")
+def cognition_focus_route():
+    from app.cognition import cognitive_state_engine as cse
+
+    snap = cse.build_cognitive_snapshot()
+    return _cognition_public_payload(snap)
+
+
 @app.get("/memory/recent")
 def memory_recent():
     items = recent_memories(limit=10)

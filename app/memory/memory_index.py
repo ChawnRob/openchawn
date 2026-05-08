@@ -477,12 +477,9 @@ def projects_gravity_board() -> dict[str, object]:
     return {"status": "ok", "count": len(rows), "projects": rows}
 
 
-def graph_statistics() -> dict[str, object]:
-    try:
-        entries = entries_snapshot_for_tests()
-    except MemoryBackendConfigError as e:
-        return {"status": "error", "config_error": str(e), "concept_node_count": 0}
-
+def graph_statistics_from_entries(entries: list[dict]) -> dict[str, object]:
+    if not isinstance(entries, list):
+        entries = []
     _, keyed = _collect_linkage(entries)
     oriented_edges = sum(int(b["linked_memories_count"]) for b in keyed.values())
     concepts_n = len(keyed)
@@ -507,3 +504,12 @@ def graph_statistics() -> dict[str, object]:
         "contradiction_pairs_count": len(pair_set),
         "note": "MVP graphe dirigé depuis concepts vers mémoires liées uniquement.",
     }
+
+
+def graph_statistics() -> dict[str, object]:
+    try:
+        entries = entries_snapshot_for_tests()
+    except MemoryBackendConfigError as e:
+        return {"status": "error", "config_error": str(e), "concept_node_count": 0}
+
+    return graph_statistics_from_entries(entries)
