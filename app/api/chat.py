@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
-from app.cognition import cognitive_state_engine as cse
 from app.core.language_policy import build_language_instruction
 from app.llm import generate_response
+from app.memory import memory_consolidation_scheduler as memory_consolidation
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
 
 logger = logging.getLogger("openchawn.chat")
@@ -93,11 +93,7 @@ def chat(
         final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
 
     lang_instruction = build_language_instruction(req.message)
-    cw = cse.get_confidence_wording_line()
-    if cw:
-        final_prompt = f"{lang_instruction}\n\n{cw}\n\n{final_prompt}"
-    else:
-        final_prompt = f"{lang_instruction}\n\n{final_prompt}"
+    final_prompt = f"{lang_instruction}\n\n{final_prompt}"
 
     system_prompt = (
         "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
@@ -153,9 +149,15 @@ def chat(
     else:
         logger.info("chat memory writeback status=skipped reason=%s", write_result.reason or "unknown")
 
+    consolidation_plan = memory_consolidation.build_consolidation_plan()
+    consolidation_recommended = bool(
+        consolidation_plan.get("status") == "ok" and consolidation_plan.get("should_run")
+    )
+
     result = {
         "output": response_text,
         "memory_used": memory_used,
+        "consolidation_recommended": consolidation_recommended,
     }
     if is_guest:
         result["guest"] = True

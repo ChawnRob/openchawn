@@ -401,6 +401,37 @@ def _compress_filtered_entries(
     return report
 
 
+def apply_compression_in_memory(
+    entries: list[dict],
+    *,
+    include_archived: bool = False,
+    dry_run: bool = False,
+    project: str | None = None,
+) -> dict[str, Any]:
+    """
+    Applique la compression sur ``entries`` in-place.
+
+    À utiliser quand le verrou fractal est déjà tenu par l’appelant (ex. consolidation)
+    ou pour des snapshots de tests.
+    """
+    if project and str(project).strip():
+        res = compress_project_memories(
+            entries,
+            str(project),
+            include_archived=include_archived,
+            dry_run=dry_run,
+        )
+    else:
+        res = _compress_filtered_entries(
+            entries,
+            entries,
+            include_archived=include_archived,
+            dry_run=dry_run,
+        )
+    res["persisted"] = False
+    return res
+
+
 def run_memory_compression_job(
     *,
     include_archived: bool = False,
@@ -409,20 +440,12 @@ def run_memory_compression_job(
 ) -> dict[str, Any]:
     with _STORE_LOCK:
         entries = [_ensure_entry_defaults(e) for e in _load_entries()]
-        if project and str(project).strip():
-            res = compress_project_memories(
-                entries,
-                str(project),
-                include_archived=include_archived,
-                dry_run=dry_run,
-            )
-        else:
-            res = _compress_filtered_entries(
-                entries,
-                entries,
-                include_archived=include_archived,
-                dry_run=dry_run,
-            )
+        res = apply_compression_in_memory(
+            entries,
+            include_archived=include_archived,
+            dry_run=dry_run,
+            project=project,
+        )
         if not dry_run and res.get("created"):
             _save_entries(entries)
         res["persisted"] = not dry_run and bool(res.get("created"))
