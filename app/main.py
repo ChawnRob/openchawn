@@ -373,8 +373,11 @@ def health_language_chat_dry_run(req: ChatLanguageDryRunRequest):
     b = assemble_chat_generation_inputs(cr, user=stub_user, persist_memory_side_effects=False)
     return {
         "route_used": "POST /chat",
+        "handler_used": "handle_chat_request",
         "chat_routes_production": ["POST /chat", "POST /api/chat"],
         "profile_used": b["profile_used"],
+        "response_language_mode": b.get("response_language_mode"),
+        "language_source": b.get("language_source"),
         "detected_language": b["detected_language"],
         "final_language": b["final_language_hint"],
         "forced_french_runtime_detected": b["forced_french_runtime_detected"],

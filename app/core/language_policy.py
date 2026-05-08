@@ -10,6 +10,7 @@ Priorité:
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Final
 
@@ -65,6 +66,8 @@ _TRANSLATION_TARGET_PATTERNS: Final[list[tuple[str, str]]] = [
     (r"\btraduis(?:-moi)?(?:\s+ce\s+texte)?\s+en\s+français\b", "fr"),
     (r"\btraduis(?:-moi)?(?:\s+ce\s+texte)?\s+en\s+francais\b", "fr"),
     (r"\btraduis(?:-moi)?(?:\s+ce\s+texte)?\s+en\s+espagnol\b", "es"),
+    # Phrases du type « Traduis « merci » en espagnol » (mot intermédiaire quelconque).
+    (r"\btraduis\s+.+\ben\s+espagnol\b", "es"),
     (r"\btraduis(?:-moi)?(?:\s+ce\s+texte)?\s+en\s+español\b", "es"),
     (r"\btraduis(?:-moi)?(?:\s+ce\s+texte)?\s+en\s+portugais\b", "pt"),
     (r"\btranslate(?:\s+this|\s+it|\s+the\s+text)?\s+to\s+english\b", "en"),
@@ -312,22 +315,17 @@ def detect_explicit_language_request(text: str) -> dict[str, str] | None:
     return None
 
 
-def detect_user_language(text: str) -> str:
+def detect_surface_language(text: str) -> str:
     """
-    Détection heuristique multilingue (priorité explicite puis scores lexicaux).
+    Langue probable du *fond* du message (scores lexicaux), **sans** appliquer
+    les motifs « réponds en X » / « traduis en X » ni la priorité translation/explicit.
 
-    Pas de forçage français sur égalité ou texte ASCII : ``en`` par défaut si aucun signal clair,
-    ou ``fr`` si accents français dominants sans contre-signal anglais fort.
+    ASCII ambigu ou sans signal → ``en`` (pas de défaut français implicite).
     """
     raw = (text or "").strip()
     if not raw:
         return "und"
 
-    req = detect_explicit_language_request(raw)
-    if req:
-        return normalize_language_code(req.get("language"))
-
-    # Normalise apostrophes (what's → what s) pour tokenizer les formes courtes anglaises
     norm = raw.replace("\u2019", " ").replace("'", " ").replace("`", " ")
     lower = norm.lower()
     tokens = re.findall(r"[a-zàâäéèêëïîôùûç]+", lower, flags=re.IGNORECASE)
@@ -346,7 +344,6 @@ def detect_user_language(text: str) -> str:
         return "fr"
     if en_score > fr_score:
         return "en"
-    # Égalité : ne pas retomber sur le français par défaut si signal anglais présent
     if en_score > 0 and fr_score > 0:
         return "en"
     if en_score == 0 and fr_score == 0:
@@ -356,6 +353,68 @@ def detect_user_language(text: str) -> str:
     if en_score > 0:
         return "en"
     return "fr"
+
+
+def detect_user_language(text: str) -> str:
+    """
+    Détection pour la compat historique : explicites / traduction **avant**
+    analyse de surface (`detect_surface_language`).
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return "und"
+
+    req = detect_explicit_language_request(raw)
+    if req:
+        return normalize_language_code(req.get("language"))
+
+    return detect_surface_language(raw)
+
+
+def derive_response_language_trace(message: str) -> dict[str, str]:
+    """
+    Métadonnées de politique de langue sans appel mémoire / LLM.
+
+    ``response_language_mode``:
+      - translate / explicit — contrainte détectée dans le texte utilisateur ;
+      - auto — aucune contrainte : ``final_language`` suit la surface (``und`` → ``en``) ;
+      - fixed — léger override ops via ``OPENCHAWN_CHAT_FIXED_LANGUAGE`` (code ISO courte).
+    """
+    raw = (message or "").strip()
+    surf = detect_surface_language(raw)
+    surf_n = normalize_language_code(surf)
+    surf_final_auto = surf_n if surf_n != "und" else "en"
+
+    fixed_raw = (os.getenv("OPENCHAWN_CHAT_FIXED_LANGUAGE") or "").strip()
+    if fixed_raw:
+        return {
+            "response_language_mode": "fixed",
+            "detected_language": surf_n,
+            "final_language": normalize_language_code(fixed_raw),
+            "language_source": "OPENCHAWN_CHAT_FIXED_LANGUAGE",
+        }
+
+    req = detect_explicit_language_request(raw)
+    if req and req.get("kind") == "translation_target":
+        return {
+            "response_language_mode": "translate",
+            "detected_language": surf_n,
+            "final_language": normalize_language_code(str(req.get("language") or "und")),
+            "language_source": "translation_target",
+        }
+    if req and req.get("kind") == "explicit_language":
+        return {
+            "response_language_mode": "explicit",
+            "detected_language": surf_n,
+            "final_language": normalize_language_code(str(req.get("language") or "und")),
+            "language_source": "explicit_language_request",
+        }
+    return {
+        "response_language_mode": "auto",
+        "detected_language": surf_n,
+        "final_language": normalize_language_code(surf_final_auto),
+        "language_source": "auto_detect_surface",
+    }
 
 
 _ENGLISH_NAME: Final[dict[str, str]] = {

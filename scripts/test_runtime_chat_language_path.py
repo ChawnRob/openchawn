@@ -107,12 +107,13 @@ def main() -> int:
     assert ra.status_code == 200, ra.text
     jb = rb.json()
     ja = ra.json()
-    assert "route_post_chat" in jb["runtime_route_signature"]
-    assert jb["runtime_route_signature"].endswith("v116-language-guard-b1ee52f")
-    assert "route_post_api_chat" in ja["runtime_route_signature"]
-    assert jb["http_mount_path"] == "/chat"
-    assert ja["http_mount_path"] == "/api/chat"
+    assert jb["route_used"] == "POST /chat"
+    assert ja["route_used"] == "POST /api/chat"
+    assert jb["handler_used"] == "handle_chat_request"
+    assert ja["handler_used"] == jb["handler_used"]
+    assert jb["response_language_mode"] == "auto"
     assert jb["detected_language"] == "en"
+    assert jb["final_language"] == "en"
     assert jb.get("forced_french_runtime_detected") is False
 
     print("OK test_runtime_chat_language_path")
