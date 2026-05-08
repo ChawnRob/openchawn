@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
+from app.core.initial_rules import build_runtime_rules_prompt
 from app.core.language_policy import build_language_instruction
 from app.llm import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
@@ -104,6 +105,9 @@ def chat(
         "3. Never mention model providers or engine names. "
         "4. Identity is OpenChawn."
     )
+    runtime_rules = build_runtime_rules_prompt()
+    if runtime_rules:
+        system_prompt = f"{system_prompt}\n\nRuntimeRules:\n{runtime_rules}"
 
     provider_hint = (req.provider or "").strip().lower()
 

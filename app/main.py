@@ -334,12 +334,23 @@ def health_memory_lifecycle():
 
 @app.get("/health/language")
 def health_language():
+    from app.core import initial_rules as ir
     from app.core import language_policy as lp
 
+    audit = ir.load_initial_rules()
     return {
         "language_policy_enabled": lp.LANGUAGE_POLICY_ENABLED,
+        "forced_french_rule_found": bool(audit.get("forced_french_rule_found")),
+        "forced_french_rule_removed": bool(audit.get("forced_french_rule_removed")),
+        "rule_sources_checked": list(audit.get("rule_sources_checked") or []),
         "fallback_language": lp.FALLBACK_LANGUAGE,
         "rule": lp.LANGUAGE_POLICY_RULE_PUBLIC,
+        "priority": [
+            "translation_target",
+            "explicit_language_request",
+            "latest_user_message_language",
+            "fallback",
+        ],
     }
 
 
