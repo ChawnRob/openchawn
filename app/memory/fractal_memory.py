@@ -949,6 +949,77 @@ def _pick_layer_entries(
     return out
 
 
+
+def _summary_key_cap(compression_level: str) -> int:
+    if compression_level == "light":
+        return 88
+    if compression_level == "aggressive":
+        return 48
+    return 120
+
+
+def _dedupe_pick_summaries(lst: list[dict], seen_keys: set[str], compression_level: str) -> list[dict]:
+    cap = _summary_key_cap(compression_level)
+    out_d: list[dict] = []
+    for item in lst:
+        raw = re.sub(r"\s+", " ", str(item.get("summary", "")).strip().lower())
+        k = raw[:cap] if raw else ""
+        if k and k in seen_keys:
+            continue
+        if k:
+            seen_keys.add(k)
+        out_d.append(item)
+    return out_d
+
+
+def _session_quality_filter(picks: list[dict], floor: float, max_decay: float) -> list[dict]:
+    if floor <= 0 and max_decay >= 99.5:
+        return picks
+    out = []
+    for e in picks:
+        imp = float(e.get("importance_score") or 0)
+        dec = float(e.get("decay_score") or 0)
+        if imp < floor and dec > max_decay:
+            continue
+        out.append(e)
+    return out if out else picks
+
+
+def _contradiction_boost_picks(
+    entries: list[dict],
+    query_keys: set[str],
+    seen_keys: set[str],
+    *,
+    limit: int,
+    compression_level: str,
+) -> list[dict]:
+    cap = _summary_key_cap(compression_level)
+    scored: list[tuple[int, dict]] = []
+    for e in entries:
+        if not is_active_memory(e) or not e.get("contradiction_detected"):
+            continue
+        mt = str(e.get("memory_type") or "")
+        if mt not in ("session", "project", "user", "system"):
+            continue
+        raw = re.sub(r"\s+", " ", str(e.get("summary", "")).strip().lower())
+        nk = raw[:cap] if raw else ""
+        if nk and nk in seen_keys:
+            continue
+        rel = _score_relevance(query_keys, e)
+        scored.append((rel, e))
+    scored.sort(key=lambda x: (-x[0], str(x[1].get("timestamp") or "")))
+    out: list[dict] = []
+    for rel, e in scored[: max(0, limit)]:
+        if rel <= 0 and limit <= 2:
+            continue
+        raw = re.sub(r"\s+", " ", str(e.get("summary", "")).strip().lower())
+        nk = raw[:cap] if raw else ""
+        if nk:
+            seen_keys.add(nk)
+        out.append(e)
+    return out
+
+
 def gather_layered_candidates(
     entries: list[dict],
     query: str,
@@ -956,45 +1027,27 @@ def gather_layered_candidates(
     user_key: str = "",
     project_name_hint: str = "",
     is_guest: bool = True,
+    layer_limits: dict[str, int] | None = None,
+    diversity_level: float = 0.5,
+    contradiction_mode: str = "off",
+    compression_level: str = "none",
+    importance_floor_session: float = 0.0,
+    max_decay_session_keep: float = 100.0,
 ) -> list[dict]:
     """
-    Même logique de retrieval que build_layered_memory_context (sans timeline/reinforce/save).
-    Retourne les mémoires annotées avec _retrieval_debug et retrieval_rank global.
+    Retrieval fractal avec Retrieval Policy V11.6 (limites par couche, diversité, contradictions, compression).
     """
     q_strip = (query or "").strip()
     keys = _keywords(q_strip)
     project_slug = _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(q_strip)
 
-    session_pick = _pick_layer_entries(
-        entries,
-        memory_type="session",
-        query_keys=keys,
-        user_key=user_key,
-        project_slug=project_slug,
-        limit=5,
-        prefer_recency=True,
-    )
-    project_pick = _pick_layer_entries(
-        entries,
-        memory_type="project",
-        query_keys=keys,
-        user_key=user_key,
-        project_slug=project_slug,
-        limit=3,
-        prefer_recency=False,
-    )
-    user_pick: list[dict] = []
-    if user_key and not is_guest:
-        user_pick = _pick_layer_entries(
-            entries,
-            memory_type="user",
-            query_keys=keys,
-            user_key=user_key,
-            project_slug=project_slug,
-            limit=2,
-            prefer_recency=False,
-        )
+    lims = {"system": 2, "user": 2, "project": 3, "session": 5}
+    if isinstance(layer_limits, dict):
+        for k in lims:
+            if k in layer_limits:
+                lims[k] = max(0, int(layer_limits[k]))
 
+    max_sys = lims["system"]
     system_pick = sorted(
         [
             e
@@ -1013,8 +1066,8 @@ def gather_layered_candidates(
             str(x.get("timestamp", "")),
         ),
         reverse=True,
-    )[:2]
-    if len(system_pick) < 2:
+    )[:max_sys]
+    if len(system_pick) < max_sys:
         for e in entries:
             if (
                 str(e.get("memory_type")) == "system"
@@ -1022,26 +1075,107 @@ def gather_layered_candidates(
                 and is_active_memory(e)
             ):
                 system_pick.append(e)
-            if len(system_pick) >= 2:
+            if len(system_pick) >= max_sys:
                 break
 
+    user_pick: list[dict] = []
+    if user_key and not is_guest and lims["user"] > 0:
+        user_pick = _pick_layer_entries(
+            entries,
+            memory_type="user",
+            query_keys=keys,
+            user_key=user_key,
+            project_slug=project_slug,
+            limit=lims["user"],
+            prefer_recency=False,
+        )
+
+    project_pick: list[dict] = []
+    if lims["project"] > 0:
+        div = float(diversity_level or 0)
+        if div >= 0.72:
+            n_loc = max(1, int(round(lims["project"] * 0.55)))
+            n_any = max(0, lims["project"] - n_loc)
+            project_pick = _pick_layer_entries(
+                entries,
+                memory_type="project",
+                query_keys=keys,
+                user_key=user_key,
+                project_slug=project_slug,
+                limit=n_loc,
+                prefer_recency=False,
+            )
+            if n_any > 0:
+                project_pick.extend(
+                    _pick_layer_entries(
+                        entries,
+                        memory_type="project",
+                        query_keys=keys,
+                        user_key=user_key,
+                        project_slug="",
+                        limit=n_any,
+                        prefer_recency=False,
+                    )
+                )
+        else:
+            project_pick = _pick_layer_entries(
+                entries,
+                memory_type="project",
+                query_keys=keys,
+                user_key=user_key,
+                project_slug=project_slug,
+                limit=lims["project"],
+                prefer_recency=False,
+            )
+
+    session_pick: list[dict] = []
+    if lims["session"] > 0:
+        session_pick = _pick_layer_entries(
+            entries,
+            memory_type="session",
+            query_keys=keys,
+            user_key=user_key,
+            project_slug=project_slug,
+            limit=lims["session"],
+            prefer_recency=True,
+        )
+        session_pick = _session_quality_filter(
+            session_pick,
+            float(importance_floor_session or 0.0),
+            float(max_decay_session_keep or 100.0),
+        )
+
     seen_keys: set[str] = set()
+    comp = str(compression_level or "none")
 
-    def _dedupe(lst: list[dict]) -> list[dict]:
-        out_d: list[dict] = []
-        for item in lst:
-            k = _norm_summary_key(str(item.get("summary", "")))
-            if k and k in seen_keys:
-                continue
-            if k:
-                seen_keys.add(k)
-            out_d.append(item)
-        return out_d
+    system_pick = _dedupe_pick_summaries(system_pick, seen_keys, comp)
+    user_pick = _dedupe_pick_summaries(user_pick, seen_keys, comp)
+    project_pick = _dedupe_pick_summaries(project_pick, seen_keys, comp)
+    session_pick = _dedupe_pick_summaries(session_pick, seen_keys, comp)
 
-    system_pick = _dedupe(system_pick)
-    user_pick = _dedupe(user_pick)
-    project_pick = _dedupe(project_pick)
-    session_pick = _dedupe(session_pick)
+    cm = str(contradiction_mode or "off")
+    if cm == "include_flagged":
+        extras = _contradiction_boost_picks(
+            entries,
+            keys,
+            seen_keys,
+            limit=max(2, min(6, lims["session"] + 2)),
+            compression_level=comp,
+        )
+        for e in extras:
+            mt = str(e.get("memory_type") or "session")
+            if mt == "project":
+                project_pick.append(e)
+            elif mt == "user" and user_key and not is_guest:
+                user_pick.append(e)
+            elif mt == "system":
+                system_pick.append(e)
+            else:
+                session_pick.append(e)
+        system_pick = _dedupe_pick_summaries(system_pick, seen_keys, comp)
+        user_pick = _dedupe_pick_summaries(user_pick, seen_keys, comp)
+        project_pick = _dedupe_pick_summaries(project_pick, seen_keys, comp)
+        session_pick = _dedupe_pick_summaries(session_pick, seen_keys, comp)
 
     def _annotate_layer(layer: str, picks: list[dict], *, prefer_recency: bool) -> list[dict]:
         out_a: list[dict] = []
@@ -1059,7 +1193,7 @@ def gather_layered_candidates(
             else:
                 why = "layer:session;keyword_overlap_with_query;session_user_scope"
             dbg: dict[str, object] = {
-                "why_selected": f"{why};layer_rank={i + 1};prefer_recency={prefer_recency}",
+                "why_selected": f"{why};layer_rank={i + 1};prefer_recency={prefer_recency};policy_compression={comp}",
                 "relevance_score": rel,
                 "importance_score": imp,
                 "decay_score": decay,
@@ -1087,7 +1221,6 @@ def gather_layered_candidates(
             all_mem.append(it)
     return all_mem
 
-
 def build_layered_memory_context(
     query: str,
     *,
@@ -1106,9 +1239,14 @@ def build_layered_memory_context(
 
     from app.cognition import cognitive_state_engine as cse
     from app.memory import memory_decision_engine as mde
+    from app.memory import retrieval_policy as rp
 
     candidate_count_for_turn = 0
     bundle: dict = {}
+    policy_bundle: dict[str, object] = {}
+    merged_caps: dict[str, int] = {}
+    conflict_scale = 1.0
+    confidence_scale = 1.0
 
     with _STORE_LOCK:
         tl_key = (user_key or "").strip() or "anon"
@@ -1121,25 +1259,44 @@ def build_layered_memory_context(
             timeline_session_id=tl_key,
         )
 
+        policy_bundle = rp.build_retrieval_policy()
+
         all_candidates = gather_layered_candidates(
             entries,
             query,
             user_key=user_key,
             project_name_hint=project_name_hint,
             is_guest=is_guest,
+            layer_limits=policy_bundle.get("layer_limits") if isinstance(policy_bundle.get("layer_limits"), dict) else None,
+            diversity_level=float(policy_bundle.get("diversity_level") or 0.5),
+            contradiction_mode=str(policy_bundle.get("contradiction_mode") or "off"),
+            compression_level=str(policy_bundle.get("compression_level") or "none"),
+            importance_floor_session=float(policy_bundle.get("importance_floor_session") or 0.0),
+            max_decay_session_keep=float(policy_bundle.get("max_decay_session_keep") or 100.0),
         )
         candidate_count_for_turn = len(all_candidates)
 
         mods = cse.memory_modifiers_for_retrieval_pass(candidate_count_for_turn, entries=entries)
+
+        rp_caps = policy_bundle.get("layer_limits") if isinstance(policy_bundle.get("layer_limits"), dict) else {}
+        merged_caps = rp.merge_layer_caps(rp_caps, mods.get("max_layer_override"))
+        conflict_scale = rp.merge_scales(
+            float(policy_bundle.get("conflict_penalty_scale") or 1.0),
+            float(mods.get("conflict_penalty_scale", 1.0)),
+        )
+        confidence_scale = rp.merge_scales(
+            float(policy_bundle.get("confidence_scale") or 1.0),
+            float(mods.get("confidence_scale", 1.0)),
+        )
 
         bundle = mde.build_memory_decision_bundle(
             query=q,
             candidates=all_candidates,
             entries_snapshot=entries,
             project_slug=project_slug,
-            max_layer_override=mods.get("max_layer_override"),
-            conflict_penalty_scale=float(mods.get("conflict_penalty_scale", 1.0)),
-            confidence_scale=float(mods.get("confidence_scale", 1.0)),
+            max_layer_override=merged_caps,
+            conflict_penalty_scale=conflict_scale,
+            confidence_scale=confidence_scale,
         )
 
         selected = bundle["selected_memories"]
@@ -1206,6 +1363,15 @@ def build_layered_memory_context(
         )
     except Exception:
         logger.debug("cognitive snapshot skipped", exc_info=True)
+
+    try:
+        applied_policy = dict(policy_bundle)
+        applied_policy["layer_limits_merged"] = merged_caps
+        applied_policy["conflict_penalty_scale_applied"] = conflict_scale
+        applied_policy["confidence_scale_applied"] = confidence_scale
+        rp.set_last_retrieval_policy(applied_policy)
+    except Exception:
+        logger.debug("retrieval policy snapshot skipped", exc_info=True)
 
     logger.info(
         "layered memory decision_engine counts system=%s user=%s project=%s session=%s query_len=%s",

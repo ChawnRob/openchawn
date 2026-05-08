@@ -566,6 +566,23 @@ def memory_reflection_report_route():
     return mem_reflect.build_reflection_report()
 
 
+@app.get("/memory/retrieval-policy")
+def memory_retrieval_policy_route():
+    from app.memory import retrieval_policy as rp
+
+    last = rp.get_last_retrieval_policy()
+    if last.get("status") == "ok":
+        return rp.lean_policy_response(last)
+    return rp.lean_policy_response(rp.build_retrieval_policy())
+
+
+@app.get("/memory/retrieval-policy/simulate")
+def memory_retrieval_policy_simulate_route(state: str = Query(default="stable")):
+    from app.memory import retrieval_policy as rp
+
+    return rp.simulate_policy_for_state(state)
+
+
 @app.post("/decision/predict-consequences")
 def decision_predict_consequences_route(req: PredictConsequencesRequest):
     from app.decision import consequence_predictor as cp
