@@ -248,6 +248,11 @@ def explain_context_decision(
         "selected": selected,
         "final_decision_score": breakdown.get("final_decision_score"),
         "importance_explanation": str(mem.get("importance_explanation") or "")[:280],
+        "relationship_summary": (
+            "liée à " + ",".join([str(x) for x in (mem.get("related_memory_ids") or [])[:3]])
+            if (mem.get("related_memory_ids") or [])
+            else ""
+        ),
         "reasons": [sanitize_timeline_text(str(x), 200) for x in reasons][:12],
         "penalties": [sanitize_timeline_text(str(x), 200) for x in penalties][:12],
         "conflicts": safe_conflicts[:8],

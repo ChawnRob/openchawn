@@ -102,6 +102,8 @@ def compute_long_term_value(entry: dict) -> float:
     system = 1 if mt == "system" else 0
     concept = 1 if level == "concept_memory" else 0
     strategic_hits = sum(1 for w in _STRATEGIC_WORDS if w in _text_bucket(entry).lower())
+    graph_degree = int(entry.get("graph_degree") or 0)
+    graph_centrality = float(entry.get("graph_centrality") or 0.0)
     score = min(
         1.0,
         system * 0.35
@@ -109,7 +111,9 @@ def compute_long_term_value(entry: dict) -> float:
         + concept * 0.16
         + linked * 0.12
         + min(0.2, merges * 0.03)
-        + min(0.25, strategic_hits * 0.06),
+        + min(0.25, strategic_hits * 0.06)
+        + min(0.14, graph_degree * 0.01)
+        + min(0.2, graph_centrality * 0.03),
     )
     return round(max(0.0, score), 4)
 

@@ -14,6 +14,7 @@ from typing import Any
 from app.cognition import cognitive_state_engine as cse
 from app.decision import consequence_predictor as cp
 from app.memory import fractal_memory as fm
+from app.memory import graph_persistence as gp
 from app.memory import memory_importance as mimp
 from app.memory import memory_compression as mc
 from app.memory import memory_decision_engine as mde
@@ -109,6 +110,8 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
     contra_p = _contradiction_pressure_score(lifecycle)
     arch_c = _count_archive_candidates(entries)
     comp_c = _compression_candidate_count(entries)
+    gstats = gp.graph_stats()
+    stable_clusters = int(gstats.get("clusters_count") or 0)
 
     snap_cog = cse.get_last_cognitive_state()
     state = str(snap_cog.get("state") or "stable").lower()
@@ -127,6 +130,8 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         reasons.append("compression_candidates")
     if arch_c >= 3:
         reasons.append("archive_backlog")
+    if stable_clusters >= 2:
+        reasons.append("stable_clusters")
 
     should_run = bool(
         dup >= 32.0
@@ -135,6 +140,7 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         or cog_hot
         or (comp_c >= 1 and len(entries) >= 12)
         or arch_c >= 6
+        or stable_clusters >= 3
     )
 
     mode = "light" if should_run else "idle"
@@ -165,6 +171,7 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         "contradiction_pressure": round(contra_p, 2),
         "archive_candidates": arch_c,
         "compression_candidates": comp_c,
+        "stable_clusters": stable_clusters,
         "estimated_impact": est,
         "safety_notes": safety,
         "cognitive_state": state,

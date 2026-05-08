@@ -1109,9 +1109,10 @@ def _pick_layer_entries(
                 continue
         rel = _score_relevance(query_keys, e) if query_keys else 0
         imp = float(e.get("importance_score", 0.0))
+        gc = float(e.get("graph_centrality") or 0.0)
         ts = str(e.get("timestamp", ""))
         decay = float(e.get("decay_score", 0.0))
-        comp = layered_sort_key(rel, imp, decay, ts)[0]
+        comp = layered_sort_key(rel, imp, decay, ts)[0] + min(35.0, gc * 5.0)
         if prefer_recency:
             scored.append(((ts, comp), e, rel, imp, ts))
         else:
@@ -1307,6 +1308,7 @@ def gather_layered_candidates(
                 "relevance_score": rel,
                 "importance_score": imp,
                 "decay_score": decay,
+                "graph_centrality": float(src.get("graph_centrality") or 0.0),
                 "memory_type": str(src.get("memory_type", "")),
                 "retrieval_rank": 0,
                 "composite_score": round(composite, 2),
@@ -1432,6 +1434,13 @@ def build_layered_memory_context(
             sid = str(sem.get("id") or "")
             if sid and sid in seen_ids:
                 semantic_duplicates += 1
+                for src in entries:
+                    if str(src.get("id") or "") != sid:
+                        continue
+                    md0 = src.setdefault("metadata", {})
+                    if isinstance(md0, dict):
+                        md0["semantic_match_hits"] = int(md0.get("semantic_match_hits") or 0) + 1
+                    break
                 for existing in all_mem:
                     if str(existing.get("id") or "") != sid:
                         continue

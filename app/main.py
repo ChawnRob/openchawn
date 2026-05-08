@@ -765,6 +765,60 @@ def memory_importance_explain_route(memory_id: str):
     raise HTTPException(status_code=404, detail="Mémoire introuvable")
 
 
+@app.get("/memory/graph/stats")
+def memory_graph_stats_route():
+    from app.memory import graph_persistence as gp
+
+    return gp.graph_stats()
+
+
+@app.get("/memory/graph/hubs")
+def memory_graph_hubs_route(limit: int = Query(default=20, ge=1, le=100)):
+    from app.memory import fractal_memory as fm
+
+    rows = fm.entries_snapshot_for_tests()
+    hubs = sorted(
+        [
+            {
+                "id": e.get("id"),
+                "summary": str(e.get("summary") or "")[:220],
+                "cluster_id": e.get("cluster_id"),
+                "graph_degree": int(e.get("graph_degree") or 0),
+                "graph_centrality": float(e.get("graph_centrality") or 0.0),
+                "concept_tags": (e.get("concept_tags") or [])[:16],
+            }
+            for e in rows
+        ],
+        key=lambda x: (float(x["graph_centrality"]), int(x["graph_degree"])),
+        reverse=True,
+    )
+    return {"status": "ok", "items": hubs[:limit]}
+
+
+@app.get("/memory/graph/related/{memory_id}")
+def memory_graph_related_route(memory_id: str, limit: int = Query(default=12, ge=1, le=60)):
+    from app.memory import memory_relationship_graph as mrg
+
+    return {"status": "ok", "memory_id": memory_id, "items": mrg.find_related_memories(memory_id, limit=limit)}
+
+
+@app.post("/memory/graph/rebuild")
+def memory_graph_rebuild_route():
+    from app.memory import graph_persistence as gp
+
+    return gp.rebuild_relationship_graph(persist_entries=True)
+
+
+@app.get("/memory/graph/explain/{memory_id}")
+def memory_graph_explain_route(memory_id: str):
+    from app.memory import memory_relationship_graph as mrg
+
+    out = mrg.explain_memory_relationships(memory_id)
+    if str(out.get("status") or "") != "ok":
+        raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    return out
+
+
 @app.post("/decision/predict-consequences")
 def decision_predict_consequences_route(req: PredictConsequencesRequest):
     from app.decision import consequence_predictor as cp
