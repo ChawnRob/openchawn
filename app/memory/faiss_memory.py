@@ -179,10 +179,20 @@ def build_faiss_index(entries: list[dict] | None = None) -> dict[str, Any]:
         if entries is None:
             entries = fm.entries_snapshot_for_tests()
         pool = [fm._ensure_entry_defaults(dict(e)) for e in (entries or [])]  # noqa: SLF001
+        pool.sort(
+            key=lambda e: (
+                float(e.get("long_term_value") or 0.0),
+                float(e.get("importance_score") or 0.0),
+                str(e.get("timestamp") or ""),
+            ),
+            reverse=True,
+        )
         items: list[dict[str, Any]] = []
         texts: list[str] = []
         for e in pool[:_MAX_INDEX_ITEMS]:
             if not e.get("id"):
+                continue
+            if e.get("indexable") is False:
                 continue
             txt = _entry_text(e)
             if not txt:
@@ -262,6 +272,8 @@ def add_memory_embedding(memory_entry: dict) -> dict[str, Any]:
             vectors = [v for i, v in enumerate(vectors) if i < len(items)]
 
         txt = _entry_text(memory_entry)
+        if memory_entry.get("indexable") is False:
+            return {"status": "ok", "added": False, "reason": "non_indexable"}
         if not txt or fm._contains_sensitive_text(txt):  # noqa: SLF001
             meta["items"] = items
             meta["vectors_fallback"] = vectors

@@ -680,6 +680,91 @@ def memory_semantic_cache_stats_route():
     return ec.embedding_cache_stats()
 
 
+@app.get("/memory/importance/health")
+def memory_importance_health_route():
+    from app.memory import fractal_memory as fm
+
+    rows = fm.entries_snapshot_for_tests()
+    if not rows:
+        return {"status": "ok", "entries": 0}
+    with_exp = [e for e in rows if str(e.get("importance_explanation") or "").strip()]
+    avg_imp = sum(float(e.get("importance_score") or 0.0) for e in rows) / max(1, len(rows))
+    avg_rec = sum(float(e.get("recurrence_score") or 0.0) for e in rows) / max(1, len(rows))
+    avg_risk = sum(float(e.get("contradiction_risk") or 0.0) for e in rows) / max(1, len(rows))
+    return {
+        "status": "ok",
+        "entries": len(rows),
+        "with_explanations": len(with_exp),
+        "avg_importance_score": round(avg_imp, 4),
+        "avg_recurrence_score": round(avg_rec, 4),
+        "avg_contradiction_risk": round(avg_risk, 4),
+    }
+
+
+@app.post("/memory/importance/refresh")
+def memory_importance_refresh_route():
+    from app.memory import memory_importance as mi
+
+    return mi.refresh_importance_scores()
+
+
+@app.get("/memory/importance/top")
+def memory_importance_top_route(limit: int = Query(default=20, ge=1, le=100)):
+    from app.memory import fractal_memory as fm
+
+    rows = fm.entries_snapshot_for_tests()
+    rows.sort(
+        key=lambda e: (
+            float(e.get("importance_score") or 0.0),
+            float(e.get("long_term_value") or 0.0),
+            str(e.get("timestamp") or ""),
+        ),
+        reverse=True,
+    )
+    out = []
+    for e in rows[:limit]:
+        out.append(
+            {
+                "id": e.get("id"),
+                "memory_type": e.get("memory_type"),
+                "project_name": e.get("project_name"),
+                "summary": str(e.get("summary") or "")[:260],
+                "importance_score": float(e.get("importance_score") or 0.0),
+                "recurrence_score": float(e.get("recurrence_score") or 0.0),
+                "semantic_density": float(e.get("semantic_density") or 0.0),
+                "contradiction_risk": float(e.get("contradiction_risk") or 0.0),
+                "long_term_value": float(e.get("long_term_value") or 0.0),
+                "importance_updated_at": e.get("importance_updated_at"),
+            }
+        )
+    return {"status": "ok", "items": out}
+
+
+@app.get("/memory/importance/explain/{memory_id}")
+def memory_importance_explain_route(memory_id: str):
+    from app.memory import fractal_memory as fm
+
+    mid = (memory_id or "").strip()
+    if not mid:
+        raise HTTPException(status_code=400, detail="memory_id manquant")
+    rows = fm.entries_snapshot_for_tests()
+    for e in rows:
+        if str(e.get("id") or "") != mid:
+            continue
+        return {
+            "status": "ok",
+            "memory_id": mid,
+            "importance_score": float(e.get("importance_score") or 0.0),
+            "recurrence_score": float(e.get("recurrence_score") or 0.0),
+            "semantic_density": float(e.get("semantic_density") or 0.0),
+            "contradiction_risk": float(e.get("contradiction_risk") or 0.0),
+            "long_term_value": float(e.get("long_term_value") or 0.0),
+            "importance_explanation": str(e.get("importance_explanation") or ""),
+            "importance_updated_at": e.get("importance_updated_at"),
+        }
+    raise HTTPException(status_code=404, detail="Mémoire introuvable")
+
+
 @app.post("/decision/predict-consequences")
 def decision_predict_consequences_route(req: PredictConsequencesRequest):
     from app.decision import consequence_predictor as cp

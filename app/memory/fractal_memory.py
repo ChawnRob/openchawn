@@ -484,12 +484,14 @@ def apply_archive_rules(
         except (TypeError, ValueError):
             acc = 0
         imp = float(e.get("importance_score") or 0.0)
+        rec = float(e.get("recurrence_score") or 0.0)
         age = _entry_age_days(e)
 
         eligible = (
             acc == 0
             and age >= float(_MIN_ARCHIVE_AGE_DAYS)
             and imp <= _MAX_ARCHIVE_IMPORTANCE + 1e-9
+            and rec <= 0.2
             and float(e.get("decay_score", 50)) >= 38.0
         )
         if eligible:
@@ -1356,6 +1358,12 @@ def build_layered_memory_context(
             timeline_user_key=tl_key,
             timeline_session_id=tl_key,
         )
+        try:
+            from app.memory import memory_importance as mi
+
+            mi.refresh_importance_scores(entries, persist=False)
+        except Exception:
+            pass
 
         def _lines_for_label(label: str, items: list[dict]) -> str:
             if not items:
@@ -1950,6 +1958,12 @@ def write_exchange(
             timeline_user_key=uid or "anon",
             timeline_session_id=uid or "anon",
         )
+        try:
+            from app.memory import memory_importance as mi
+
+            mi.refresh_importance_scores(entries, persist=False)
+        except Exception:
+            pass
         _save_entries(entries)
 
     _timeline_write_exchange(

@@ -160,10 +160,25 @@ def find_compression_candidates(
                 "canonical_bucket": canon,
                 "candidate_ids": uniq,
                 "cluster_size": len(uniq),
+                "avg_long_term_value": round(
+                    sum(
+                        float((next((x for x in entries if str(x.get("id")) == i), {}) or {}).get("long_term_value") or 0.0)
+                        for i in uniq
+                    )
+                    / max(1, len(uniq)),
+                    4,
+                ),
             }
         )
 
-    clusters_out.sort(key=lambda x: (-int(x["cluster_size"]), x["project_name"], x["memory_type"]))
+    clusters_out.sort(
+        key=lambda x: (
+            -float(x.get("avg_long_term_value") or 0.0),
+            -int(x["cluster_size"]),
+            x["project_name"],
+            x["memory_type"],
+        )
+    )
     return {
         "status": "ok",
         "clusters": clusters_out,

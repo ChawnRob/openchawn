@@ -14,6 +14,7 @@ from typing import Any
 from app.cognition import cognitive_state_engine as cse
 from app.decision import consequence_predictor as cp
 from app.memory import fractal_memory as fm
+from app.memory import memory_importance as mimp
 from app.memory import memory_compression as mc
 from app.memory import memory_decision_engine as mde
 from app.memory import memory_index as mi
@@ -41,6 +42,14 @@ def _memory_pressure_score(lifecycle: dict[str, Any]) -> float:
     h = lifecycle.get("memory_health_score")
     health = float(h) if isinstance(h, (int, float)) else 50.0
     return float(min(100.0, avg_d * 0.72 + contra * 9.5 + max(0.0, 72.0 - health) * 0.35))
+
+
+def _importance_risk_pressure(entries: list[dict]) -> float:
+    if not entries:
+        return 0.0
+    avg_imp = sum(float(e.get("importance_score") or 0.0) for e in entries) / max(1, len(entries))
+    avg_risk = sum(float(e.get("contradiction_risk") or 0.0) for e in entries) / max(1, len(entries))
+    return float(min(100.0, (1.0 - avg_imp) * 46.0 + avg_risk * 54.0))
 
 
 def _contradiction_pressure_score(lifecycle: dict[str, Any]) -> float:
@@ -91,10 +100,12 @@ def build_consolidation_plan(entries: list[dict] | None = None) -> dict[str, Any
         entries = snap
     else:
         entries = [fm._ensure_entry_defaults(dict(e)) for e in entries]  # noqa: SLF001
+    mimp.refresh_importance_scores(entries, persist=False)
 
     lifecycle = fm.lifecycle_metrics_from_entries(entries)
     dup = _dup_pressure_score(entries)
     mem_p = _memory_pressure_score(lifecycle)
+    mem_p = min(100.0, mem_p + _importance_risk_pressure(entries) * 0.35)
     contra_p = _contradiction_pressure_score(lifecycle)
     arch_c = _count_archive_candidates(entries)
     comp_c = _compression_candidate_count(entries)
