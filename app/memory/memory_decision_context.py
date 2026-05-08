@@ -14,6 +14,7 @@ from app.memory import fractal_memory as fm
 from app.memory import memory_contradiction_resolution as mcr
 from app.memory import memory_relationship_graph as mrg
 from app.memory import memory_temporal_evolution as mte
+from app.decision import decision_arbitration as dar
 
 _LOCK = Lock()
 _LAST_CONTEXT: dict[str, Any] = {"status": "empty"}
@@ -215,6 +216,27 @@ def build_decision_context(
     ctx["context_stability"] = compute_context_stability(ctx)
     ctx["context_risk"] = compute_context_risk(ctx)
     ctx["reasoning_summary"] = summarize_decision_context(ctx)
+    options_for_arbitration = []
+    for e in selected[:10]:
+        options_for_arbitration.append(
+            {
+                "option_id": f"mem_{str(e.get('id') or '')}",
+                "title": str(e.get("summary") or "")[:200],
+                "source_memory_ids": [str(e.get("id") or "")],
+                "strategy_type": _infer_strategy_from_memory(e),
+            }
+        )
+    try:
+        arb = dar.arbitrate_decision(
+            project=str((selected[0].get("project_name") if selected else "") or ""),
+            decision_type="unknown",
+            options=options_for_arbitration,
+            entries=rows,
+            context=ctx,
+        )
+    except Exception:
+        arb = {"status": "error", "selected_option": None, "options": []}
+    ctx["arbitration"] = arb
     if persist_annotations:
         by_id = {str(x.get("id") or ""): x for x in rows if x.get("id")}
         for e in selected:
@@ -229,4 +251,28 @@ def build_decision_context(
         global _LAST_CONTEXT
         _LAST_CONTEXT = dict(ctx)
     return ctx
+
+
+def _infer_strategy_from_memory(mem: dict) -> str:
+    txt = " ".join(
+        [
+            str(mem.get("summary") or ""),
+            " ".join([str(t) for t in (mem.get("concept_tags") or [])[:10]]),
+        ]
+    ).lower()
+    if any(k in txt for k in ("deepseek", "openai", "provider", "openrouter", "ollama")):
+        return "provider_strategy"
+    if any(k in txt for k in ("deployment", "railway", "infra", "prod", "production")):
+        return "deployment_strategy"
+    if any(k in txt for k in ("memory", "retrieval", "faiss", "compression", "consolidation")):
+        return "memory_strategy"
+    if any(k in txt for k in ("security", "secret", "token", "apikey", "api key")):
+        return "security_strategy"
+    if any(k in txt for k in ("cost", "budget", "pricing")):
+        return "cost_strategy"
+    if any(k in txt for k in ("architecture", "dependency", "module")):
+        return "architecture_strategy"
+    if any(k in txt for k in ("product", "feature", "user")):
+        return "product_strategy"
+    return "unknown"
 

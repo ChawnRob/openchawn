@@ -184,6 +184,19 @@ class MemoryContradictionResolveRequest(BaseModel):
     mode: str = "manual"
 
 
+class DecisionArbitrationOptionRequest(BaseModel):
+    title: str
+    source_memory_ids: list[str] = []
+    option_id: str = ""
+    strategy_type: str = ""
+
+
+class DecisionArbitrationSimulateRequest(BaseModel):
+    project: str = "openchawn"
+    decision_type: str = "unknown"
+    options: list[DecisionArbitrationOptionRequest]
+
+
 @app.get("/")
 def serve_frontend():
     return FileResponse("static/index.html")
@@ -986,6 +999,61 @@ def decision_predict_consequences_route(req: PredictConsequencesRequest):
         related_memories=[],
         decision_context=dc,
     )
+
+
+@app.get("/decision/arbitration/last")
+def decision_arbitration_last_route():
+    from app.decision import decision_arbitration as dar
+
+    return dar.get_last_arbitration()
+
+
+@app.post("/decision/arbitration/simulate")
+def decision_arbitration_simulate_route(req: DecisionArbitrationSimulateRequest):
+    from app.decision import decision_arbitration as dar
+    from app.memory import memory_decision_context as mdc
+
+    ctx = mdc.build_decision_context(query=req.decision_type, limit=18)
+    opts = [
+        {
+            "option_id": str(o.option_id or ""),
+            "title": str(o.title or ""),
+            "source_memory_ids": list(o.source_memory_ids or []),
+            "strategy_type": str(o.strategy_type or ""),
+        }
+        for o in (req.options or [])
+    ]
+    return dar.arbitrate_decision(
+        project=str(req.project or ""),
+        decision_type=str(req.decision_type or ""),
+        options=opts,
+        context=ctx,
+    )
+
+
+@app.get("/decision/arbitration/report")
+def decision_arbitration_report_route():
+    from app.decision import decision_arbitration as dar
+
+    last = dar.get_last_arbitration()
+    if str(last.get("status") or "") == "empty":
+        return {"status": "empty", "selected_option": None, "options": []}
+    return last
+
+
+@app.get("/decision/arbitration/explain/{option_id}")
+def decision_arbitration_explain_route(option_id: str):
+    from app.decision import decision_arbitration as dar
+
+    oid = str(option_id or "").strip()
+    if not oid:
+        raise HTTPException(status_code=400, detail="option_id manquant")
+    last = dar.get_last_arbitration()
+    for o in last.get("options") or []:
+        if str(o.get("option_id") or "") != oid:
+            continue
+        return {"status": "ok", "option": o}
+    raise HTTPException(status_code=404, detail="Option introuvable")
 
 
 @app.get("/decision/last-impact")

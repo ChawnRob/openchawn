@@ -202,6 +202,11 @@ def build_impact_report(
         "confidence_hint": pred["confidence_hint"],
         "proposed_action_preview": pred["proposed_action_preview"],
         "project": pred["project"],
+        "arbitration_selected_option": (
+            ((decision_context or {}).get("arbitration") or {}).get("selected_option")
+            if isinstance(decision_context, dict)
+            else None
+        ),
     }
     global _LAST_IMPACT_REPORT
     with _LAST_IMPACT_LOCK:
