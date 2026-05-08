@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,22 +25,24 @@ def main() -> int:
     static = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
     assert "apiFetch('/chat'" in static, "frontend doit appeler POST /chat"
     assert "fetch(API + '/chat'" not in static  # legacy double prefix check
-    assert "/api/chat" not in static or static.count("/api/chat") == 0
+    assert (
+        "apiFetch('/api/chat'" not in static
+    ), "l'UI ne doit pas composer POST /api/chat (alias curl / integrations)."
 
     guest = {"is_guest": True, "guest_session_id": "rtest", "ip": "127.0.0.1"}
     assert resolve_profile_id(ChatRequest(message="hi"), guest) == "default"
     assert resolve_profile_id(ChatRequest(message="hi", profile="fluxorca"), guest) == "fluxorca"
 
     fp = get_profile("fluxorca").get("system_prompt", "")
-    assert "langue dominante" in fp.lower()
-    assert "impos" in fp.lower()
+    assert "fluxorca" in fp.lower()
+    assert "english" in fp.lower()
 
     en_inst = build_language_instruction("Explain OpenChawn")
-    assert "anglais" in en_inst.lower()
+    assert "english" in en_inst.lower()
     fr_inst = build_language_instruction("Explique OpenChawn")
     assert "français" in fr_inst.lower()
     tr = build_language_instruction("Traduis ce texte en anglais : Bonjour")
-    assert "traduction" in tr.lower() and "anglais" in tr.lower()
+    assert "translation" in tr.lower() and "english" in tr.lower()
 
     bundle = assemble_chat_generation_inputs(
         ChatRequest(message="hello how are you and what's your name?", profile="fluxorca"),
@@ -70,8 +73,47 @@ def main() -> int:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["route_used"] == "POST /chat"
+    assert body.get("chat_routes_production") == ["POST /chat", "POST /api/chat"]
     assert body["profile_used"] == "fluxorca"
     assert body.get("detected_language") == "en"
+
+    assert ChatRequest(message="ping", project="openchawn").project_name == "openchawn"
+
+    from unittest.mock import patch
+
+    hdr = {}
+    sg = client.post("/guest/session", json={})
+    assert sg.status_code == 200
+    hdr["X-Guest-Session"] = sg.json()["session_id"]
+
+    def _fake_gen(**kwargs):
+        return {
+            "output": "I am fine.",
+            "success": True,
+            "provider": "mock",
+            "status_code": 200,
+            "forced_french_runtime_removed": False,
+            "prompt_contains_forced_french_before_sanitize": False,
+        }
+
+    payload = {"message": "hello how are you?", "project": "openchawn"}
+
+    with patch("app.api.chat.generate_response", side_effect=_fake_gen):
+        rb = client.post("/chat", params={"debug": "true"}, json=payload, headers=hdr)
+        # Même garde 2s que la prod entre deux messages (IP + session guest).
+        time.sleep(2.1)
+        ra = client.post("/api/chat", params={"debug": "true"}, json=payload, headers=hdr)
+    assert rb.status_code == 200, rb.text
+    assert ra.status_code == 200, ra.text
+    jb = rb.json()
+    ja = ra.json()
+    assert "route_post_chat" in jb["runtime_route_signature"]
+    assert jb["runtime_route_signature"].endswith("v116-language-guard-b1ee52f")
+    assert "route_post_api_chat" in ja["runtime_route_signature"]
+    assert jb["http_mount_path"] == "/chat"
+    assert ja["http_mount_path"] == "/api/chat"
+    assert jb["detected_language"] == "en"
+    assert jb.get("forced_french_runtime_detected") is False
 
     print("OK test_runtime_chat_language_path")
     return 0

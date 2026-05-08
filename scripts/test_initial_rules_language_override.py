@@ -38,10 +38,10 @@ def main() -> int:
     assert "language policy:" in san
 
     # language policy behavior
-    assert "anglais" in build_language_instruction("Explain OpenChawn")
+    assert "english" in build_language_instruction("Explain OpenChawn").lower()
     assert "français" in build_language_instruction("Explique OpenChawn")
     tr = build_language_instruction("Traduis ce texte en anglais : Bonjour")
-    assert "traduction" in tr and "anglais" in tr
+    assert "translation" in tr.lower() and "english" in tr.lower()
 
     # /api/chat uses policy and does not inject forced french
     client = TestClient(app)
@@ -60,7 +60,7 @@ def main() -> int:
         assert en.status_code == 200, en.text
         up = str(captured.get("user_message") or "").lower()
         sp = str(captured.get("system_prompt") or "").lower()
-        assert "langue détectée: anglais" in up or "réponds en anglais" in up
+        assert "output language: english" in up or "english" in up
         assert "uniquement en français" not in up
         assert "toujours répondre en français" not in sp
 

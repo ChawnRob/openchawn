@@ -47,7 +47,7 @@ def _stub_llm(
     **_: object,
 ) -> dict:
     raw = user_message or ""
-    chunks = raw.split("── DEMANDE ──")
+    chunks = raw.split("── USER REQUEST ──")
     last = chunks[-1].strip().lower() if chunks else raw.lower()
     flat = last.replace("œ", "oe")
 

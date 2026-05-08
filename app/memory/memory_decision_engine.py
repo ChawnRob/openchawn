@@ -291,10 +291,10 @@ def _assemble_context_preview(memories: list[dict]) -> str:
         by_mt[mt].append(m)
 
     parts = [
-        lines("── MÉMOIRE SYSTÈME (règles globales OpenChawn) ──", by_mt["system"]),
-        lines("── PRÉFÉRENCES UTILISATEUR ──", by_mt["user"]),
-        lines("── MÉMOIRE PROJET ──", by_mt["project"]),
-        lines("── CONTEXTE SESSION (court terme) ──", by_mt["session"]),
+        lines("── SYSTEM MEMORY (OpenChawn global context) ──", by_mt["system"]),
+        lines("── USER PREFERENCES ──", by_mt["user"]),
+        lines("── PROJECT MEMORY ──", by_mt["project"]),
+        lines("── SESSION CONTEXT (short term) ──", by_mt["session"]),
     ]
     return "\n\n".join(p for p in parts if p)
 

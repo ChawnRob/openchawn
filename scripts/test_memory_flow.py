@@ -126,10 +126,10 @@ def main() -> int:
 
     # 3) Layering — ordre des en-têtes (sections vides ignorées)
     markers = [
-        ("MÉMOIRE SYSTÈME", "SYSTEM"),
-        ("PRÉFÉRENCES UTILISATEUR", "USER"),
-        ("MÉMOIRE PROJET", "PROJECT"),
-        ("CONTEXTE SESSION", "SESSION"),
+        ("SYSTEM MEMORY", "SYSTEM"),
+        ("USER PREFERENCES", "USER"),
+        ("PROJECT MEMORY", "PROJECT"),
+        ("SESSION CONTEXT", "SESSION"),
     ]
     positions: list[tuple[str, str, int]] = []
     for label, layer in markers:

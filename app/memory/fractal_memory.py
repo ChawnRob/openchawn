@@ -1573,11 +1573,12 @@ def build_layered_memory_context(
         semantic_pick = _rank_sort(layered["semantic"])
 
         parts = [
-            _lines_for_label("MÉMOIRE SYSTÈME (règles globales OpenChawn)", system_pick),
-            _lines_for_label("PRÉFÉRENCES UTILISATEUR", user_pick),
-            _lines_for_label("MÉMOIRE PROJET", project_pick),
-            _lines_for_label("CONTEXTE SESSION (court terme)", session_pick),
-            _lines_for_label("MÉMOIRE SÉMANTIQUE (FAISS hybride)", semantic_pick),
+            # En-têtes en anglais pour éviter d'amorcer le modèle vers le français lorsque la requête est EN.
+            _lines_for_label("SYSTEM MEMORY (OpenChawn global context)", system_pick),
+            _lines_for_label("USER PREFERENCES", user_pick),
+            _lines_for_label("PROJECT MEMORY", project_pick),
+            _lines_for_label("SESSION CONTEXT (short term)", session_pick),
+            _lines_for_label("SEMANTIC MEMORY (FAISS hybrid)", semantic_pick),
         ]
         body = "\n\n".join(p for p in parts if p)
 

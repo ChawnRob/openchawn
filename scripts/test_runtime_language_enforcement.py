@@ -35,7 +35,7 @@ def main() -> int:
     assert detect_user_language(en_hello) == "en"
     assert effective_final_language(en_hello) == "en"
     inst_en = build_language_instruction(en_hello)
-    assert "anglais" in inst_en.lower()
+    assert "english" in inst_en.lower()
     assert "français" not in inst_en.lower()
 
     fr_msg = "Bonjour, pourriez-vous m'expliquer ce projet en français simple ?"
@@ -45,7 +45,7 @@ def main() -> int:
 
     tr = "Translate this to Spanish: Good morning"
     assert detect_explicit_language_request(tr) and detect_explicit_language_request(tr).get("language") == "es"
-    assert "espagnol" in build_language_instruction(tr).lower() or "Espagnol" in build_language_instruction(tr)
+    assert "spanish" in build_language_instruction(tr).lower()
 
     assert normalize_language_code("not_a_real_lang_code_xyz") == "und"
     assert get_language_name("not_a_real_lang_code_xyz") == "not_a_real_lang_code_xyz"

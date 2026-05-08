@@ -358,28 +358,88 @@ def detect_user_language(text: str) -> str:
     return "fr"
 
 
+_ENGLISH_NAME: Final[dict[str, str]] = {
+    "en": "English",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "de": "German",
+    "it": "Italian",
+    "fr": "French",
+    "und": "the user's language (prefer English if ambiguous ASCII/latin text)",
+}
+
+
 def build_language_instruction(user_message: str) -> str:
     """
-    Consigne injectée dans le message utilisateur final (hors bloc mémoire).
+    Consigne injectée en tête du message utilisateur (hors bloc mémoire).
 
-    Format officiel OpenChawn pour le provider.
+    Règle critique: pour une cible anglaise, **toute** la consigne est en anglais — un bloc
+    entièrement en français amorçait les modèles vers des réponses en français malgré
+    « langue détectée: anglais » en fin de phrase.
     """
     req = detect_explicit_language_request(user_message)
     code = normalize_language_code((req or {}).get("language") or detect_user_language(user_message))
-    label = _LABELS.get(code) or _LABELS.get(FALLBACK_LANGUAGE, "français")
-    if req and req.get("kind") == "translation_target":
+    label_fr = _LABELS.get(code) or _LABELS.get("und", "non déterminée")
+    label_en = _ENGLISH_NAME.get(code, "the matching language")
+
+    if code == "fr":
+        if req and req.get("kind") == "translation_target":
+            return (
+                "Réponds obligatoirement dans la langue du dernier message utilisateur. "
+                "Exception prioritaire: ici il s'agit d'une demande de traduction, "
+                f"donc la sortie principale doit être en {label_fr}."
+            )
+        if req and req.get("kind") == "explicit_language":
+            return (
+                "Réponds obligatoirement dans la langue du dernier message utilisateur. "
+                "Exception prioritaire: ici l'utilisateur demande explicitement une langue, "
+                f"donc réponds en {label_fr}."
+            )
         return (
             "Réponds obligatoirement dans la langue du dernier message utilisateur. "
-            "Exception prioritaire: ici il s'agit d'une demande de traduction, "
-            f"donc la sortie principale doit être en {label}."
+            f"Langue détectée : {label_fr}."
         )
-    if req and req.get("kind") == "explicit_language":
+
+    if code == "en":
+        if req and req.get("kind") == "translation_target":
+            return (
+                "Translation / target language: English. "
+                "Produce the main deliverable in English only, even if other parts of the message are not in English."
+            )
+        if req and req.get("kind") == "explicit_language":
+            return (
+                "The user explicitly requested English. "
+                "Write your entire reply in English. Do not answer in French."
+            )
         return (
-            "Réponds obligatoirement dans la langue du dernier message utilisateur. "
-            "Exception prioritaire: ici l'utilisateur demande explicitement une langue, "
-            f"donc réponds en {label}."
+            "OUTPUT LANGUAGE: English. Write your complete reply in English only. "
+            "Do not answer in French. Do not claim you can only express yourself in French."
         )
+
+    if code == "und":
+        return (
+            "OUTPUT LANGUAGE: Match the user's latest message. "
+            "If the message is clearly English, reply entirely in English and not in French. "
+            "If unclear, prefer English for short ASCII/Latin text without French-specific accents."
+        )
+
+    if code in ("es", "pt", "de", "it"):
+        if req and req.get("kind") == "translation_target":
+            return (
+                f"Translation / target language: {label_en}. "
+                f"Produce the main output in {label_en} only."
+            )
+        if req and req.get("kind") == "explicit_language":
+            return (
+                f"The user explicitly requested {label_en}. "
+                f"Write your entire reply in {label_en}. Do not answer in French."
+            )
+        return (
+            f"OUTPUT LANGUAGE: {label_en}. Write your complete reply in {label_en} only. "
+            "Do not default to French."
+        )
+
     return (
-        "Réponds obligatoirement dans la langue du dernier message utilisateur. "
-        f"Langue détectée: {label}."
+        f"OUTPUT LANGUAGE: {label_en}. Follow the user's language. "
+        "Do not default to French unless the user's message is clearly French."
     )

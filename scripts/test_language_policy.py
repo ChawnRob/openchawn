@@ -28,7 +28,7 @@ def main() -> int:
     assert "français" in build_language_instruction("Bonjour à tous.")
 
     assert detect_user_language("Hello, how are you today?") == "en"
-    assert "anglais" in build_language_instruction("Hello there.")
+    assert "english" in build_language_instruction("Hello there.").lower()
 
     mixed_fr_dom = (
         "Bonjour merci beaucoup pour votre aide avec ce problème "
@@ -45,15 +45,15 @@ def main() -> int:
 
     explicit = "Pourrait-on avoir une version courte ? answer in English please."
     assert detect_user_language(explicit) == "en"
-    assert "anglais" in build_language_instruction(explicit)
+    assert "english" in build_language_instruction(explicit).lower()
     req = detect_explicit_language_request(explicit)
     assert req and req.get("kind") == "explicit_language" and req.get("language") == "en"
 
     tr_en = "Traduis ce texte en anglais : Bonjour"
     req = detect_explicit_language_request(tr_en)
     assert req and req.get("kind") == "translation_target" and req.get("language") == "en"
-    assert "traduction" in build_language_instruction(tr_en).lower()
-    assert "anglais" in build_language_instruction(tr_en)
+    bi_tr = build_language_instruction(tr_en).lower()
+    assert "translation" in bi_tr and "english" in bi_tr
 
     tr_fr = "Translate this to French: Hello"
     req = detect_explicit_language_request(tr_fr)
@@ -63,16 +63,16 @@ def main() -> int:
     ask_en = "Réponds en anglais : explique OpenChawn"
     req = detect_explicit_language_request(ask_en)
     assert req and req.get("kind") == "explicit_language" and req.get("language") == "en"
-    assert "anglais" in build_language_instruction(ask_en)
+    assert "english" in build_language_instruction(ask_en).lower()
 
     assert detect_user_language("Explique OpenChawn") == "fr"
     assert "français" in build_language_instruction("Explique OpenChawn")
     assert detect_user_language("Explain OpenChawn") == "en"
-    assert "anglais" in build_language_instruction("Explain OpenChawn")
+    assert "english" in build_language_instruction("Explain OpenChawn").lower()
 
     assert detect_user_language("xyz abc 12345 !!!") == "en"
     assert detect_user_language("@@@") == "en"
-    assert "anglais" in build_language_instruction("@@@").lower()
+    assert "english" in build_language_instruction("@@@").lower()
 
     assert normalize_language_code("EN-us") == "en"
     assert normalize_language_code("FR") == "fr"

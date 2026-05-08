@@ -38,6 +38,7 @@ _request_counts: dict[str, int] = defaultdict(int)
 # Routes et leurs limites
 _RATE_RULES: dict[str, int] = {
     "/chat": RATE_LIMIT_CHAT,
+    "/api/chat": RATE_LIMIT_CHAT,
     "/register": RATE_LIMIT_AUTH,
     "/login": RATE_LIMIT_AUTH,
     "/guest/session": RATE_LIMIT_AUTH,
@@ -53,8 +54,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             f"request | ip={client_ip} | path={path} | count={_request_counts[client_ip]}"
         )
 
-        # /chat guardrail: max 1 request per 2 seconds per IP
-        if path == "/chat":
+        # Chat guardrail: max 1 request per 2 seconds per IP (mounted paths share policy)
+        if path in ("/chat", "/api/chat"):
             auth_header = (request.headers.get("Authorization", "") or "").strip()
             guest_session = (request.headers.get("X-Guest-Session", "") or "").strip()
             if guest_session:

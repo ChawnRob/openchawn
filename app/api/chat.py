@@ -4,7 +4,10 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
+
+# Attribution déploiements / observabilité temporaire (prod route debugging).
+_CHAT_SIGNATURE_TAG = "v116-language-guard-b1ee52f"
 
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
@@ -42,7 +45,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
     profile: str = ""
     provider: str = ""
-    project_name: str = ""
+    project_name: str = Field("", validation_alias=AliasChoices("project_name", "project"))
     memory_context: str = ""
     user_goal: str = ""
 
@@ -87,13 +90,15 @@ def infer_forced_french_source_type(*, memory_body: str, profile_prompt: str, sy
 
 def build_openchawn_base_system_prompt() -> str:
     return (
-        "You are OpenChawn, an AI orchestration system created by Robert L. "
+        "You are OpenChawn, an AI orchestration system created by Robert. "
         "STRICT RULES: "
-        "1. Follow the language instruction injected at the top of the user message with highest priority "
-        "(including translation and explicit-language exceptions). "
-        "2. Keep answers concise and direct. "
-        "3. Never mention model providers or engine names. "
-        "4. Identity is OpenChawn."
+        "1. Follow the OUTPUT LANGUAGE / language block at the very start of the user message — it overrides "
+        "everything else (translation targets, explicit language requests, detected language). "
+        "2. Never answer in French when OUTPUT LANGUAGE is English or the user's message is clearly English. "
+        "Never claim you are restricted to French-only replies. "
+        "3. Keep answers concise and direct. "
+        "4. Never mention model providers or engine names. "
+        "5. Identity is OpenChawn."
     )
 
 
@@ -126,7 +131,7 @@ def assemble_chat_generation_inputs(
 
     base_request = req.message
     if memory_context:
-        final_prompt = f"{memory_context}\n\n── DEMANDE ──\n{base_request}"
+        final_prompt = f"{memory_context}\n\n── USER REQUEST ──\n{base_request}"
     else:
         final_prompt = base_request
 
@@ -185,14 +190,22 @@ def assemble_chat_generation_inputs(
     }
 
 
-@router.post("/chat")
-def chat(
+def runtime_route_signature(signature_fn_name: str) -> str:
+    return f"app/api/chat.py::{signature_fn_name}::{_CHAT_SIGNATURE_TAG}"
+
+
+def handle_chat_request(
     req: ChatRequest,
-    user: dict = Depends(get_current_user_or_guest),
-    debug: bool = Query(default=False),
-):
+    user: dict,
+    *,
+    debug: bool,
+    http_mount_path: str,
+    signature_fn_name: str,
+) -> dict[str, Any]:
+    """Handler partagé : logique unique pour ``POST /chat`` et ``POST /api/chat``."""
     is_guest = user.get("is_guest", False)
     violation_retry = False
+    quota: dict[str, Any] = {}
 
     if is_guest:
         quota = check_guest_quota(user["guest_session_id"], user["ip"])
@@ -208,9 +221,12 @@ def chat(
 
     bundle = assemble_chat_generation_inputs(req, user=user, persist_memory_side_effects=True)
     provider_hint = (req.provider or "").strip().lower()
+    runtime_sig = runtime_route_signature(signature_fn_name)
 
-    # Prompts passés au provider : versions **déjà** nettoyées par sanitize_provider_prompts
-    # (le gateway refait un passage défensif sans effet si déjà propre).
+    ff_detected_bundle = bool(bundle.get("forced_french_runtime_detected"))
+    ff_removed_assemble = bool(bundle.get("forced_french_runtime_removed_preview"))
+
+    # Prompts pour le gateway : déjà sanitisés ici ; le gateway refait une passe défensive.
     sp_in = bundle["sanitized_system_prompt"]
     um_in = bundle["sanitized_user_message"]
 
@@ -224,7 +240,7 @@ def chat(
     success = bool(llm_result.get("success", bool(response_text)))
     provider_error = llm_result.get("error", None)
     provider_status = llm_result.get("status_code", None)
-    ff_removed = bool(llm_result.get("forced_french_runtime_removed", False))
+    ff_removed_gateway = bool(llm_result.get("forced_french_runtime_removed", False))
     pre_ff = bool(llm_result.get("prompt_contains_forced_french_before_sanitize", False))
 
     if (
@@ -245,14 +261,21 @@ def chat(
         success = bool(llm_result.get("success", bool(response_text)))
         provider_error = llm_result.get("error", None)
         provider_status = llm_result.get("status_code", None)
-        ff_removed = ff_removed or bool(llm_result.get("forced_french_runtime_removed", False))
+        ff_removed_gateway = ff_removed_gateway or bool(llm_result.get("forced_french_runtime_removed", False))
         pre_ff = pre_ff or bool(llm_result.get("prompt_contains_forced_french_before_sanitize", False))
 
+    ff_removed_combined = ff_removed_assemble or ff_removed_gateway
+    detected = str(bundle.get("detected_language") or "")
+    final_lang = str(bundle.get("final_language_hint") or "")
+
     logger.info(
-        f"chat provider={provider_used} success={success} "
+        "chat_route_trace "
+        f"path={http_mount_path} sig={runtime_sig} detected_language={detected} "
+        f"final_language={final_lang} ff_detected={ff_detected_bundle} "
+        f"ff_removed_assemble={ff_removed_assemble} ff_removed_gateway={ff_removed_gateway} "
+        f"debug={debug} provider={provider_used} success={success} "
         f"status={provider_status} guest={is_guest} "
-        f"forced_french_before={pre_ff} runtime_removed={ff_removed} "
-        f"en_violation_retry={violation_retry}"
+        f"forced_french_before_gateway={pre_ff} en_violation_retry={violation_retry}"
     )
 
     if not success or not response_text:
@@ -298,17 +321,61 @@ def chat(
     if is_guest:
         result["guest"] = True
         result["quota_remaining"] = quota["remaining"]
+    # Garde-langue assemble + gateway sanitize (toujours actifs sur cette route).
+    lang_guard_active = True
     if debug:
+        result["runtime_route_signature"] = runtime_sig
+        result["language_guard_active"] = lang_guard_active
+        result["detected_language"] = bundle["detected_language"]
+        result["final_language"] = bundle.get("final_language_hint")
+        result["forced_french_runtime_detected"] = ff_detected_bundle
+        result["forced_french_runtime_removed"] = ff_removed_combined
+        result["http_mount_path"] = http_mount_path
         result["language_debug"] = {
-            "route_used": "POST /chat",
+            "http_mount_path": http_mount_path,
+            "routes_equivalent": ["POST /chat", "POST /api/chat"],
             "profile_used": bundle["profile_used"],
             "detected_language": bundle["detected_language"],
             "final_language_instruction": (str(bundle.get("lang_instruction") or ""))[:420],
             "final_language": bundle.get("final_language_hint"),
-            "forced_french_runtime_detected": bool(bundle.get("forced_french_runtime_detected")),
-            "forced_french_runtime_removed": ff_removed,
+            "forced_french_runtime_detected": ff_detected_bundle,
+            "forced_french_runtime_removed_assemble": ff_removed_assemble,
+            "forced_french_runtime_removed_gateway": ff_removed_gateway,
+            "forced_french_runtime_removed": ff_removed_combined,
             "forced_french_source_type": bundle.get("forced_french_source_type"),
             "prompt_contains_forced_french": bool(bundle.get("prompt_contains_forced_french")),
             "english_violation_regenerated": violation_retry,
         }
     return result
+
+
+@router.post("/chat")
+def route_post_chat(
+    req: ChatRequest,
+    user: dict = Depends(get_current_user_or_guest),
+    debug: bool = Query(default=False),
+):
+    """Point d’entrée principal utilisé par ``static/index.html`` (fetch vers ``/chat``)."""
+    return handle_chat_request(
+        req,
+        user,
+        debug=debug,
+        http_mount_path="/chat",
+        signature_fn_name="route_post_chat",
+    )
+
+
+@router.post("/api/chat")
+def route_post_api_chat(
+    req: ChatRequest,
+    user: dict = Depends(get_current_user_or_guest),
+    debug: bool = Query(default=False),
+):
+    """Alias HTTP aligné sur le même handler (tests curl / intégrations legacy)."""
+    return handle_chat_request(
+        req,
+        user,
+        debug=debug,
+        http_mount_path="/api/chat",
+        signature_fn_name="route_post_api_chat",
+    )

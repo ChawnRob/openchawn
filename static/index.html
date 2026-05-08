@@ -1131,6 +1131,7 @@ async function send() {
   scrollDown();
 
   try {
+    // Backend: POST /chat et POST /api/chat partagent le même handler (OpenChawn app/api/chat.py).
     const r = await apiFetch('/chat', {
       method: 'POST',
       body: JSON.stringify({ message: text }),
