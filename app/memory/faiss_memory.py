@@ -195,6 +195,8 @@ def build_faiss_index(entries: list[dict] | None = None) -> dict[str, Any]:
                 continue
             if e.get("indexable") is False:
                 continue
+            if str(e.get("contradiction_resolution_status") or "") == "deprecated":
+                continue
             txt = _entry_text(e)
             if not txt:
                 continue
@@ -275,6 +277,8 @@ def add_memory_embedding(memory_entry: dict) -> dict[str, Any]:
         txt = _entry_text(memory_entry)
         if memory_entry.get("indexable") is False:
             return {"status": "ok", "added": False, "reason": "non_indexable"}
+        if str(memory_entry.get("contradiction_resolution_status") or "") == "deprecated":
+            return {"status": "ok", "added": False, "reason": "deprecated"}
         if not txt or fm._contains_sensitive_text(txt):  # noqa: SLF001
             meta["items"] = items
             meta["vectors_fallback"] = vectors

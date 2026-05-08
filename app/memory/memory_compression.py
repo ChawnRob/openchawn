@@ -67,6 +67,8 @@ def _eligible_source_for_compression(entry: dict, *, include_archived: bool = Fa
         return False
     if bool(entry.get("contradiction_detected")):
         return False
+    if str(entry.get("contradiction_resolution_status") or "") in ("unresolved", "conflict_active"):
+        return False
     if _metadata_secret_flag(entry):
         return False
     text_parts = (

@@ -64,6 +64,7 @@ def compute_memory_evolution(entry: dict) -> dict[str, Any]:
     ltv = float(entry.get("long_term_value") or 0.0)
     cen = float(entry.get("graph_centrality") or 0.0)
     risk = float(entry.get("contradiction_risk") or 0.0)
+    rs = str(entry.get("contradiction_resolution_status") or "")
     sem_hits = int((entry.get("metadata") or {}).get("semantic_match_hits") or 0) if isinstance(entry.get("metadata"), dict) else 0
 
     trend = max(-1.0, min(1.0, imp * 0.45 + rec * 0.28 + ltv * 0.25 + min(0.2, cen * 0.03) + min(0.1, sem_hits * 0.02) - risk * 0.35 - min(0.35, inactive_days / 120.0)))
@@ -72,6 +73,8 @@ def compute_memory_evolution(entry: dict) -> dict[str, Any]:
     volatility = max(0.0, min(1.0, risk * 0.6 + (0.25 if bool(entry.get("contradiction_detected")) else 0.0) + (0.18 if abs(momentum) > 0.65 else 0.0)))
 
     status = "stable"
+    if rs == "superseded":
+        status = "declining" if inactive_days > 20 else "stable"
     if risk >= 0.65:
         status = "unresolved"
     elif inactive_days > 45 and access == 0 and age_days > 45:
@@ -88,7 +91,7 @@ def compute_memory_evolution(entry: dict) -> dict[str, Any]:
 
     explanation = (
         f"trend={trend:.2f}; momentum={momentum:.2f}; stability={stability:.2f}; "
-        f"volatility={volatility:.2f}; inactive_days={inactive_days:.1f}; contradiction_risk={risk:.2f}"
+        f"volatility={volatility:.2f}; inactive_days={inactive_days:.1f}; contradiction_risk={risk:.2f}; resolution={rs or 'n/a'}"
     )[:320]
 
     return {

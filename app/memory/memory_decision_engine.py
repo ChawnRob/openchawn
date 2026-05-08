@@ -96,6 +96,13 @@ def score_memory_candidate(
     recency_v = _recency_score(mem)
 
     flag_pen = 26.0 if bool(mem.get("contradiction_detected")) else 0.0
+    crs = str(mem.get("contradiction_resolution_status") or "")
+    if crs in ("unresolved", "conflict_active"):
+        flag_pen += 22.0
+    if crs in ("resolved", "superseded"):
+        flag_pen -= 8.0
+    if str(mem.get("superseded_by") or "").strip():
+        flag_pen += 16.0
     contradiction_penalty = round(flag_pen + extra_penalty, 2)
 
     final_score = round(
@@ -249,6 +256,7 @@ def explain_context_decision(
         "final_decision_score": breakdown.get("final_decision_score"),
         "importance_explanation": str(mem.get("importance_explanation") or "")[:280],
         "temporal_explanation": str(mem.get("temporal_explanation") or "")[:280],
+        "resolution_reason": str(mem.get("resolution_reason") or "")[:280],
         "relationship_summary": (
             "liée à " + ",".join([str(x) for x in (mem.get("related_memory_ids") or [])[:3]])
             if (mem.get("related_memory_ids") or [])
@@ -447,6 +455,10 @@ def build_memory_decision_bundle(
             penalties_list.append(f"pairwise_conflict_penalty={round(pen, 2)}")
         if bool(mem.get("contradiction_detected")):
             penalties_list.append("contradiction_detected_flag")
+        if str(mem.get("contradiction_resolution_status") or "") in ("unresolved", "conflict_active"):
+            penalties_list.append("contradiction_unresolved_or_active")
+        if str(mem.get("superseded_by") or "").strip():
+            penalties_list.append("superseded_memory_penalty")
 
         scored_rows.append({"memory": mem, "breakdown": bd, "reasons": reasons, "penalties_list": penalties_list})
         scoring_breakdown.append({"memory_id": mid, **bd})

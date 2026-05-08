@@ -117,6 +117,8 @@ def compute_long_term_value(entry: dict) -> float:
         + min(0.2, graph_centrality * 0.03)
         + min(0.14, max(0.0, momentum) * 0.45),
     )
+    if str(entry.get("contradiction_resolution_status") or "") in ("deprecated", "superseded"):
+        score *= 0.55
     return round(max(0.0, score), 4)
 
 

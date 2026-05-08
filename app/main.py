@@ -177,6 +177,13 @@ class MemoryCompressionRunRequest(BaseModel):
     project: str = ""
 
 
+class MemoryContradictionResolveRequest(BaseModel):
+    winner_memory_id: str
+    loser_memory_id: str
+    reason: str = ""
+    mode: str = "manual"
+
+
 @app.get("/")
 def serve_frontend():
     return FileResponse("static/index.html")
@@ -865,6 +872,57 @@ def memory_temporal_explain_route(memory_id: str):
     out = mte.explain_temporal_evolution(memory_id)
     if str(out.get("status") or "") != "ok":
         raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    return out
+
+
+@app.get("/memory/contradictions/candidates")
+def memory_contradictions_candidates_route():
+    from app.memory import memory_contradiction_resolution as mcr
+
+    return {"status": "ok", "items": mcr.detect_resolution_candidates()}
+
+
+@app.post("/memory/contradictions/refresh")
+def memory_contradictions_refresh_route():
+    from app.memory import memory_contradiction_resolution as mcr
+
+    return mcr.refresh_contradiction_resolutions()
+
+
+@app.get("/memory/contradictions/report")
+def memory_contradictions_report_route():
+    from app.memory import memory_contradiction_resolution as mcr
+
+    return mcr.build_contradiction_resolution_report()
+
+
+@app.get("/memory/contradictions/explain/{memory_id}")
+def memory_contradictions_explain_route(memory_id: str):
+    from app.memory import memory_contradiction_resolution as mcr
+
+    out = mcr.explain_contradiction_resolution(memory_id)
+    if str(out.get("status") or "") != "ok":
+        raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    return out
+
+
+@app.post("/memory/contradictions/resolve")
+def memory_contradictions_resolve_route(req: MemoryContradictionResolveRequest):
+    from app.memory import fractal_memory as fm
+    from app.memory import memory_contradiction_resolution as mcr
+
+    with fm._STORE_LOCK:  # noqa: SLF001
+        rows = [fm._ensure_entry_defaults(dict(e)) for e in fm._load_entries()]  # noqa: SLF001
+        out = mcr.resolve_memory_contradiction(
+            rows,
+            winner_memory_id=req.winner_memory_id,
+            loser_memory_id=req.loser_memory_id,
+            reason=req.reason,
+            mode=req.mode,
+        )
+        if str(out.get("status") or "") != "ok":
+            raise HTTPException(status_code=400, detail=str(out.get("detail") or "resolution_failed"))
+        fm._save_entries(rows)  # noqa: SLF001
     return out
 
 

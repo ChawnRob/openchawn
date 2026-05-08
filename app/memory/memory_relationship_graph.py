@@ -301,6 +301,7 @@ def find_related_memories(memory_id: str, *, limit: int = 12, entries: list[dict
                 "memory_type": str(e.get("memory_type") or ""),
                 "cluster_id": str(e.get("cluster_id") or ""),
                 "graph_centrality": float(e.get("graph_centrality") or 0.0),
+                "contradiction_resolution_status": str(e.get("contradiction_resolution_status") or ""),
             }
         )
         if len(out) >= max(1, int(limit)):
@@ -326,6 +327,7 @@ def explain_memory_relationships(memory_id: str, *, entries: list[dict] | None =
         "graph_degree": int(e.get("graph_degree") or 0),
         "graph_centrality": float(e.get("graph_centrality") or 0.0),
         "concept_tags": list(e.get("concept_tags") or [])[:20],
+        "contradiction_resolution_status": str(e.get("contradiction_resolution_status") or ""),
         "top_related": rel,
         "explanation": (
             "cette mémoire est liée à " + ", ".join(reasons)
