@@ -84,11 +84,11 @@ def chat(
     # ── Enrich prompt with optional V11.6 fields ──
     extra_parts = []
     if req.project_name:
-        extra_parts.append(f"Projet: {req.project_name}")
+        extra_parts.append(f"Project: {req.project_name}")
     if req.memory_context:
-        extra_parts.append(f"Mémoire: {req.memory_context}")
+        extra_parts.append(f"Memory: {req.memory_context}")
     if req.user_goal:
-        extra_parts.append(f"Objectif: {req.user_goal}")
+        extra_parts.append(f"UserGoal: {req.user_goal}")
     if extra_parts:
         final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
 
@@ -96,13 +96,13 @@ def chat(
     final_prompt = f"{lang_instruction}\n\n{final_prompt}"
 
     system_prompt = (
-        "Tu es OpenChawn, un système d'orchestration d'intelligence artificielle créé par Robert. "
-        "RÈGLES STRICTES : "
-        "1. Respecte impérativement la consigne de langue indiquée dans la première ligne du message utilisateur "
-        "(répondre dans la même langue que le dernier message de l'utilisateur). "
-        "2. Réponds brièvement et directement. "
-        "3. Ne mentionne jamais Mistral, OpenAI, Qwen ou un autre provider. "
-        "4. Tu es OpenChawn, point final."
+        "You are OpenChawn, an AI orchestration system created by Robert. "
+        "STRICT RULES: "
+        "1. Follow the language instruction injected at the top of the user message with highest priority "
+        "(including translation and explicit-language exceptions). "
+        "2. Keep answers concise and direct. "
+        "3. Never mention model providers or engine names. "
+        "4. Identity is OpenChawn."
     )
 
     provider_hint = (req.provider or "").strip().lower()
@@ -149,10 +149,13 @@ def chat(
     else:
         logger.info("chat memory writeback status=skipped reason=%s", write_result.reason or "unknown")
 
-    consolidation_plan = memory_consolidation.build_consolidation_plan()
-    consolidation_recommended = bool(
-        consolidation_plan.get("status") == "ok" and consolidation_plan.get("should_run")
-    )
+    try:
+        consolidation_plan = memory_consolidation.build_consolidation_plan()
+        consolidation_recommended = bool(
+            consolidation_plan.get("status") == "ok" and consolidation_plan.get("should_run")
+        )
+    except Exception:
+        consolidation_recommended = False
 
     result = {
         "output": response_text,

@@ -1,6 +1,6 @@
 """
 Retrieval Policy Layer V11.6 — adapte le retrieval mémoire à l’état cognitif OpenChawn.
-Heuristiques locales uniquement : pas d’embeddings, FAISS, vector DB ni LLM.
+Heuristiques locales uniquement, avec couche sémantique locale hybride (FAISS complémentaire).
 """
 
 from __future__ import annotations
@@ -49,6 +49,7 @@ def policy_for_cognitive_state(
         "confidence_scale": 1.0,
         "importance_floor_session": 0.0,
         "max_decay_session_keep": 100.0,
+        "semantic_boost": 0.2,
     }
 
     if st == "focused":
@@ -60,6 +61,7 @@ def policy_for_cognitive_state(
             compression_level="light",
             conflict_penalty_scale=1.06,
             confidence_scale=1.02,
+            semantic_boost=0.22,
         )
     elif st == "exploring":
         policy.update(
@@ -71,6 +73,7 @@ def policy_for_cognitive_state(
             compression_level="none",
             conflict_penalty_scale=1.02,
             confidence_scale=0.95,
+            semantic_boost=0.28,
         )
     elif st == "contradicted":
         policy.update(
@@ -81,6 +84,7 @@ def policy_for_cognitive_state(
             compression_level="light",
             conflict_penalty_scale=1.38 if contra != "low" else 1.28,
             confidence_scale=0.87,
+            semantic_boost=0.24,
         )
     elif st == "overloaded":
         policy.update(
@@ -93,6 +97,7 @@ def policy_for_cognitive_state(
             compression_level="aggressive",
             conflict_penalty_scale=1.14,
             confidence_scale=0.84,
+            semantic_boost=0.14,
         )
     elif st == "uncertain":
         policy.update(
@@ -103,6 +108,7 @@ def policy_for_cognitive_state(
             conflict_penalty_scale=1.1,
             confidence_scale=0.89,
             importance_floor_session=0.06,
+            semantic_boost=0.19,
         )
     elif st in ("stable", "high_confidence"):
         policy.update(
@@ -111,6 +117,7 @@ def policy_for_cognitive_state(
             compression_level="light",
             conflict_penalty_scale=0.98 if st == "high_confidence" else 1.0,
             confidence_scale=1.03 if st == "high_confidence" else 1.0,
+            semantic_boost=0.2,
         )
     elif st == "memory_fragmented":
         policy.update(
@@ -124,6 +131,7 @@ def policy_for_cognitive_state(
             confidence_scale=0.92,
             importance_floor_session=0.07,
             max_decay_session_keep=68.0,
+            semantic_boost=0.23,
         )
 
     # Ajustement léger si pression cognitive très haute (sans LLM)
@@ -154,6 +162,7 @@ def explain_retrieval_policy(policy: dict[str, Any]) -> str:
         f"diversité={policy.get('diversity_level')}",
         f"contradiction_mode={policy.get('contradiction_mode')}",
         f"compression={policy.get('compression_level')}",
+        f"semantic_boost={policy.get('semantic_boost')}",
         f"échelles conflit/confiance={policy.get('conflict_penalty_scale')}/{policy.get('confidence_scale')}",
     ]
     return sanitize_timeline_text(" | ".join(parts), 520)
@@ -250,6 +259,7 @@ def lean_policy_response(policy: dict[str, Any]) -> dict[str, Any]:
         "compression_level",
         "conflict_penalty_scale",
         "confidence_scale",
+        "semantic_boost",
         "explanation",
         "layer_limits",
     )

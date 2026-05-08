@@ -181,7 +181,7 @@ def step_ollama(prompt: str, mem_hits: list, kimi: str, minimax: str, mistral: s
         f"Contexte culturel (Kimi): {kimi or '(aucun)'}\n\n"
         f"Question optimisee (DeepSeek): {minimax or '(aucune)'}\n\n"
         f"Structure logique (OpenRouter): {mistral or '(aucune)'}\n\n"
-        f"Genere la reponse finale claire, utile, en francais."
+        f"Genere la reponse finale claire et utile dans la langue attendue par l'utilisateur."
     )
     p = _load_provider("openai")
     src = "OpenAI"

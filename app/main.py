@@ -616,6 +616,70 @@ def memory_consolidation_last_report_route():
     return mcs.get_last_consolidation_report()
 
 
+@app.get("/memory/semantic/search")
+def memory_semantic_search_route(
+    q: str = Query(default=""),
+    project_name: str = Query(default=""),
+    memory_type: str = Query(default=""),
+    language: str = Query(default=""),
+    archived: bool | None = Query(default=None),
+    contradicted: bool | None = Query(default=None),
+    limit: int = Query(default=8, ge=1, le=30),
+):
+    from app.memory import faiss_memory as fsm
+
+    filters = {
+        "project_name": (project_name or "").strip(),
+        "memory_type": (memory_type or "").strip(),
+        "language": (language or "").strip(),
+        "archived": archived,
+        "contradicted": contradicted,
+    }
+    return fsm.search_semantic_memory((q or "").strip(), top_k=limit, filters=filters)
+
+
+@app.get("/memory/semantic/stats")
+def memory_semantic_stats_route():
+    from app.memory import faiss_memory as fsm
+
+    return fsm.get_semantic_index_stats()
+
+
+@app.get("/memory/semantic/health")
+def memory_semantic_health_route(window: int = Query(default=50, ge=1, le=120)):
+    from app.memory import fractal_memory as fm
+
+    return fm.get_semantic_health(window=window)
+
+
+@app.post("/memory/semantic/rebuild")
+def memory_semantic_rebuild_route(incremental: bool = Query(default=False)):
+    from app.memory import faiss_memory as fsm
+
+    return fsm.rebuild_semantic_index(incremental=bool(incremental))
+
+
+@app.get("/memory/semantic/worker/status")
+def memory_semantic_worker_status_route():
+    from app.memory import semantic_indexing_worker as siw
+
+    return siw.get_semantic_worker_status()
+
+
+@app.post("/memory/semantic/worker/run-once")
+def memory_semantic_worker_run_once_route():
+    from app.memory import semantic_indexing_worker as siw
+
+    return siw.process_semantic_index_queue()
+
+
+@app.get("/memory/semantic/cache/stats")
+def memory_semantic_cache_stats_route():
+    from app.memory import embedding_cache as ec
+
+    return ec.embedding_cache_stats()
+
+
 @app.post("/decision/predict-consequences")
 def decision_predict_consequences_route(req: PredictConsequencesRequest):
     from app.decision import consequence_predictor as cp

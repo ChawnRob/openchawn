@@ -1,4 +1,5 @@
 import logging
+from app.core.language_policy import detect_user_language
 log = logging.getLogger("openchawn.router")
 
 _REGISTRY = {}
@@ -133,6 +134,10 @@ def handle(prompt: str, raw_message: str = "") -> dict:
 
     return {
         "action": "MODEL_CALL_NEEDED",
-        "output": "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment.",
+        "output": (
+            "I am OpenChawn. No model replied yet."
+            if detect_user_language(raw_message or prompt) == "en"
+            else "Je suis OpenChawn. Aucun modèle n'a répondu pour le moment."
+        ),
         "provider": None,
     }

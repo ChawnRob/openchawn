@@ -18,6 +18,7 @@ def main() -> int:
 
     from app.core.language_policy import (
         build_language_instruction,
+        detect_explicit_language_request,
         detect_user_language,
         normalize_language_code,
     )
@@ -45,6 +46,29 @@ def main() -> int:
     explicit = "Pourrait-on avoir une version courte ? answer in English please."
     assert detect_user_language(explicit) == "en"
     assert "anglais" in build_language_instruction(explicit)
+    req = detect_explicit_language_request(explicit)
+    assert req and req.get("kind") == "explicit_language" and req.get("language") == "en"
+
+    tr_en = "Traduis ce texte en anglais : Bonjour"
+    req = detect_explicit_language_request(tr_en)
+    assert req and req.get("kind") == "translation_target" and req.get("language") == "en"
+    assert "traduction" in build_language_instruction(tr_en).lower()
+    assert "anglais" in build_language_instruction(tr_en)
+
+    tr_fr = "Translate this to French: Hello"
+    req = detect_explicit_language_request(tr_fr)
+    assert req and req.get("kind") == "translation_target" and req.get("language") == "fr"
+    assert "français" in build_language_instruction(tr_fr)
+
+    ask_en = "Réponds en anglais : explique OpenChawn"
+    req = detect_explicit_language_request(ask_en)
+    assert req and req.get("kind") == "explicit_language" and req.get("language") == "en"
+    assert "anglais" in build_language_instruction(ask_en)
+
+    assert detect_user_language("Explique OpenChawn") == "fr"
+    assert "français" in build_language_instruction("Explique OpenChawn")
+    assert detect_user_language("Explain OpenChawn") == "en"
+    assert "anglais" in build_language_instruction("Explain OpenChawn")
 
     assert detect_user_language("xyz abc 12345 !!!") == "fr"
     assert "français" in build_language_instruction("@@@")
