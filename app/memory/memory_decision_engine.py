@@ -94,6 +94,8 @@ def score_memory_candidate(
     importance_term = round(min(95.0, imp * 96.0), 2)
     cen_v, inf_v = _concept_scores_for_memory(mem, cen_map, infl_map)
     recency_v = _recency_score(mem)
+    ctx_rel = float(mem.get("context_decision_relevance") or 0.0)
+    ctx_boost = min(18.0, max(0.0, ctx_rel * 16.0))
 
     flag_pen = 26.0 if bool(mem.get("contradiction_detected")) else 0.0
     crs = str(mem.get("contradiction_resolution_status") or "")
@@ -106,7 +108,7 @@ def score_memory_candidate(
     contradiction_penalty = round(flag_pen + extra_penalty, 2)
 
     final_score = round(
-        relevance_term + importance_term + cen_v + inf_v + recency_v - decay - contradiction_penalty,
+        relevance_term + importance_term + cen_v + inf_v + recency_v + ctx_boost - decay - contradiction_penalty,
         3,
     )
 
@@ -121,6 +123,7 @@ def score_memory_candidate(
         "influence_score": round(inf_v, 3),
         "contradiction_penalty": contradiction_penalty,
         "recency_score": recency_v,
+        "context_boost": round(ctx_boost, 3),
         "final_decision_score": final_score,
     }
 
@@ -396,10 +399,29 @@ def build_memory_decision_bundle(
     confidence_scale: float = 1.0,
 ) -> dict[str, Any]:
     cen_map, infl_map = concept_centrality_influence_maps(entries_snapshot)
+    try:
+        from app.memory import memory_decision_context as mdc
+
+        decision_ctx = mdc.build_decision_context(query=query, entries=entries_snapshot, limit=max(8, len(candidates)))
+        sel_map = {str(e.get("id") or ""): e for e in (decision_ctx.get("selected_memories") or []) if e.get("id")}
+    except Exception:
+        decision_ctx = {"status": "error"}
+        sel_map = {}
 
     rejected_precheck: list[dict[str, Any]] = []
     work_candidates: list[dict] = []
     for mem in candidates:
+        mid0 = str(mem.get("id") or "")
+        if mid0 in sel_map:
+            mem.update(
+                {
+                    "context_weight": float(sel_map[mid0].get("context_weight") or 0.0),
+                    "context_priority": int(sel_map[mid0].get("context_priority") or 0),
+                    "context_selected_at": sel_map[mid0].get("context_selected_at"),
+                    "context_cluster_role": str(sel_map[mid0].get("context_cluster_role") or ""),
+                    "context_decision_relevance": float(sel_map[mid0].get("context_decision_relevance") or 0.0),
+                }
+            )
         dbg = mem.get("_retrieval_debug") if isinstance(mem.get("_retrieval_debug"), dict) else {}
         if not is_active_memory(mem) or str(mem.get("lifecycle_status")) == MEMORY_LIFECYCLE_ARCHIVED:
             m_copy = dict(mem)
@@ -446,6 +468,8 @@ def build_memory_decision_bundle(
             f"layer:{dbg.get('memory_type','')}",
             f"retrieval_rank:{dbg.get('retrieval_rank','')}",
         ]
+        if float(mem.get("context_decision_relevance") or 0.0) >= 0.62:
+            reasons.append("decision_context_relevance_boost")
         if float(bd.get("centrality_score") or 0) > 12:
             reasons.append("concept_graph_boost")
         if float(bd.get("recency_score") or 0) > 35:
@@ -518,6 +542,7 @@ def build_memory_decision_bundle(
         "conflicts_detected": conflicts_detected,
         "arbitration_summary": arbitration_summary,
         "confidence_hint": confidence,
+        "decision_context": decision_ctx,
         "scoring_breakdown": scoring_breakdown,
         "final_context_preview": preview,
     }

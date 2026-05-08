@@ -69,6 +69,12 @@ def _eligible_source_for_compression(entry: dict, *, include_archived: bool = Fa
         return False
     if str(entry.get("contradiction_resolution_status") or "") in ("unresolved", "conflict_active"):
         return False
+    if str(entry.get("context_cluster_role") or "") == "dominant":
+        return False
+    if float(entry.get("context_decision_relevance") or 0.0) >= 0.7:
+        return False
+    if str(entry.get("temporal_status") or "") in ("stable", "rising") and int(entry.get("context_priority") or 0) <= 5:
+        return False
     if _metadata_secret_flag(entry):
         return False
     text_parts = (

@@ -926,6 +926,55 @@ def memory_contradictions_resolve_route(req: MemoryContradictionResolveRequest):
     return out
 
 
+@app.get("/memory/context/build")
+def memory_context_build_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    from app.memory import memory_decision_context as mdc
+
+    return mdc.build_decision_context(query=q, limit=limit)
+
+
+@app.get("/memory/context/explain")
+def memory_context_explain_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    from app.memory import memory_decision_context as mdc
+
+    ctx = mdc.build_decision_context(query=q, limit=limit)
+    return mdc.explain_context_selection(ctx)
+
+
+@app.get("/memory/context/risk")
+def memory_context_risk_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    from app.memory import memory_decision_context as mdc
+
+    ctx = mdc.build_decision_context(query=q, limit=limit)
+    return {
+        "status": "ok",
+        "context_risk": float(ctx.get("context_risk") or 0.0),
+        "unresolved_conflicts": len(ctx.get("unresolved_conflicts") or []),
+        "human_review_required": sum(1 for x in (ctx.get("unresolved_conflicts") or []) if bool(x.get("human_review_required"))),
+    }
+
+
+@app.get("/memory/context/stability")
+def memory_context_stability_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    from app.memory import memory_decision_context as mdc
+
+    ctx = mdc.build_decision_context(query=q, limit=limit)
+    return {
+        "status": "ok",
+        "context_stability": float(ctx.get("context_stability") or 0.0),
+        "context_confidence": float(ctx.get("context_confidence") or 0.0),
+        "fragmentation_score": float(ctx.get("fragmentation_score") or 0.0),
+    }
+
+
+@app.get("/memory/context/clusters")
+def memory_context_clusters_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    from app.memory import memory_decision_context as mdc
+
+    ctx = mdc.build_decision_context(query=q, limit=limit)
+    return {"status": "ok", "active_clusters": ctx.get("active_clusters") or []}
+
+
 @app.post("/decision/predict-consequences")
 def decision_predict_consequences_route(req: PredictConsequencesRequest):
     from app.decision import consequence_predictor as cp

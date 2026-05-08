@@ -463,6 +463,10 @@ def semantic_candidates_for_query(
         c = dict(e)
         score = float(row.get("score") or 0.0)
         eff_boost = float(semantic_boost)
+        if str(c.get("context_cluster_role") or "") == "dominant":
+            eff_boost *= 1.14
+        if float(c.get("context_decision_relevance") or 0.0) >= 0.62:
+            eff_boost *= 1.08
         if st == "overloaded":
             eff_boost *= 0.75
         elif st in ("exploring", "focused"):
