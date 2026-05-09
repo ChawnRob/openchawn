@@ -2,26 +2,32 @@
 Providers LLM : DeepSeek (par défaut), Kimi optionnel, OpenRouter, OpenAI.
 Pas d’Ollama, pas de chaînage localhost:11434.
 
-DeepSeek lit toujours la clé depuis os.environ au moment de la résolution :
-`DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` (autres providers inchangés).
+Clé DeepSeek : alias centralisés via ``app.provider_runtime_config``.
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 
+from app.provider_runtime_config import (
+    DEEPSEEK_API_KEY_ENV_ALIASES,
+    OPENROUTER_KEY_ENV_ALIASES,
+    resolve_deepseek_api_key,
+)
 from app.routing import build_intelligent_order, provider_capabilities
 from app.routing.intelligent_router import RouterDecision
 from app.settings import Settings, get_settings
 
 
-def _deepseek_key_live() -> str:
-    return (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+def reset_provider_manager_singleton() -> None:
+    """Tests / reload : casser le singleton en mémoire."""
+    global _manager
+    _manager = None
 
 def _required_env_for_provider(name: str) -> str:
     n = _normalize_provider_name(name)
     if n == "deepseek":
-        return "DEEPSEEK_API_KEY"
+        return "|".join(DEEPSEEK_API_KEY_ENV_ALIASES)
     if n == "kimi":
         return "KIMI_API_KEY"
     if n == "openai":
@@ -29,7 +35,7 @@ def _required_env_for_provider(name: str) -> str:
     if n == "infomaniak":
         return "INFOMANIAK_API_KEY"
     if n == "openrouter":
-        return "OPENROUTER_API_KEY"
+        return "|".join(OPENROUTER_KEY_ENV_ALIASES)
     return ""
 
 
@@ -56,7 +62,7 @@ class ProviderManager:
         n = _normalize_provider_name(name)
         s = self.settings
         if n == "deepseek":
-            return bool(_deepseek_key_live())
+            return bool(resolve_deepseek_api_key())
         if n == "kimi":
             return bool((s.kimi_api_key or "").strip())
         if n == "openrouter":

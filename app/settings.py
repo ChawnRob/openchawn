@@ -16,6 +16,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from app.provider_runtime_config import DEEPSEEK_API_KEY_ENV_ALIASES, OPENROUTER_KEY_ENV_ALIASES
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_DEV_SECRET = "dev-secret-change-me-in-production"
 _DEEPSEEK_HOST = "https://api.deepseek.com"
@@ -264,7 +266,7 @@ def _build_settings() -> Settings:
         anthropic_base_url=_str("ANTHROPIC_BASE_URL", default="https://api.anthropic.com/v1").rstrip(
             "/"
         ),
-        deepseek_api_key=(os.getenv("DEEPSEEK_API_KEY") or "").strip(),
+        deepseek_api_key=_str(*DEEPSEEK_API_KEY_ENV_ALIASES, default=""),
         deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro").strip() or "deepseek-v4-pro",
         deepseek_base_url=deepseek_base,
         infomaniak_api_key=_str("INFOMANIAK_API_KEY", default=""),
@@ -280,7 +282,7 @@ def _build_settings() -> Settings:
         perplexity_base_url=_str("PERPLEXITY_BASE_URL", default="https://api.perplexity.ai").rstrip(
             "/"
         ),
-        openrouter_api_key=_str("OPENROUTER_API_KEY", default=""),
+        openrouter_api_key=_str(*OPENROUTER_KEY_ENV_ALIASES, default=""),
         openrouter_base_url=_str(
             "OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1"
         ).rstrip("/"),

@@ -354,6 +354,14 @@ def health_language():
     }
 
 
+@app.get("/health/provider-runtime")
+def health_provider_runtime():
+    """Diagnostic provider (V11.6) : booléens uniquement, jamais de secrets."""
+    from app.provider_runtime_config import get_provider_runtime_config
+
+    return get_provider_runtime_config()
+
+
 class ChatLanguageDryRunRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
     profile: str = ""

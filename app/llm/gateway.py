@@ -6,6 +6,7 @@ import requests as http_requests
 
 from app.core.runtime_language_guard import prompt_contains_forced_french, sanitize_provider_prompts
 from app.provider_manager import FIXED_ORDER, get_provider_manager
+from app.provider_runtime_config import resolve_deepseek_api_key
 from app.routing import (
     get_cost_tracking_hooks,
     get_fallback_manager,
@@ -15,14 +16,6 @@ from app.routing.provider_capabilities import provider_capabilities
 from app.settings import Settings, get_settings
 
 logger = logging.getLogger("openchawn.gateway")
-
-
-def _deepseek_api_key_live() -> str:
-    return (os.getenv("DEEPSEEK_API_KEY") or "").strip()
-
-
-def _deepseek_model_live() -> str:
-    return os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
 
 
 def _deepseek_model_for_task(task_type: str) -> str:
@@ -176,11 +169,12 @@ def _dispatch(
     if name == "openai":
         return _openai_responses(s, system_prompt, user_message)
     if name == "deepseek":
-        if not _deepseek_api_key_live():
+        dkey = resolve_deepseek_api_key()
+        if not dkey:
             return "", None, "DEEPSEEK_API_KEY_MISSING"
         return _chat_completions(
             base_url=s.deepseek_base_url,
-            api_key=_deepseek_api_key_live(),
+            api_key=dkey,
             model=_deepseek_model_for_task(task_type),
             system_prompt=system_prompt,
             user_message=user_message,
@@ -226,7 +220,7 @@ def _hint_order(pm, provider_hint: str) -> list[str]:
     if h in FIXED_ORDER:
         extra = pm.settings
         hint_ok = (
-            (h == "deepseek" and bool(_deepseek_api_key_live()))
+            (h == "deepseek" and bool(resolve_deepseek_api_key()))
             or (h == "kimi" and bool((extra.kimi_api_key or "").strip()))
             or (h == "openrouter" and bool((extra.openrouter_api_key or "").strip()))
             or (h == "openai" and bool((extra.openai_api_key or "").strip()))
@@ -251,7 +245,8 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
     Chaîne **explicite uniquement parmi providers configurés** :
     ordre intelligent DeepSeek/Kimi/OpenAI/Infomaniak (avec OpenRouter en compat).
 
-    Pas d’Ollama. Pas de tentative si DEFAULT_PROVIDER=deepseek sans DEEPSEEK_API_KEY.
+    Pas d’Ollama. Si DEFAULT_PROVIDER=deepseek sans clé native DeepSeek, poursuit avec
+    les autres providers configurés (ex. OpenRouter) au lieu d’échouer immédiatement.
     """
     pre_ff = prompt_contains_forced_french((system_prompt or "") + "\n" + (user_message or ""))
     system_prompt, user_message, ff_runtime_removed = sanitize_provider_prompts(
@@ -266,7 +261,12 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
     s = get_settings()
     pm = get_provider_manager()
 
-    if _normalize_pref(s.default_provider) == "deepseek" and not _deepseek_api_key_live():
+    # Ne bloque pas si OpenRouter/OpenAI/etc. sont configurés (clé DeepSeek sous alias ou absente).
+    if (
+        _normalize_pref(s.default_provider) == "deepseek"
+        and not resolve_deepseek_api_key()
+        and not pm.resolution_order()
+    ):
         return {
             "output": "",
             "provider": "none",
@@ -282,6 +282,10 @@ def generate_response(*, system_prompt: str, user_message: str, provider_hint: s
         provider_hint=provider_hint,
     )
     seq = decision.ordered_providers
+    # OpenRouter est supporté par le gateway mais absent du scoring ``provider_capabilities``.
+    # Sans repli : ``ordered_providers`` vide alors que ``resolution_order`` contient encore openrouter/kimi/etc.
+    if not seq:
+        seq = pm.resolution_order()
 
     if not seq:
         return {

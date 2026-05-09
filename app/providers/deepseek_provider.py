@@ -3,6 +3,7 @@ import os
 
 import httpx
 
+from app.provider_runtime_config import resolve_deepseek_api_key
 from app.settings import _deepseek_base_normalize
 
 from app.providers.base import BaseProvider
@@ -17,7 +18,7 @@ class DeepSeekProvider(BaseProvider):
     """DeepSeek — client compatible OpenAI (clé/modèle via os.environ Railway)."""
 
     def __init__(self) -> None:
-        self.api_key = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
+        self.api_key = resolve_deepseek_api_key()
         self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip() or "deepseek-v4-flash"
         raw_base = os.getenv("DEEPSEEK_BASE_URL") or _DEEPSEEK_DEFAULT_BASE
         self.base_url = _deepseek_base_normalize(raw_base).rstrip("/")
@@ -63,4 +64,4 @@ class DeepSeekProvider(BaseProvider):
             return f"[ERREUR] {str(e)}"
 
     def is_available(self) -> bool:
-        return bool((os.getenv("DEEPSEEK_API_KEY") or "").strip())
+        return bool(resolve_deepseek_api_key())
