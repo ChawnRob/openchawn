@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from datetime import datetime, timezone
 import requests as http_requests
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ from app.config import (
     MODEL_PROVIDER,
 )
 from app.provider_manager import get_provider_manager
+from app.provider_runtime_config import INCIDENT_PROBE_PROVIDER_RUNTIME_REVISION
 from app.profiles import list_profiles, get_profile_for_user
 from app.routing import get_cost_tracking_hooks, get_fallback_manager, get_provider_health_hooks
 from app.memory.fractal_memory import (
@@ -58,6 +60,8 @@ app = FastAPI(
     redoc_url=None if IS_PROD else "/redoc",
     openapi_url=None if IS_PROD else "/openapi.json",
 )
+
+_APP_STARTED_AT = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 app.add_middleware(SecurityHeadersMiddleware)
@@ -360,6 +364,93 @@ def health_provider_runtime():
     from app.provider_runtime_config import get_provider_runtime_config
 
     return get_provider_runtime_config()
+
+
+def _incident_forced_french_line_snippets(blob: str, *, max_lines: int = 8) -> list[str]:
+    from app.core.runtime_language_guard import line_contains_forced_french_pattern
+
+    out: list[str] = []
+    for line in (blob or "").splitlines():
+        if not line_contains_forced_french_pattern(line):
+            continue
+        s = line.strip()
+        if len(s) > 100:
+            s = s[:97] + "…"
+        out.append(s)
+        if len(out) >= max_lines:
+            break
+    return out
+
+
+@app.get("/__runtime", include_in_schema=False)
+def incident_runtime_meta():
+    """SRE V11.6 : identité process + version politique + commit déploiement."""
+    from app.api.chat import LANGUAGE_POLICY_VERSION, read_deployed_commit
+
+    env = (
+        (os.getenv("OPENCHAWN_ENV") or "").strip()
+        or (os.getenv("RAILWAY_ENVIRONMENT") or "").strip()
+        or "unknown"
+    )
+    return {
+        "app": "OpenChawn",
+        "version": str(getattr(app, "version", "") or "0.6.0"),
+        "git_commit": read_deployed_commit(),
+        "route_signature": "GET___RUNTIME_INCIDENT_V116",
+        "language_policy_version": LANGUAGE_POLICY_VERSION,
+        "provider_runtime_version": INCIDENT_PROBE_PROVIDER_RUNTIME_REVISION,
+        "started_at": _APP_STARTED_AT,
+        "environment": env,
+    }
+
+
+class IncidentLanguageDryRunRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    profile: str = "default"
+
+    @field_validator("message")
+    @classmethod
+    def incident_msg(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Message vide")
+        if len(v) > 2000:
+            raise ValueError("Message trop long (2000 caractères max)")
+        return v
+
+
+@app.post("/__debug/language-dry-run", include_in_schema=False)
+def incident_language_dry_run(req: IncidentLanguageDryRunRequest):
+    """SRE V11.6 : chemin langue + garde forced-FR sans appel LLM (guest sec)."""
+    from app.api.chat import ChatRequest, assemble_chat_generation_inputs
+
+    stub_user = {
+        "is_guest": True,
+        "guest_session_id": "incident-probe",
+        "ip": "127.0.0.1",
+    }
+    cr = ChatRequest(message=req.message, profile=(req.profile or "").strip())
+    b = assemble_chat_generation_inputs(cr, user=stub_user, persist_memory_side_effects=False)
+    pre = ((b.get("system_prompt") or "") + "\n" + (b.get("user_message") or "")).strip()
+    snippets = _incident_forced_french_line_snippets(pre)
+    if not snippets:
+        spost = (
+            (b.get("sanitized_system_prompt") or "") + "\n" + (b.get("sanitized_user_message") or "")
+        ).strip()
+        snippets = _incident_forced_french_line_snippets(spost)
+
+    return {
+        "detected_language": b["detected_language"],
+        "final_language": b["final_language_hint"],
+        "language_instruction": b["lang_instruction"],
+        "prompt_contains_forced_french": b["prompt_contains_forced_french"],
+        "memory_contains_forced_french": b["memory_contains_forced_french"],
+        "profile_contains_forced_french": b["profile_contains_forced_french"],
+        "system_contains_forced_french": b["system_core_contains_forced_french"],
+        "forced_french_source_type": b["forced_french_source_type"],
+        "forced_french_snippets_redacted": snippets,
+        "sanitized_still_contains_forced_french": b["provider_prompt_contains_forced_french"],
+    }
 
 
 class ChatLanguageDryRunRequest(BaseModel):

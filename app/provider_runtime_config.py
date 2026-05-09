@@ -8,6 +8,8 @@ import os
 from typing import Iterable
 
 RUNTIME_SOURCE = "app.provider_runtime_config"
+# Bump quand surface diagnostic incident / compat runtime change (GET /__runtime).
+INCIDENT_PROBE_PROVIDER_RUNTIME_REVISION = "v116-incident-probe-1"
 
 # Ordre de précédence pour l'API DeepSeek native (sans OpenRouter).
 DEEPSEEK_API_KEY_ENV_ALIASES: tuple[str, ...] = (

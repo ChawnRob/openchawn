@@ -223,6 +223,7 @@ def assemble_chat_generation_inputs(
         "prompt_contains_forced_french": bool(prompt_contains_forced_french(pre_combined_scan)),
         "memory_contains_forced_french": memory_ff,
         "profile_contains_forced_french": profile_ff,
+        "system_core_contains_forced_french": bool(prompt_contains_forced_french(base_system)),
         "provider_prompt_contains_forced_french": provider_prompt_contains_forced_french,
     }
 
