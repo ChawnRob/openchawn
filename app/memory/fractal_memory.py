@@ -37,7 +37,15 @@ def _deprecate_forced_french_runtime_memories(entries: list[dict]) -> int:
             continue
         md = e.setdefault("metadata", {})
         md["forced_french_runtime_rule_removed"] = True
-        md["forced_french_deprecation_reason"] = "forced_french_runtime_rule_removed"
+        md["forced_french_deprecation_reason"] = "legacy_french_only_prototype_rule"
+        _nn: list[str] = []
+        _prev = md.get("neutralization_notes")
+        if isinstance(_prev, list):
+            _nn.extend(str(x) for x in _prev)
+        elif _prev not in (None, ""):
+            _nn.append(str(_prev))
+        _nn.append("archaeology_v116_deprecated_no_runtime_injection")
+        md["neutralization_notes"] = _nn
         e["lifecycle_status"] = MEMORY_LIFECYCLE_ARCHIVED
         e["contradiction_resolution_status"] = "deprecated"
         n += 1

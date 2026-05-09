@@ -87,6 +87,10 @@
     "timestamp": "2026-04-15T14:59:25.132291",
     "user_id": "user-2",
     "prompt_preview": "parle uniquement en français",
+    "fossil_legacy_french_only_prototype_note": {
+      "injected_live_prompt_chat": false,
+      "tag": "archaeology_v116"
+    },
     "provider": "ollama",
     "scores": {
       "length": 1.0,

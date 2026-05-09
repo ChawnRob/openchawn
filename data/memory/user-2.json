@@ -53,7 +53,8 @@
     "timestamp": "2026-04-15T14:59:25.128095",
     "forced_french_runtime_rule_removed": true,
     "deprecation_reason": "legacy_french_only_prototype_rule",
-    "lifecycle_note": "superseded_runtime_neutralization_v116"
+    "lifecycle_note": "superseded_runtime_neutralization_v116",
+    "assistant_content_note": "promesse_fr_only_historique_ne_pas_injecter"
   },
   {
     "role": "user",
@@ -76,7 +77,8 @@
     "timestamp": "2026-04-15T15:01:09.732425",
     "forced_french_runtime_rule_removed": true,
     "deprecation_reason": "legacy_french_only_prototype_rule",
-    "lifecycle_note": "superseded_runtime_neutralization_v116"
+    "lifecycle_note": "superseded_runtime_neutralization_v116",
+    "assistant_content_note": "promesse_fr_only_historique_ne_pas_injecter"
   },
   {
     "role": "user",

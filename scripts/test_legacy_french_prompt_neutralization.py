@@ -33,6 +33,8 @@ def main() -> int:
         "Réponds UNIQUEMENT en français.",
         "Réponds en français, avec précision, calme et structure.",
         "Ne mélange JAMAIS les langues.",
+        "Je ne parle qu'en français, comme mes règles l'exigent.",
+        "formule-la en français s'il te plaît.",
     ]
     for s in legacy_samples:
         assert prompt_contains_forced_french(s), f"attendu forced-french legacy pour: {s!r}"

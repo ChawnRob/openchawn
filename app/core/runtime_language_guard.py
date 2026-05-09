@@ -32,6 +32,9 @@ FORCED_FRENCH_LINE_SUBSTRINGS: tuple[str, ...] = (
     "ne melange jamais les langues",
     "reponds en francais clair",
     "repondre en francais clair",
+    "je ne parle qu'en francais",
+    "comme mes regles l'exigent",
+    "formule-la en francais",
 )
 
 NEUTRAL_LANGUAGE_REPLACEMENT_LINE = (
@@ -45,10 +48,17 @@ RESPONSE_FORCED_FRENCH_SUBSTRINGS: tuple[str, ...] = (
     "ne peux m'exprimer qu'en francais",
     "uniquement en francais",
     "repondre uniquement en francais",
+    "reponds uniquement en francais",
+    "repondrai uniquement en francais",
     "toujours repondre en francais",
     "assistant francais",
     "desole, je ne peux",
     "regles strictes",
+    "je ne parle qu'en francais",
+    "comme mes regles l'exigent",
+    "formule-la en francais",
+    "tu parles en francais",
+    "ne melange jamais les langues",
 )
 
 
