@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from app.config import (
     ALLOWED_ORIGINS,
+    GUEST_DAILY_LIMIT,
     IS_PROD,
     LOG_LEVEL,
     MAX_MESSAGE_LENGTH,
@@ -265,7 +266,15 @@ def login(req: LoginRequest):
 
 @app.get("/health")
 def health():
-    return {"mode": "handle", "status": "ok"}
+    return {
+        "mode": "handle",
+        "status": "ok",
+        "guest_quota": {
+            "guest_limit": GUEST_DAILY_LIMIT,
+            "guest_remaining": None,
+            "reset_window": "utc_calendar_day",
+        },
+    }
 
 
 @app.get("/health/providers")

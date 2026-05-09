@@ -406,6 +406,10 @@ def handle_chat_request(
         }
         if deployed:
             dbg["deployed_commit"] = deployed
+        if is_guest:
+            dbg["guest_limit"] = int(quota.get("limit") or 0)
+            dbg["guest_remaining"] = int(quota.get("remaining") or 0)
+            dbg["reset_window"] = "utc_calendar_day"
         result.update(dbg)
     return result
 

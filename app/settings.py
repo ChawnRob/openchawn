@@ -60,6 +60,22 @@ def _int(key: str, default: int) -> int:
         return default
 
 
+def _int_coalesce(*keys: str, default: int) -> int:
+    """Premier ENV entier valide parmi ``keys``, sinon ``default``."""
+    for key in keys:
+        raw = os.environ.get(key)
+        if raw is None or str(raw).strip() == "":
+            continue
+        try:
+            v = int(str(raw).strip())
+            if v < 1:
+                continue
+            return v
+        except ValueError:
+            continue
+    return default
+
+
 def _load_dotenv_if_dev() -> None:
     """En prod, ne jamais lire un fichier .env."""
     env = _str("OPENCHAWN_ENV", default="development").lower()
@@ -232,7 +248,11 @@ def _build_settings() -> Settings:
         rate_limit_auth=_int("OPENCHAWN_RATE_AUTH", 10),
         max_message_length=_int("OPENCHAWN_MAX_MSG_LEN", 4000),
         profile=_str("OPENCHAWN_PROFILE", default="default"),
-        guest_daily_limit=_int("OPENCHAWN_GUEST_DAILY_LIMIT", 5),
+        guest_daily_limit=_int_coalesce(
+            "GUEST_DAILY_MESSAGE_LIMIT",
+            "OPENCHAWN_GUEST_DAILY_LIMIT",
+            default=15,
+        ),
         default_provider=_str("DEFAULT_PROVIDER", default="deepseek").strip().lower(),
         model_provider=_str("MODEL_PROVIDER", default="").strip().lower(),
         openchawn_provider=_str("OPENCHAWN_PROVIDER", default="auto").strip().lower(),
