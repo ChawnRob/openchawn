@@ -16,6 +16,7 @@ from app.core.language_policy import (
     detect_user_language,
     derive_response_language_trace,
 )
+from app.core.runtime_language_policy import OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN
 from app.core.runtime_language_guard import (
     assistant_reply_violates_english_user_expectation,
     prompt_contains_forced_french,
@@ -32,6 +33,16 @@ router = APIRouter(tags=["openchawn"])
 
 CHAT_HANDLER_NAME = "handle_chat_request"
 CHAT_PIPELINE_TAG = "v116-stabilization"
+
+# Marqueurs durs diagnostic prod (présence dans JSON = trafic sur ce handler).
+ROUTE_SIGNATURE_POST_CHAT = "POST_CHAT_MAIN_HANDLER_ACTIVE_V116"
+ROUTE_SIGNATURE_POST_API_CHAT = "POST_API_CHAT_HANDLER_ACTIVE_V116"
+
+# Ligne injectée système — identique à ``language_policy_version`` exposé en debug.
+LANGUAGE_POLICY_VERSION = "runtime_auto_v116_no_forced_french"
+LANGUAGE_POLICY_VERSION_LINE = (
+    "LANGUAGE_POLICY_VERSION: runtime_auto_v116_no_forced_french"
+)
 
 # Renfort LLM si le modèle produit une excuse « français uniquement » (ne pas persister cette variante).
 _EN_VIOLATION_RETRY_SYSTEM_SUFFIX = (
@@ -96,14 +107,10 @@ def infer_forced_french_source_type(*, memory_body: str, profile_prompt: str, sy
 def build_openchawn_base_system_prompt() -> str:
     return (
         "You are OpenChawn, an AI orchestration system created by Robert. "
-        "STRICT RULES: "
-        "1. Follow the OUTPUT LANGUAGE / language block at the very start of the user message — it overrides "
-        "everything else (translation targets, explicit language requests, detected language). "
-        "2. Never answer in French when OUTPUT LANGUAGE is English or the user's message is clearly English. "
-        "Never claim you are restricted to French-only replies. "
-        "3. Keep answers concise and direct. "
-        "4. Never mention model providers or engine names. "
-        "5. Identity is OpenChawn."
+        "Follow the OUTPUT LANGUAGE / language block at the start of the user message when present. "
+        "Keep answers concise. Never mention model providers or engine names.\n\n"
+        f"{OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN}\n\n"
+        f"{LANGUAGE_POLICY_VERSION_LINE}"
     )
 
 
@@ -180,11 +187,15 @@ def assemble_chat_generation_inputs(
 
     pre_combined_scan = (system_prompt + "\n" + layered_user_message).strip()
     forced_french_runtime_detected = bool(prompt_contains_forced_french(pre_combined_scan))
+    memory_ff = bool(prompt_contains_forced_french(memory_context or ""))
+    profile_ff = bool(prompt_contains_forced_french(profile_prompt or ""))
 
     # Phase 4 — runtime guard (nettoyage lignes française forcée) avant gateway.
     sp_san, um_san, forced_french_runtime_removed = sanitize_provider_prompts(
         system_prompt, layered_user_message
     )
+    provider_scan = (sp_san + "\n" + um_san).strip()
+    provider_prompt_contains_forced_french = bool(prompt_contains_forced_french(provider_scan))
 
     return {
         "user_key": user_key,
@@ -210,6 +221,9 @@ def assemble_chat_generation_inputs(
             system_core=base_system,
         ),
         "prompt_contains_forced_french": bool(prompt_contains_forced_french(pre_combined_scan)),
+        "memory_contains_forced_french": memory_ff,
+        "profile_contains_forced_french": profile_ff,
+        "provider_prompt_contains_forced_french": provider_prompt_contains_forced_french,
     }
 
 
@@ -258,8 +272,14 @@ def handle_chat_request(
 
     sp_in = bundle["sanitized_system_prompt"]
     um_in = bundle["sanitized_user_message"]
+    route_signature = (
+        ROUTE_SIGNATURE_POST_CHAT if http_mount_path == "/chat" else ROUTE_SIGNATURE_POST_API_CHAT
+    )
 
     # ── Phase 5: provider ──
+    response_language_violation_detected = False
+    violation_on_first_generation = False
+
     llm_result = generate_response(
         system_prompt=sp_in,
         user_message=um_in,
@@ -280,6 +300,7 @@ def handle_chat_request(
         and detect_user_language(req.message) == "en"
         and assistant_reply_violates_english_user_expectation(response_text)
     ):
+        violation_on_first_generation = True
         violation_retry = True
         logger.warning("language_policy_violation: regenerating with English enforcement (first reply discarded)")
         llm_result = generate_response(
@@ -294,6 +315,11 @@ def handle_chat_request(
         provider_status = llm_result.get("status_code", None)
         ff_removed_gateway = ff_removed_gateway or bool(llm_result.get("forced_french_runtime_removed", False))
         pre_ff = pre_ff or bool(llm_result.get("prompt_contains_forced_french_before_sanitize", False))
+
+    if detect_user_language(req.message) == "en" and response_text:
+        response_language_violation_detected = violation_on_first_generation or bool(
+            assistant_reply_violates_english_user_expectation(response_text)
+        )
 
     ff_removed_combined = ff_removed_assemble or ff_removed_gateway
     detected = str(bundle.get("detected_language") or "")
@@ -350,6 +376,7 @@ def handle_chat_request(
         "consolidation_recommended": consolidation_recommended,
         "lang": bundle.get("final_language_hint") or bundle.get("detected_language"),
         "profile_used": bundle["profile_used"],
+        "route_signature": route_signature,
     }
     if is_guest:
         result["guest"] = True
@@ -357,11 +384,20 @@ def handle_chat_request(
     deployed = read_deployed_commit()
     if debug:
         dbg: dict[str, Any] = {
-            "route_used": f"POST {http_mount_path}",
-            "handler_used": CHAT_HANDLER_NAME,
-            "response_language_mode": bundle["response_language_mode"],
+            "route_signature": route_signature,
+            "handler_name": CHAT_HANDLER_NAME,
+            "provider_used": str(provider_used or ""),
+            "profile_used": bundle["profile_used"],
             "detected_language": bundle["detected_language"],
             "final_language": bundle["final_language_hint"],
+            "language_policy_version": LANGUAGE_POLICY_VERSION,
+            "prompt_contains_forced_french": bool(bundle.get("prompt_contains_forced_french")),
+            "memory_contains_forced_french": bool(bundle.get("memory_contains_forced_french")),
+            "profile_contains_forced_french": bool(bundle.get("profile_contains_forced_french")),
+            "provider_prompt_contains_forced_french": bool(bundle.get("provider_prompt_contains_forced_french")),
+            "response_language_violation_detected": response_language_violation_detected,
+            "route_used": f"POST {http_mount_path}",
+            "response_language_mode": bundle["response_language_mode"],
             "language_source": bundle["language_source"],
             "forced_french_runtime_detected": ff_detected_bundle,
             "forced_french_runtime_removed": ff_removed_combined,

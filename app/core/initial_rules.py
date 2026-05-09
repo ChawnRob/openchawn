@@ -12,6 +12,7 @@ from threading import Lock
 from typing import Any
 
 from app.core.runtime_language_guard import line_contains_forced_french_pattern
+from app.core.runtime_language_policy import OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN
 
 logger = logging.getLogger("openchawn.initial_rules")
 
@@ -22,13 +23,7 @@ _LAST_AUDIT: dict[str, Any] = {
     "rule_sources_checked": [],
 }
 
-_NEUTRAL_LANGUAGE_POLICY = (
-    "Language policy:\n"
-    "- If the user explicitly asks for translation, answer in the requested target language.\n"
-    "- If the user explicitly asks for a language, answer in that language.\n"
-    "- Otherwise answer in the dominant language of the latest user message.\n"
-    "- Use French only as fallback when the language cannot be detected."
-)
+_NEUTRAL_LANGUAGE_POLICY = OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN
 
 
 def _default_sources() -> list[str]:

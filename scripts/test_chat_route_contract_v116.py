@@ -66,7 +66,10 @@ def main() -> int:
     assert rb.status_code == 200, rb.text
     assert ra.status_code == 200, ra.text
     jb, ja = rb.json(), ra.json()
-    assert jb["handler_used"] == ja["handler_used"] == "handle_chat_request"
+    assert jb["handler_name"] == ja["handler_name"] == "handle_chat_request"
+    assert jb["route_signature"] == "POST_CHAT_MAIN_HANDLER_ACTIVE_V116"
+    assert ja["route_signature"] == "POST_API_CHAT_HANDLER_ACTIVE_V116"
+    assert jb["language_policy_version"] == "runtime_auto_v116_no_forced_french"
     assert jb["final_language"] == "en"
     assert ja["final_language"] == "en"
     assert jb["detected_language"] == "en"

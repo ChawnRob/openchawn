@@ -44,14 +44,16 @@
     "content": "parle uniquement en français",
     "timestamp": "2026-04-15T14:59:25.124467",
     "forced_french_runtime_rule_removed": true,
-    "deprecation_reason": "forced_french_runtime_rule_removed"
+    "deprecation_reason": "legacy_french_only_prototype_rule",
+    "lifecycle_note": "superseded_runtime_neutralization_v116"
   },
   {
     "role": "assistant",
     "content": "Je m'excuse pour la confusion. Je vais répondre uniquement en français comme demandé. Comment puis-je vous aider aujourd'hui dans votre vie professionnelle ? N'hésitez pas à me poser des questions sur l'optimisation de votre entreprise, le marketing digital, la gestion financière ou tout autre sujet pertinent.",
     "timestamp": "2026-04-15T14:59:25.128095",
     "forced_french_runtime_rule_removed": true,
-    "deprecation_reason": "forced_french_runtime_rule_removed"
+    "deprecation_reason": "legacy_french_only_prototype_rule",
+    "lifecycle_note": "superseded_runtime_neutralization_v116"
   },
   {
     "role": "user",
@@ -73,7 +75,8 @@
     "content": "D'accord, je répondrai uniquement en français.\n\nEst-ce que vous avez des questions ou besoin d'aide concernant votre entreprise ou vos activités professionnelles ? Je peux vous aider avec la gestion de votre temps, des stratégies commerciales, l'optimisation de vos processus ou tout autre sujet pertinent.",
     "timestamp": "2026-04-15T15:01:09.732425",
     "forced_french_runtime_rule_removed": true,
-    "deprecation_reason": "forced_french_runtime_rule_removed"
+    "deprecation_reason": "legacy_french_only_prototype_rule",
+    "lifecycle_note": "superseded_runtime_neutralization_v116"
   },
   {
     "role": "user",

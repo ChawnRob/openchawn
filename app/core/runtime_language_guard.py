@@ -26,6 +26,12 @@ FORCED_FRENCH_LINE_SUBSTRINGS: tuple[str, ...] = (
     "fidele aux regles strictes",
     "regles strictes",
     "/etc/openchawn/initial_rules.json",
+    # Prototype historiques (harmonisés en minuscules sans accents — cf. _normalize_for_match sur la ligne).
+    "reponds en francais, avec precision, calme et structure",
+    "tu parles en francais",
+    "ne melange jamais les langues",
+    "reponds en francais clair",
+    "repondre en francais clair",
 )
 
 NEUTRAL_LANGUAGE_REPLACEMENT_LINE = (

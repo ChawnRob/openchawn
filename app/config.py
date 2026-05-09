@@ -4,6 +4,7 @@ Les modules existants importent `app.config` sans changement de nom de variable.
 """
 from __future__ import annotations
 
+from app.core.runtime_language_policy import OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN
 from app.settings import get_settings
 
 _s = get_settings()
@@ -23,9 +24,8 @@ MAX_MESSAGE_LENGTH = _s.max_message_length
 
 PROFILE = _s.profile
 
-LANG_INSTRUCTION = (
-    "Réponds UNIQUEMENT en {lang_name}. Ne mélange JAMAIS les langues dans ta réponse."
-)
+# Ancien prototype : "Réponds UNIQUEMENT en {lang} / Ne mélange JAMAIS" — remplacé par politique runtime unique.
+LANG_INSTRUCTION = OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN
 
 PROVIDER = _s.openchawn_provider
 MODEL_PROVIDER = _s.effective_model_provider

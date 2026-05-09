@@ -2,6 +2,10 @@
 
 This document is meant for engineers validating a production rollout. It summarizes the chat pipeline order, observability knobs, smoke tiers, and post-deploy verification.
 
+## Politique runtime unique (V116)
+
+Anciennes chaînes prototype du type « Réponds UNIQUEMENT en français / Ne mélange JAMAIS » sont **interdites** en configuration globale (`LANG_INSTRUCTION` → texte anglais partagé `OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN`). Le garde `FORCED_FRENCH_LINE_SUBSTRINGS` inclut les formulations historiques normalisées pour éviter leur réinjection (lignes retirées avant appel provider).
+
 ## Chat pipeline ordering (`handle_chat_request` + `assemble_chat_generation_inputs`)
 
 1. Quota / auth (guest sessions only consume quota via `check_guest_quota`).
@@ -26,7 +30,7 @@ This document is meant for engineers validating a production rollout. It summari
 Safe diagnostic fields appended to JSON when `debug=true`:
 
 - `route_used` (`POST /chat` or `POST /api/chat`)
-- `handler_used` (always `handle_chat_request`)
+- `handler_name` (always `handle_chat_request`)
 - `response_language_mode`, `detected_language`, `final_language`, `language_source`
 - `forced_french_runtime_detected`, `forced_french_runtime_removed` (assembled + gateway)
 - `english_violation_regenerated`
@@ -61,5 +65,5 @@ Run from repo root (`openchawn`):
 
 1. Wait for Railway deploy **SUCCESS**.
 2. `python scripts/smoke_test_prod_v116.py --base-url https://www.openchawn.com`
-3. Optional: authenticated curl with guest session (`X-Guest-Session`) hitting `/chat?debug=true` vs `/api/chat?debug=true`, verifying identical handler metadata (`handler_used`).
+3. Optional: authenticated curl with guest session (`X-Guest-Session`) hitting `/chat?debug=true` vs `/api/chat?debug=true`, verifying identical handler metadata (`handler_name`) and distinct `route_signature` values.
 4. Manually sanity-check UI English prompt still answers in English on the hosted site.
