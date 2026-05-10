@@ -4,6 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenChawn</title>
+<script>
+(function () {
+  window.OPENCHAWN_DEFAULT_UX = window.OPENCHAWN_DEFAULT_UX || 'chat_clean';
+  var q = (new URLSearchParams(location.search).get('ux') || '').trim().toLowerCase();
+  try {
+    var ls = (localStorage.getItem('openchawn_ux_mode') || '').trim().toLowerCase();
+  } catch (e) { ls = ''; }
+  var w = typeof window.OPENCHAWN_UX_MODE === 'string' ? window.OPENCHAWN_UX_MODE.toLowerCase().trim() : '';
+  var legacy =
+    q === 'legacy' || q === 'full' || q === 'debug'
+    || ls === 'legacy' || ls === 'debug'
+    || w === 'legacy' || w === 'debug';
+  document.documentElement.classList.add(legacy ? 'ux-legacy' : 'ux-chat-clean');
+})();
+</script>
 <style>
 /* OpenChawn hero cockpit — light / sky / cyan / phoenix. No CDN: --font-ui (lecture) vs --font-tech (HUD). */
 
@@ -89,6 +104,318 @@ body::after {
   max-width: 960px;
   margin: 0 auto;
   padding: 0 14px;
+}
+
+html.ux-chat-clean .app {
+  min-height: 0;
+}
+
+html.ux-chat-clean body::before {
+  opacity: 0.45;
+}
+
+html.ux-chat-clean .scanline {
+  opacity: 0.35;
+}
+
+/* ── chat_clean minimal header ── */
+html.ux-chat-clean .oc-header-logo-mark {
+  display: none !important;
+}
+
+html.ux-chat-clean .header-title {
+  letter-spacing: 0.12em;
+  font-size: 18px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-transform: none;
+}
+
+html.ux-chat-clean .header-sub-clean-vis {
+  display: block !important;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+html.ux-chat-clean .header-sub-legacy-vis {
+  display: none !important;
+}
+
+html:not(.ux-chat-clean) .header-sub-clean-vis {
+  display: none !important;
+}
+
+html.ux-chat-clean .oc-header-actions-legacy {
+  display: none !important;
+}
+
+html:not(.ux-chat-clean) .oc-settings-only-clean {
+  display: none !important;
+}
+
+html.ux-chat-clean .messages {
+  flex: 1;
+  min-height: 0;
+}
+
+html.ux-chat-clean .input-area {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent 0%, rgba(237, 250, 252, 0.92) 22%, rgba(237, 250, 252, 0.98) 100%);
+  backdrop-filter: blur(8px);
+}
+
+html.ux-chat-clean #uxToolbar {
+  display: none !important;
+}
+
+html.ux-chat-clean .clean-input-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html.ux-chat-clean .clean-input-shell .mic-btn {
+  display: none !important;
+}
+
+html.ux-chat-clean .clean-input-shell .input-wrapper {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+html.ux-chat-clean .clean-input-shell .input-wrapper textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px !important;
+}
+
+html.ux-chat-clean .clean-input-shell .send-btn,
+html.ux-chat-clean .clean-input-shell .clean-gear-slot {
+  flex-shrink: 0;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit .hero-emblem-wrap,
+html.ux-chat-clean .welcome.hero-cockpit .welcome-line,
+html.ux-chat-clean .welcome.hero-cockpit h2.hero-system-ready::before {
+  display: none !important;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
+  letter-spacing: 0.12em !important;
+  font-size: 15px !important;
+  font-family: var(--font-ui);
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit p {
+  font-size: 14px;
+  max-width: 320px;
+}
+
+html.ux-legacy .oc-clean-input-quick {
+  display: none !important;
+}
+
+html:not(.ux-legacy) .oc-clean-input-quick {
+  display: flex !important;
+}
+
+/* Boutons rapides GPT-style */
+.oc-clean-toolbar-btn {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--glass-strong);
+  color: var(--deep-blue);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: box-shadow 0.2s, border-color 0.2s;
+  font-family: var(--font-ui);
+}
+
+.oc-clean-toolbar-btn:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 2px 12px rgba(56, 221, 245, 0.2);
+}
+
+.oc-clean-toolbar-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.oc-clean-toolbar-btn.gear-btn {
+  font-size: 19px;
+  padding-bottom: 2px;
+}
+
+/* Drawer réglages / technique */
+.oc-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(6, 37, 54, 0.35);
+  backdrop-filter: blur(3px);
+}
+
+.oc-settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 60;
+  width: min(100%, 380px);
+  height: 100%;
+  background: linear-gradient(195deg, #f8fdfe 0%, #e8f6fb 100%);
+  border-left: 1px solid var(--border-cyan);
+  box-shadow: -12px 0 40px rgba(6, 37, 54, 0.12);
+  transform: translateX(105%);
+  transition: transform 0.28s ease;
+  display: flex;
+  flex-direction: column;
+  max-height: 100vh;
+}
+
+.oc-settings-drawer.is-open {
+  transform: translateX(0);
+}
+
+.oc-settings-drawer-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.oc-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-cyan);
+  flex-shrink: 0;
+}
+
+.oc-settings-title {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--deep-blue);
+}
+
+.oc-settings-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border-cyan);
+  background: var(--glass-strong);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--deep-blue);
+}
+
+.oc-settings-close:hover {
+  border-color: var(--border-strong);
+}
+
+.oc-settings-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 12px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.oc-settings-section-label {
+  font-family: var(--font-tech);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #058799;
+  margin-top: 4px;
+}
+
+.oc-settings-dash-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.oc-settings-dash-grid .ux-tool-btn {
+  flex: 1 1 44%;
+  min-height: 44px;
+}
+
+.ux-tool-wide {
+  width: 100%;
+  flex-basis: 100%;
+}
+
+html.ux-chat-clean #ocTechnicalSlotLegacy {
+  display: none !important;
+}
+
+html.ux-chat-clean #ocTechnicalBundle .owner-access-strip {
+  display: none !important;
+}
+
+.oc-technical-slot-legacy-host {
+  flex-shrink: 0;
+}
+
+html.ux-legacy .oc-technical-slot-legacy-host:empty {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  html.ux-chat-clean .header {
+    padding: 10px 2px;
+  }
+
+  html.ux-chat-clean .header-title {
+    font-size: 16px;
+  }
+
+  html.ux-chat-clean .messages {
+    padding: 8px 2px;
+    gap: 10px;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  html.ux-chat-clean .msg {
+    max-width: 94%;
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+
+  html.ux-chat-clean .send-btn {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  html.ux-chat-clean .oc-clean-toolbar-btn {
+    width: 46px;
+    height: 46px;
+  }
 }
 
 /* ── Header ── */
@@ -979,14 +1306,17 @@ body::after {
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <div class="logo-mark">OC</div>
+      <div class="logo-mark oc-header-logo-mark">OC</div>
       <div>
         <div class="header-title">OpenChawn</div>
-        <div class="header-sub">Neural Interface v11.6.3</div>
+        <div class="header-sub-wrap">
+          <span class="header-sub header-sub-legacy-vis" id="headerSubLegacyLine">Neural Interface v11.6.3</span>
+          <span class="header-sub header-sub-clean-vis oc-clean-subtitle">Assistant privé</span>
+        </div>
       </div>
     </div>
-    <div class="header-right">
-      <div class="link-cluster">
+    <div class="header-right oc-header-actions-legacy">
+      <div class="link-cluster" id="ocHeaderHudCluster">
         <div class="status-badge">
           <div class="status-dot" id="statusDot"></div>
           <span id="statusText">LINK</span>
@@ -997,54 +1327,8 @@ body::after {
     </div>
   </div>
 
-  <!-- System bar — chips -->
-  <div class="sys-bar hidden" id="sysBar">
-    <div class="sys-chip">
-      <span class="sys-chip-label">engine</span>
-      <span class="sys-chip-value" id="sysProvider">OpenChawn</span>
-    </div>
-    <div class="sys-chip">
-      <span class="sys-chip-label">profile</span>
-      <span class="sys-chip-value" id="sysProfile">---</span>
-    </div>
-    <div class="sys-chip">
-      <span class="sys-chip-label">lang</span>
-      <span class="sys-chip-value" id="sysLang">---</span>
-    </div>
-    <div class="sys-chip">
-      <span class="sys-chip-label">user</span>
-      <span class="sys-chip-value" id="sysUser">---</span>
-    </div>
-    <div class="sys-chip">
-      <span class="sys-chip-label">device</span>
-      <span class="sys-chip-value device-badge" id="sysDevice">---</span>
-    </div>
-    <div class="sys-chip">
-      <span class="sys-chip-label">mode</span>
-      <span class="sys-chip-value" id="sysMode">public</span>
-    </div>
-    <div class="sys-chip sys-chip-tier">
-      <span class="sys-chip-label">accès</span>
-      <span id="accessTierChip" class="tier-pill tier-guest">GUEST LIMITED</span>
-    </div>
-  </div>
-
-  <!-- deploy-bundle: owner-access + guest-quota-20-default + ux-text-import-export + hero cockpit (V11.6.2) -->
-  <div class="owner-access-wrap hidden" id="ownerAccessWrap">
-    <div class="owner-access-strip">
-      <span id="ownerTokenHint" class="owner-token-hint hidden" role="status">Jeton enregistré localement</span>
-      <span id="ownerAccessSummaryLine" class="owner-access-summary" role="status" aria-live="polite"></span>
-    </div>
-    <div class="owner-access-panel hidden" id="ownerAccessPanel" aria-labelledby="toggleOwnerAccess">
-      <p class="owner-access-note"><strong>Accès privé (owner)</strong> — secret stocké uniquement dans ce navigateur (localStorage). Jamais affiché en clair après enregistrement. Transmis uniquement via l’en-tête Authorization sur POST /chat.</p>
-      <input type="password" id="ownerTokenInput" autocomplete="off" spellcheck="false" placeholder="Coller le jeton">
-      <div class="owner-access-actions">
-        <button type="button" class="ux-tool-btn" id="btnSaveOwnerToken">Enregistrer le jeton</button>
-        <button type="button" class="ux-tool-btn" id="btnClearOwnerToken">Effacer le jeton</button>
-      </div>
-      <div class="owner-access-status" id="ownerAccessStatus" aria-live="polite"></div>
-    </div>
-  </div>
+  <!-- Mode legacy : le bundle technique sera déplacé ici au boot si ux=legacy -->
+  <div id="ocTechnicalSlotLegacy" class="oc-technical-slot-legacy-host"></div>
 
   <!-- AUTH SCREEN -->
   <div class="auth-screen hidden" id="authScreen">
@@ -1123,6 +1407,7 @@ body::after {
   </div>
 
   <div class="input-area" id="inputArea">
+    <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
       <button type="button" class="ux-tool-btn tool-accent" id="toggleOwnerAccess" aria-expanded="false" aria-controls="ownerAccessPanel" title="Accès privé (owner)">
         Accès privé (owner)
@@ -1148,6 +1433,7 @@ body::after {
       <div class="import-status" id="importStatus" aria-live="polite"></div>
     </div>
     <div class="input-wrapper">
+      <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte">+</button>
       <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
@@ -1158,8 +1444,88 @@ body::after {
       <button type="button" class="send-btn" id="sendBtn" title="Envoyer à OpenChawn">
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
+      <span class="clean-gear-slot">
+        <button type="button" class="oc-clean-toolbar-btn gear-btn oc-clean-input-quick" id="btnUxSettingsGear" aria-label="Réglages et diagnostic" title="Réglages">⚙︎</button>
+      </span>
+    </div>
     </div>
   </div>
+
+  <div id="ocSettingsBackdrop" class="oc-settings-backdrop hidden" aria-hidden="true"></div>
+  <aside id="ocSettingsDrawer" class="oc-settings-drawer" aria-hidden="true" aria-labelledby="ocSettingsDrawerTitle" inert="">
+    <div class="oc-settings-drawer-inner">
+      <div class="oc-settings-header">
+        <h2 id="ocSettingsDrawerTitle" class="oc-settings-title">Réglages</h2>
+        <button type="button" class="oc-settings-close" id="btnCloseOcSettings" aria-label="Fermer">×</button>
+      </div>
+      <div class="oc-settings-body" id="ocSettingsDrawerScroll">
+        <div id="ocSettingsHudMount"></div>
+        <div id="ocSettingsLogoutMount"></div>
+        <p class="oc-settings-section-label">Raccourcis</p>
+        <div class="oc-settings-dash-grid">
+          <button type="button" class="ux-tool-btn tool-accent oc-settings-dash-btn" id="btnMirrorOwnerAccess">Accès privé</button>
+          <button type="button" class="ux-tool-btn oc-settings-dash-btn" id="btnMirrorImportPanel">Importer du texte</button>
+          <button type="button" class="ux-tool-btn oc-settings-dash-btn" id="btnMirrorSpeech">Micro dictée</button>
+          <button type="button" class="ux-tool-btn oc-settings-dash-btn" id="btnMirrorDownload" disabled>Télécharger la réponse</button>
+          <button type="button" class="ux-tool-btn oc-settings-dash-btn" id="btnMirrorCopy" disabled>Copier la réponse</button>
+        </div>
+        <p class="oc-settings-section-label oc-settings-only-clean">Mode interface</p>
+        <button type="button" class="ux-tool-btn ux-tool-wide oc-settings-only-clean" id="btnUxSwitchToLegacy">Afficher interface technique (legacy)</button>
+        <p class="oc-settings-helper oc-settings-only-clean" style="font-size:11px;color:var(--text-muted);font-family:var(--font-ui);">Réversible : rechargez avec <code>?ux=legacy</code> ou définissez <code>localStorage.openchawn_ux_mode=legacy</code>.</p>
+
+        <!-- Bundle ENGINE / PROFILE / OWNER — déplaçable (chat_clean dans ce panneau) -->
+        <div id="ocTechnicalMobilityDrawerSlot">
+          <div id="ocTechnicalBundle">
+            <div class="sys-bar hidden" id="sysBar">
+              <div class="sys-chip">
+                <span class="sys-chip-label">engine</span>
+                <span class="sys-chip-value" id="sysProvider">OpenChawn</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-label">profile</span>
+                <span class="sys-chip-value" id="sysProfile">---</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-label">lang</span>
+                <span class="sys-chip-value" id="sysLang">---</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-label">user</span>
+                <span class="sys-chip-value" id="sysUser">---</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-label">device</span>
+                <span class="sys-chip-value device-badge" id="sysDevice">---</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-label">mode</span>
+                <span class="sys-chip-value" id="sysMode">public</span>
+              </div>
+              <div class="sys-chip sys-chip-tier">
+                <span class="sys-chip-label">accès</span>
+                <span id="accessTierChip" class="tier-pill tier-guest">GUEST LIMITED</span>
+              </div>
+            </div>
+            <div class="owner-access-wrap hidden" id="ownerAccessWrap">
+              <div class="owner-access-strip">
+                <span id="ownerTokenHint" class="owner-token-hint hidden" role="status">Jeton enregistré localement</span>
+                <span id="ownerAccessSummaryLine" class="owner-access-summary" role="status" aria-live="polite"></span>
+              </div>
+              <div class="owner-access-panel hidden" id="ownerAccessPanel" aria-labelledby="toggleOwnerAccess">
+                <p class="owner-access-note"><strong>Accès privé (owner)</strong> — secret stocké uniquement dans ce navigateur (localStorage). Jamais affiché en clair après enregistrement. Transmis uniquement via l’en-tête Authorization sur POST /chat.</p>
+                <input type="password" id="ownerTokenInput" autocomplete="off" spellcheck="false" placeholder="Coller le jeton">
+                <div class="owner-access-actions">
+                  <button type="button" class="ux-tool-btn" id="btnSaveOwnerToken">Enregistrer le jeton</button>
+                  <button type="button" class="ux-tool-btn" id="btnClearOwnerToken">Effacer le jeton</button>
+                </div>
+                <div class="owner-access-status" id="ownerAccessStatus" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <script>
@@ -1245,6 +1611,117 @@ const dom = {
   accessTierChip: document.getElementById('accessTierChip'),
   btnSpeech: document.getElementById('btnSpeech'),
 };
+
+const OC_UX_LEGACY = document.documentElement.classList.contains('ux-legacy');
+console.log('[OpenChawn] ux_mode:', OC_UX_LEGACY ? 'legacy' : 'chat_clean');
+
+function ocUxPlaceTechnicalBundle() {
+  const bundle = document.getElementById('ocTechnicalBundle');
+  const legacySlot = document.getElementById('ocTechnicalSlotLegacy');
+  const drawerSlot = document.getElementById('ocTechnicalMobilityDrawerSlot');
+  if (!bundle || !legacySlot || !drawerSlot) return;
+  if (OC_UX_LEGACY) {
+    legacySlot.appendChild(bundle);
+  } else {
+    drawerSlot.appendChild(bundle);
+  }
+}
+
+/** Mode chat_clean : liaison + session dans le tiroir réglages uniquement */
+function ocUxCleanMountHeaderControls() {
+  if (OC_UX_LEGACY) return;
+  const hud = document.getElementById('ocHeaderHudCluster');
+  const hudMount = document.getElementById('ocSettingsHudMount');
+  const lo = document.getElementById('logoutBtn');
+  const loMount = document.getElementById('ocSettingsLogoutMount');
+  if (hud && hudMount) hudMount.appendChild(hud);
+  if (lo && loMount) loMount.appendChild(lo);
+}
+
+function ocUxSetInputPlaceholder() {
+  try {
+    if (!dom.input) return;
+    dom.input.placeholder = OC_UX_LEGACY
+      ? 'Transmettez votre requête… (Entrée pour envoyer)'
+      : 'Message… (\u23CE pour envoyer)';
+  } catch (_) {}
+}
+
+/** Tiroir réglages ════════════════════════════════════════════════════ */
+function ocSettingsDrawerEls() {
+  return {
+    drawer: document.getElementById('ocSettingsDrawer'),
+    backdrop: document.getElementById('ocSettingsBackdrop'),
+  };
+}
+
+function ocOpenSettingsDrawer() {
+  const { drawer, backdrop } = ocSettingsDrawerEls();
+  if (!drawer || !backdrop) return;
+  backdrop.classList.remove('hidden');
+  drawer.classList.add('is-open');
+  backdrop.setAttribute('aria-hidden', 'false');
+  drawer.setAttribute('aria-hidden', 'false');
+  drawer.removeAttribute('inert');
+  document.getElementById('btnCloseOcSettings')?.focus();
+}
+
+function ocCloseSettingsDrawer() {
+  const { drawer, backdrop } = ocSettingsDrawerEls();
+  if (!drawer || !backdrop) return;
+  backdrop.classList.add('hidden');
+  drawer.classList.remove('is-open');
+  backdrop.setAttribute('aria-hidden', 'true');
+  drawer.setAttribute('aria-hidden', 'true');
+  drawer.setAttribute('inert', '');
+  if (!OC_UX_LEGACY) document.getElementById('btnUxSettingsGear')?.focus();
+}
+
+ocUxPlaceTechnicalBundle();
+ocUxCleanMountHeaderControls();
+ocUxSetInputPlaceholder();
+
+document.getElementById('btnUxSettingsGear')?.addEventListener('click', () => ocOpenSettingsDrawer());
+document.getElementById('btnCloseOcSettings')?.addEventListener('click', () => ocCloseSettingsDrawer());
+document.getElementById('ocSettingsBackdrop')?.addEventListener('click', () => ocCloseSettingsDrawer());
+
+document.getElementById('btnMirrorOwnerAccess')?.addEventListener('click', () => {
+  dom.toggleOwnerAccess?.click?.();
+});
+
+document.getElementById('btnMirrorImportPanel')?.addEventListener('click', () => {
+  dom.toggleImportPanel?.click?.();
+  if (dom.importPanel && !dom.importPanel.classList.contains('hidden')) {
+    ocCloseSettingsDrawer();
+  }
+});
+
+document.getElementById('btnMirrorSpeech')?.addEventListener('click', () => {
+  ocCloseSettingsDrawer();
+  dom.btnSpeech?.click?.();
+});
+
+document.getElementById('btnMirrorDownload')?.addEventListener('click', () => dom.btnDownloadResponse?.click?.());
+document.getElementById('btnMirrorCopy')?.addEventListener('click', () => dom.btnCopyResponse?.click?.());
+
+document.getElementById('btnImportPlus')?.addEventListener('click', () => {
+  dom.toggleImportPanel?.click?.();
+});
+
+document.getElementById('btnUxSwitchToLegacy')?.addEventListener('click', () => {
+  try {
+    localStorage.setItem('openchawn_ux_mode', 'legacy');
+  } catch (_) {}
+  location.reload();
+});
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape') return;
+  const d = ocSettingsDrawerEls().drawer;
+  if (d && d.classList.contains('is-open')) {
+    ocCloseSettingsDrawer();
+  }
+});
 
 let ocLastOwnerValidated = false;
 let ocOwnerTokenRejected = false;
@@ -1419,6 +1896,10 @@ function refreshExportButtons() {
   const ok = !!(lastAssistantPlain && lastAssistantPlain.length);
   dom.btnDownloadResponse.disabled = !ok;
   dom.btnCopyResponse.disabled = !ok;
+  const mr = document.getElementById('btnMirrorDownload');
+  const mc = document.getElementById('btnMirrorCopy');
+  if (mr) mr.disabled = !ok;
+  if (mc) mc.disabled = !ok;
 }
 
 function insertImportIntoMainEditor(text) {
@@ -1730,6 +2211,9 @@ dom.logoutBtn.addEventListener('click', async () => {
 });
 
 function showAuthForLogin() {
+  try {
+    if (typeof ocCloseSettingsDrawer === 'function') ocCloseSettingsDrawer();
+  } catch (_) {}
   dom.authScreen.classList.remove('hidden');
   dom.messages.classList.add('hidden');
   dom.inputArea.classList.add('hidden');
