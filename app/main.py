@@ -10,7 +10,6 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from app.config import (
     ALLOWED_ORIGINS,
-    GUEST_DAILY_LIMIT,
     IS_PROD,
     LOG_LEVEL,
     MAX_MESSAGE_LENGTH,
@@ -43,6 +42,7 @@ from app.auth.database import init_db, create_user, get_user_by_email, update_us
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
 from app.auth.guest import create_guest_session, get_guest_quota_status
+from app.settings import get_settings
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
 from app.api.chat import router as chat_router
 
@@ -270,7 +270,7 @@ def health():
         "mode": "handle",
         "status": "ok",
         "guest_quota": {
-            "guest_limit": GUEST_DAILY_LIMIT,
+            "guest_limit": get_settings().guest_daily_limit,
             "guest_remaining": None,
             "reset_window": "utc_calendar_day",
         },

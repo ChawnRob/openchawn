@@ -246,6 +246,14 @@ def handle_chat_request(
       7) persistence mémoire **uniquement** sur réponse finale valide et HTTP 200.
     """
     is_guest = user.get("is_guest", False)
+    owner_authenticated = bool(user.get("is_owner") or user.get("user_role") == "owner")
+    if owner_authenticated:
+        user_role_out = "owner"
+    elif is_guest:
+        user_role_out = "guest"
+    else:
+        user_role_out = str(user.get("user_role") or "user")
+
     violation_retry = False
     quota: dict[str, Any] = {}
 
@@ -333,7 +341,8 @@ def handle_chat_request(
         f"detected_language={detected} final_language={final_lang} "
         f"ff_detected={ff_detected_bundle} ff_removed_assemble={ff_removed_assemble} ff_removed_gateway={ff_removed_gateway} "
         f"debug={debug} provider={provider_used} success={success} "
-        f"status={provider_status} guest={is_guest} "
+        f"status={provider_status} guest={is_guest} owner={owner_authenticated} "
+        f"user_role={user_role_out} "
         f"forced_french_before_gateway={pre_ff} en_violation_retry={violation_retry}"
     )
 
@@ -378,6 +387,8 @@ def handle_chat_request(
         "lang": bundle.get("final_language_hint") or bundle.get("detected_language"),
         "profile_used": bundle["profile_used"],
         "route_signature": route_signature,
+        "user_role": user_role_out,
+        "owner_authenticated": owner_authenticated,
     }
     if is_guest:
         result["guest"] = True
@@ -403,6 +414,8 @@ def handle_chat_request(
             "forced_french_runtime_detected": ff_detected_bundle,
             "forced_french_runtime_removed": ff_removed_combined,
             "english_violation_regenerated": violation_retry,
+            "owner_authenticated": owner_authenticated,
+            "user_role": user_role_out,
         }
         if deployed:
             dbg["deployed_commit"] = deployed

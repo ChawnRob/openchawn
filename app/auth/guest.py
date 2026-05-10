@@ -8,9 +8,14 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from app.config import GUEST_DAILY_LIMIT
+from app.settings import get_settings
 
 logger = logging.getLogger("openchawn.guest")
+
+
+def _guest_cap() -> int:
+    """Limite jour courant ; relit les settings pour tests / ENV reload."""
+    return get_settings().guest_daily_limit
 
 
 # ── In-memory store ──────────────────────────────────────
@@ -62,7 +67,7 @@ def create_guest_session(ip: str) -> dict:
                 session.reset_if_new_day()
                 logger.info(
                     f"guest session reused | session={sid[:12]}… | ip={ip} | "
-                    f"quota_remaining={max(0, GUEST_DAILY_LIMIT - session.message_count)}"
+                    f"quota_remaining={max(0, _guest_cap() - session.message_count)}"
                 )
                 return _session_to_dict(session)
         # All stale, clear and create new
@@ -75,7 +80,7 @@ def create_guest_session(ip: str) -> dict:
 
     logger.info(
         f"guest session created | session={session_id[:12]}… | ip={ip} | "
-        f"quota_remaining={GUEST_DAILY_LIMIT}"
+        f"quota_remaining={_guest_cap()}"
     )
     return _session_to_dict(session)
 
@@ -89,7 +94,8 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
 
     if not session:
         logger.warning(f"guest session unknown | session={session_id[:12]}…")
-        return {"allowed": False, "remaining": 0, "limit": GUEST_DAILY_LIMIT}
+        cap = _guest_cap()
+        return {"allowed": False, "remaining": 0, "limit": cap}
 
     # Verify IP matches (prevent session hijacking)
     if session.ip != ip:
@@ -97,18 +103,20 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
             f"guest session ip mismatch | session={session_id[:12]}… | "
             f"expected={session.ip} got={ip}"
         )
-        return {"allowed": False, "remaining": 0, "limit": GUEST_DAILY_LIMIT}
+        cap = _guest_cap()
+        return {"allowed": False, "remaining": 0, "limit": cap}
 
     session.reset_if_new_day()
 
-    remaining = GUEST_DAILY_LIMIT - session.message_count
+    cap = _guest_cap()
+    remaining = cap - session.message_count
 
     if remaining <= 0:
         logger.info(
             f"blocked by quota | session={session_id[:12]}… | ip={ip} | "
-            f"count={session.message_count}/{GUEST_DAILY_LIMIT}"
+            f"count={session.message_count}/{cap}"
         )
-        return {"allowed": False, "remaining": 0, "limit": GUEST_DAILY_LIMIT}
+        return {"allowed": False, "remaining": 0, "limit": cap}
 
     # Consume one message
     session.message_count += 1
@@ -116,9 +124,9 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
 
     logger.info(
         f"guest message ok | session={session_id[:12]}… | ip={ip} | "
-        f"quota_remaining={remaining}/{GUEST_DAILY_LIMIT}"
+        f"quota_remaining={remaining}/{cap}"
     )
-    return {"allowed": True, "remaining": remaining, "limit": GUEST_DAILY_LIMIT}
+    return {"allowed": True, "remaining": remaining, "limit": cap}
 
 
 def get_guest_quota_status(session_id: str) -> dict | None:
@@ -127,17 +135,19 @@ def get_guest_quota_status(session_id: str) -> dict | None:
     if not session:
         return None
     session.reset_if_new_day()
-    remaining = max(0, GUEST_DAILY_LIMIT - session.message_count)
-    return {"remaining": remaining, "limit": GUEST_DAILY_LIMIT, "used": session.message_count}
+    cap = _guest_cap()
+    remaining = max(0, cap - session.message_count)
+    return {"remaining": remaining, "limit": cap, "used": session.message_count}
 
 
 # ── Internal helpers ─────────────────────────────────────
 
 def _session_to_dict(session: _GuestSession) -> dict:
-    remaining = max(0, GUEST_DAILY_LIMIT - session.message_count)
+    cap = _guest_cap()
+    remaining = max(0, cap - session.message_count)
     return {
         "session_id": session.session_id,
-        "quota": {"remaining": remaining, "limit": GUEST_DAILY_LIMIT},
+        "quota": {"remaining": remaining, "limit": cap},
     }
 
 

@@ -2,13 +2,18 @@
 Middlewares : rate limiting + error handler + security headers.
 Zéro dépendance externe.
 """
-import time
+import hashlib
 import logging
+import time
 from collections import defaultdict
-from fastapi import Request, HTTPException
+
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from app.config import RATE_LIMIT_CHAT, RATE_LIMIT_AUTH, IS_PROD
+
+from app.auth.owner_access import bearer_matches_configured_owner_token
+from app.config import IS_PROD, RATE_LIMIT_AUTH, RATE_LIMIT_CHAT
+from app.settings import get_settings
 
 logger = logging.getLogger("openchawn.middleware")
 
@@ -58,10 +63,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path in ("/chat", "/api/chat"):
             auth_header = (request.headers.get("Authorization", "") or "").strip()
             guest_session = (request.headers.get("X-Guest-Session", "") or "").strip()
+            bearer = ""
+            if auth_header.lower().startswith("bearer "):
+                bearer = auth_header[7:].strip()
+            ot = (get_settings().openchawn_owner_token or "").strip()
             if guest_session:
                 actor_key = f"{client_ip}:guest:{guest_session}"
-            elif auth_header.startswith("Bearer "):
-                actor_key = f"{client_ip}:auth:{auth_header[7:19]}"
+            elif bearer and ot and bearer_matches_configured_owner_token(bearer, ot):
+                actor_key = f"{client_ip}:owner"
+            elif bearer:
+                h = hashlib.sha256(bearer.encode("utf-8")).hexdigest()[:20]
+                actor_key = f"{client_ip}:auth:{h}"
             else:
                 actor_key = client_ip
             now = time.time()

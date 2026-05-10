@@ -104,6 +104,7 @@ class Settings:
     max_message_length: int
     profile: str
     guest_daily_limit: int
+    openchawn_owner_token: str
 
     default_provider: str
     model_provider: str
@@ -251,8 +252,9 @@ def _build_settings() -> Settings:
         guest_daily_limit=_int_coalesce(
             "GUEST_DAILY_MESSAGE_LIMIT",
             "OPENCHAWN_GUEST_DAILY_LIMIT",
-            default=15,
+            default=20,
         ),
+        openchawn_owner_token=_str("OPENCHAWN_OWNER_TOKEN", default=""),
         default_provider=_str("DEFAULT_PROVIDER", default="deepseek").strip().lower(),
         model_provider=_str("MODEL_PROVIDER", default="").strip().lower(),
         openchawn_provider=_str("OPENCHAWN_PROVIDER", default="auto").strip().lower(),

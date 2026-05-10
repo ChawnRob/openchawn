@@ -2,15 +2,18 @@
 Dépendances FastAPI pour l'authentification.
 """
 from fastapi import Request, HTTPException
-from app.auth.security import verify_token
+
 from app.auth.database import get_user_by_id
+from app.auth.owner_access import bearer_matches_configured_owner_token, owner_principal
+from app.auth.security import verify_token
+from app.settings import get_settings
 
 
 def get_current_user(request: Request) -> dict:
     """Extrait et valide le user depuis le header Authorization: Bearer <token>."""
-    auth_header = request.headers.get("Authorization", "")
+    auth_header = (request.headers.get("Authorization") or "").strip()
 
-    if not auth_header.startswith("Bearer "):
+    if not auth_header.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Token manquant")
 
     token = auth_header[7:]
@@ -28,27 +31,40 @@ def get_current_user(request: Request) -> dict:
 
 def get_current_user_or_guest(request: Request) -> dict:
     """
-    Tente l'auth JWT classique. Si absent/invalide, cherche un header
-    X-Guest-Session pour identifier un visiteur anonyme.
-    Retourne un dict avec is_guest=True/False.
-    """
-    auth_header = request.headers.get("Authorization", "")
+    Ordre :
+      - Bearer OPENCHAWN_OWNER_TOKEN (prioritaire, ne transite pas en log) ;
+      - JWT compte ;
+      - X-Guest-Session invité.
 
-    # ── Authenticated user ──
-    if auth_header.startswith("Bearer "):
+    Retourne un dict avec is_guest=True/False ; owner : is_owner + user_role.
+    """
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    client_ip = request.client.host if request.client else "unknown"
+
+    bearer = ""
+    lower = auth_header.lower()
+    if lower.startswith("bearer "):
+        bearer = auth_header[7:].strip()
+
+    owner_cfg = get_settings().openchawn_owner_token
+    if bearer and bearer_matches_configured_owner_token(bearer, owner_cfg):
+        return owner_principal(client_ip)
+
+    # ── Authenticated user (JWT — ne doit jamais recevoir une valeur journalisée) ──
+    if lower.startswith("bearer "):
         token = auth_header[7:]
         payload = verify_token(token)
         if payload:
             user = get_user_by_id(int(payload["sub"]))
             if user and user["is_active"]:
-                return {**user, "is_guest": False}
+                return {**user, "is_guest": False, "user_role": "user"}
 
     # ── Guest session ──
     guest_session_id = request.headers.get("X-Guest-Session", "").strip()
     if guest_session_id:
-        client_ip = request.client.host if request.client else "unknown"
         return {
             "is_guest": True,
+            "user_role": "guest",
             "guest_session_id": guest_session_id,
             "ip": client_ip,
         }

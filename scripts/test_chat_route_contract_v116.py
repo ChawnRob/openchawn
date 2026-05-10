@@ -66,6 +66,8 @@ def main() -> int:
     assert rb.status_code == 200, rb.text
     assert ra.status_code == 200, ra.text
     jb, ja = rb.json(), ra.json()
+    assert jb.get("user_role") == "guest" and jb.get("owner_authenticated") is False
+    assert ja.get("user_role") == "guest" and ja.get("owner_authenticated") is False
     assert jb["handler_name"] == ja["handler_name"] == "handle_chat_request"
     assert jb["route_signature"] == "POST_CHAT_MAIN_HANDLER_ACTIVE_V116"
     assert ja["route_signature"] == "POST_API_CHAT_HANDLER_ACTIVE_V116"

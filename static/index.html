@@ -710,6 +710,85 @@ body::after {
   border-radius: 10px;
   letter-spacing: 0.3px;
 }
+
+/* ── Owner private access (localStorage only) ─────────── */
+.owner-access-wrap {
+  padding: 6px 6px 10px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.owner-access-toggle {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--steel);
+  cursor: pointer;
+}
+
+.owner-access-toggle:hover {
+  border-color: var(--border-active);
+  color: var(--cyan);
+}
+
+.owner-access-hint {
+  margin-left: 10px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--cyan-dim);
+}
+
+.owner-access-panel {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius);
+}
+
+.owner-access-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.owner-access-panel input[type="password"] {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(6, 10, 16, 0.5);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.owner-access-panel input:focus {
+  border-color: var(--border-active);
+}
+
+.owner-access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.owner-access-status {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-top: 8px;
+  min-height: 14px;
+}
+
+.owner-access-status.err { color: var(--error); }
 </style>
 </head>
 <body>
@@ -723,7 +802,7 @@ body::after {
       <div class="logo-mark">OC</div>
       <div>
         <div class="header-title">OpenChawn</div>
-        <div class="header-sub">Neural Interface v11.6.1 UX</div>
+        <div class="header-sub">Neural Interface v11.6.2</div>
       </div>
     </div>
     <div class="header-right">
@@ -756,6 +835,25 @@ body::after {
     <div class="tag">
       <span class="tag-label">device</span>
       <span class="tag-value device-badge" id="sysDevice">---</span>
+    </div>
+  </div>
+
+  <div class="owner-access-wrap hidden" id="ownerAccessWrap">
+    <button type="button" class="owner-access-toggle" id="toggleOwnerAccess" aria-expanded="false">
+      Accès privé (owner)
+    </button>
+    <span class="owner-access-hint hidden" id="ownerTokenHint">Jeton stocké localement</span>
+    <div class="owner-access-panel hidden" id="ownerAccessPanel">
+      <p class="owner-access-note">
+        Jeton OPENCHAWN_OWNER_TOKEN : stocké uniquement dans ce navigateur (localStorage).
+        Jamais envoyé hors de l’en-tête Authorization pour POST /chat. Ne pas partager.
+      </p>
+      <input type="password" id="ownerTokenInput" autocomplete="off" spellcheck="false" placeholder="Coller le jeton">
+      <div class="owner-access-actions">
+        <button type="button" class="ux-tool-btn" id="btnSaveOwnerToken">Enregistrer le jeton</button>
+        <button type="button" class="ux-tool-btn" id="btnClearOwnerToken">Effacer le jeton</button>
+      </div>
+      <div class="owner-access-status" id="ownerAccessStatus" aria-live="polite"></div>
     </div>
   </div>
 
@@ -929,6 +1027,14 @@ const dom = {
   btnInsertImport: document.getElementById('btnInsertImport'),
   btnDownloadResponse: document.getElementById('btnDownloadResponse'),
   btnCopyResponse: document.getElementById('btnCopyResponse'),
+  ownerAccessWrap: document.getElementById('ownerAccessWrap'),
+  toggleOwnerAccess: document.getElementById('toggleOwnerAccess'),
+  ownerAccessPanel: document.getElementById('ownerAccessPanel'),
+  ownerTokenInput: document.getElementById('ownerTokenInput'),
+  ownerTokenHint: document.getElementById('ownerTokenHint'),
+  btnSaveOwnerToken: document.getElementById('btnSaveOwnerToken'),
+  btnClearOwnerToken: document.getElementById('btnClearOwnerToken'),
+  ownerAccessStatus: document.getElementById('ownerAccessStatus'),
 };
 
 // ── V11.6.1 UX: text import / export (client-only; normal POST /chat) ──
@@ -1085,11 +1191,72 @@ dom.btnDownloadResponse.addEventListener('click', downloadAssistantTxt);
 dom.btnCopyResponse.addEventListener('click', () => { copyAssistantPlain(); });
 
 // ── Auth helpers ─────────────────────────────────────
+function ocHasLocalOwnerToken() {
+  return !!(localStorage.getItem('oc_owner_token') || '').trim();
+}
+
+function ocRefreshOwnerTokenHint() {
+  const on = ocHasLocalOwnerToken();
+  dom.ownerTokenHint.classList.toggle('hidden', !on);
+}
+
+function ocApplySysBarDefaults() {
+  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  if (jwt) {
+    try {
+      const u = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+      dom.sysUser.textContent = (u && u.email) ? u.email : '---';
+      dom.sysProfile.textContent = (u && u.business_type) ? u.business_type : '---';
+    } catch (_) {
+      dom.sysUser.textContent = '---';
+      dom.sysProfile.textContent = '---';
+    }
+    return;
+  }
+  if (isGuestMode) {
+    if (ocHasLocalOwnerToken()) {
+      dom.sysUser.textContent = 'Robert';
+      dom.sysProfile.textContent = 'owner';
+    } else {
+      dom.sysUser.textContent = 'Invité';
+      dom.sysProfile.textContent = 'guest';
+    }
+  }
+}
+
+function ocSyncSysBarAfterChat(payload) {
+  if (!payload || typeof payload.owner_authenticated !== 'boolean') {
+    ocApplySysBarDefaults();
+    return;
+  }
+  if (payload.owner_authenticated) {
+    dom.sysProfile.textContent = 'owner';
+    dom.sysUser.textContent = 'Robert';
+    dom.ownerAccessStatus.textContent = '';
+    dom.ownerAccessStatus.classList.remove('err');
+    return;
+  }
+  if (ocHasLocalOwnerToken() && isGuestMode && !(token || sessionStorage.getItem('oc_token') || '').trim()) {
+    dom.sysUser.textContent = 'Invité';
+    dom.sysProfile.textContent = 'guest';
+    dom.ownerAccessStatus.textContent = 'Jeton refuse par le serveur (verifier OPENCHAWN_OWNER_TOKEN).';
+    dom.ownerAccessStatus.classList.add('err');
+  } else {
+    ocApplySysBarDefaults();
+    dom.ownerAccessStatus.classList.remove('err');
+  }
+}
+
 function authHeaders() {
   const h = { 'Content-Type': 'application/json' };
-  const t = (token || sessionStorage.getItem('oc_token') || '').trim();
-  if (t) {
-    h['Authorization'] = 'Bearer ' + t;
+  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  const ownerTok = (localStorage.getItem('oc_owner_token') || '').trim();
+  if (jwt) {
+    h['Authorization'] = 'Bearer ' + jwt;
+  } else if (ownerTok) {
+    h['Authorization'] = 'Bearer ' + ownerTok;
+    const g = (sessionStorage.getItem('oc_guest_session') || '').trim();
+    if (g) h['X-Guest-Session'] = g;
   } else {
     const g = (sessionStorage.getItem('oc_guest_session') || '').trim();
     if (g) h['X-Guest-Session'] = g;
@@ -1250,6 +1417,7 @@ function showAuthForLogin() {
   dom.messages.classList.add('hidden');
   dom.inputArea.classList.add('hidden');
   dom.sysBar.classList.add('hidden');
+  dom.ownerAccessWrap.classList.add('hidden');
   dom.loginBox.classList.remove('hidden');
   dom.registerBox.classList.add('hidden');
   dom.loginError.textContent = '';
@@ -1263,6 +1431,9 @@ function enterChat() {
   dom.messages.classList.remove('hidden');
   dom.inputArea.classList.remove('hidden');
   dom.sysBar.classList.remove('hidden');
+  dom.ownerAccessWrap.classList.remove('hidden');
+  ocRefreshOwnerTokenHint();
+  ocApplySysBarDefaults();
   dom.logoutBtn.classList.remove('hidden');
   dom.logoutBtn.textContent = 'Déconnexion';
   dom.sysUser.textContent = currentUser?.email || '---';
@@ -1278,6 +1449,9 @@ function enterGuestChat() {
   dom.messages.classList.remove('hidden');
   dom.inputArea.classList.remove('hidden');
   dom.sysBar.classList.remove('hidden');
+  dom.ownerAccessWrap.classList.remove('hidden');
+  ocRefreshOwnerTokenHint();
+  ocApplySysBarDefaults();
   dom.logoutBtn.classList.remove('hidden');
   dom.logoutBtn.textContent = 'Connexion';
   dom.sysUser.textContent = 'Invité';
@@ -1331,6 +1505,36 @@ async function boot() {
   }
 }
 boot();
+
+dom.toggleOwnerAccess.addEventListener('click', () => {
+  dom.ownerAccessPanel.classList.toggle('hidden');
+  const collapsed = dom.ownerAccessPanel.classList.contains('hidden');
+  dom.toggleOwnerAccess.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+});
+
+dom.btnSaveOwnerToken.addEventListener('click', () => {
+  const v = (dom.ownerTokenInput.value || '').trim();
+  if (!v) {
+    dom.ownerAccessStatus.textContent = 'Saisie vide.';
+    dom.ownerAccessStatus.classList.add('err');
+    return;
+  }
+  localStorage.setItem('oc_owner_token', v);
+  dom.ownerTokenInput.value = '';
+  ocRefreshOwnerTokenHint();
+  ocApplySysBarDefaults();
+  dom.ownerAccessStatus.textContent = 'Jeton enregistre localement. Champ efface.';
+  dom.ownerAccessStatus.classList.remove('err');
+});
+
+dom.btnClearOwnerToken.addEventListener('click', () => {
+  localStorage.removeItem('oc_owner_token');
+  dom.ownerTokenInput.value = '';
+  ocRefreshOwnerTokenHint();
+  ocApplySysBarDefaults();
+  dom.ownerAccessStatus.textContent = 'Jeton efface.';
+  dom.ownerAccessStatus.classList.remove('err');
+});
 
 // ── Health check ─────────────────────────────────────
 async function checkHealth() {
@@ -1432,6 +1636,7 @@ async function send() {
     // provider gardé en console pour debug, pas affiché
     if (d.provider) console.log('[OpenChawn] provider:', d.provider);
     dom.sysLang.textContent = d.lang || '---';
+    ocSyncSysBarAfterChat(d);
 
   } catch (err) {
     addMsg('error', 'TRANSMISSION FAILED — ' + err.message);
