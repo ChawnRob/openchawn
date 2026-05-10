@@ -196,19 +196,97 @@ html.ux-legacy .oc-drawer-text-link {
   text-decoration-color: var(--cyan-soft);
 }
 
+/* Stage = zone scroll + composer (chat_clean : état vide centré ou conversation) */
+.oc-clean-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html.ux-chat-clean .oc-clean-stage {
+  flex: 1;
+  min-height: 0;
+}
+
+/* État vide GPT-like : hero + composer centrés verticalement dans la colonne */
+html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state {
+  justify-content: center;
+  align-items: center;
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .messages {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+  width: min(840px, calc(100vw - 48px));
+  max-width: 840px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .oc-clean-hero {
+  flex: 0 0 auto;
+  padding: 8px 12px 0;
+  gap: 10px;
+}
+
+html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .oc-clean-hero .hero-system-ready {
+  margin-bottom: 0;
+}
+
+html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .oc-clean-hero p {
+  margin: 0;
+  max-width: min(520px, 92vw);
+}
+
 html.ux-chat-clean .messages {
   flex: 1;
   min-height: 0;
 }
 
-html.ux-chat-clean .input-area {
+html.ux-chat-clean.oc-chat-has-messages .messages {
+  flex: 1;
+  min-height: 0;
+  width: auto;
+  max-width: none;
+}
+
+html.ux-chat-clean .input-area.oc-clean-composer-centered {
+  width: min(840px, calc(100vw - 48px));
+  max-width: 840px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: max(2px, env(safe-area-inset-left));
+  padding-right: max(2px, env(safe-area-inset-right));
+  box-sizing: border-box;
+}
+
+/* 24–40 px entre la tagline et le composer ; pas de barre collée au bas */
+html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .input-area.oc-clean-composer-centered {
+  flex-shrink: 0;
+  position: static;
+  border-top: none;
+  background: transparent;
+  backdrop-filter: none;
+  margin-top: clamp(24px, 3.5vh, 40px);
+  padding: 0 2px max(12px, env(safe-area-inset-bottom));
+  z-index: auto;
+}
+
+html.ux-chat-clean.oc-chat-has-messages .input-area.oc-clean-composer-centered {
   flex-shrink: 0;
   position: sticky;
   bottom: 0;
   z-index: 24;
   padding-bottom: max(14px, env(safe-area-inset-bottom));
+  margin-top: 0;
   background: linear-gradient(180deg, transparent 0%, rgba(237, 250, 252, 0.92) 22%, rgba(237, 250, 252, 0.98) 100%);
   backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border-cyan);
 }
 
 html.ux-chat-clean #uxToolbar {
@@ -445,6 +523,11 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .messages {
     padding: 8px 2px;
     gap: 10px;
+  }
+
+  html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .messages {
+    padding: 4px 10px 0;
+    gap: 8px;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
@@ -1451,9 +1534,10 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     </div>
   </div>
 
-  <!-- CHAT SCREEN (hidden until auth) -->
+  <!-- CHAT SCREEN (hidden until auth) : stage = scroll + composer -->
+  <div class="oc-clean-stage oc-clean-empty-state" id="ocCleanStage">
   <div class="messages" id="messages">
-    <div class="welcome hero-cockpit" id="welcome">
+    <div class="welcome hero-cockpit oc-clean-hero" id="welcome">
       <div class="hero-emblem-wrap" aria-hidden="true">
         <div class="hero-ring"></div>
         <div class="hero-ring ring-2"></div>
@@ -1475,7 +1559,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     </div>
   </div>
 
-  <div class="input-area" id="inputArea">
+  <div class="input-area oc-clean-composer-centered" id="inputArea">
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
       <button type="button" class="ux-tool-btn tool-accent" id="toggleOwnerAccess" aria-expanded="false" aria-controls="ownerAccessPanel" title="Accès privé (owner)">
@@ -1519,6 +1603,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     </div>
     </div>
   </div>
+  </div>
 
   <div id="ocSettingsBackdrop" class="oc-settings-backdrop hidden" aria-hidden="true"></div>
   <aside id="ocSettingsDrawer" class="oc-settings-drawer" aria-hidden="true" aria-labelledby="ocSettingsDrawerTitle" inert="">
@@ -1540,7 +1625,6 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
         </div>
         <p class="oc-settings-section-label oc-settings-only-clean">Mode interface</p>
         <button type="button" class="ux-tool-btn ux-tool-wide oc-settings-only-clean" id="btnUxSwitchToLegacy">Afficher interface technique (legacy)</button>
-        <p class="oc-settings-helper oc-settings-only-clean" style="font-size:11px;color:var(--text-muted);font-family:var(--font-ui);">Réversible : <code>?ux=legacy</code> ou <code>localStorage.openchawn_ux_mode=legacy</code> ; retour propre : <code>?ux=chat_clean</code> ou effacer la clé.</p>
 
         <button type="button" class="oc-drawer-text-link oc-settings-only-legacy" id="btnUxBackToChatClean">Revenir à chat_clean</button>
 
@@ -1685,6 +1769,12 @@ const dom = {
 
 const OC_UX_LEGACY = document.documentElement.classList.contains('ux-legacy');
 console.log('[OpenChawn] ux_mode:', OC_UX_LEGACY ? 'legacy' : 'chat_clean');
+
+(function ocUxInitCleanEmptyStage() {
+  const st = document.getElementById('ocCleanStage');
+  if (!st) return;
+  if (OC_UX_LEGACY) st.classList.remove('oc-clean-empty-state');
+})();
 
 function ocUxPlaceTechnicalBundle() {
   const bundle = document.getElementById('ocTechnicalBundle');
@@ -2526,6 +2616,10 @@ function scrollDown() {
 
 // ── Add message ─────────────────────────────────────
 function addMsg(role, text, meta) {
+  if (!OC_UX_LEGACY) {
+    document.documentElement.classList.add('oc-chat-has-messages');
+    document.getElementById('ocCleanStage')?.classList.remove('oc-clean-empty-state');
+  }
   if (dom.welcome) dom.welcome.remove();
 
   const div = document.createElement('div');
