@@ -560,6 +560,102 @@ body::after {
 
 .send-btn:disabled { opacity: 0.2; cursor: not-allowed; }
 
+/* ── V11.6.1 UX: import / export (frontend only) ─────── */
+
+.ux-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.ux-tool-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--cyan);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.ux-tool-btn:hover:not(:disabled) {
+  border-color: var(--border-active);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.ux-tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.import-panel {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius);
+}
+
+.import-panel-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.import-panel label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  width: 100%;
+}
+
+.import-panel textarea {
+  width: 100%;
+  min-height: 88px;
+  max-height: 220px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: rgba(6, 10, 16, 0.5);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+  outline: none;
+}
+
+.import-panel textarea:focus {
+  border-color: var(--border-active);
+}
+
+.import-status {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  min-height: 16px;
+  margin-top: 8px;
+}
+
+.import-status.err { color: var(--error); }
+
+.import-status.warn { color: var(--cyan-dim); }
+
 .send-btn svg {
   width: 18px;
   height: 18px;
@@ -627,7 +723,7 @@ body::after {
       <div class="logo-mark">OC</div>
       <div>
         <div class="header-title">OpenChawn</div>
-        <div class="header-sub">Neural Interface v0.6</div>
+        <div class="header-sub">Neural Interface v11.6.1 UX</div>
       </div>
     </div>
     <div class="header-right">
@@ -733,6 +829,27 @@ body::after {
   </div>
 
   <div class="input-area" id="inputArea">
+    <div class="ux-toolbar" id="uxToolbar" aria-label="Outils texte">
+      <button type="button" class="ux-tool-btn" id="toggleImportPanel" title="Coller ou charger un fichier .txt / .md (max 100 Ko)">
+        Importer du texte
+      </button>
+      <button type="button" class="ux-tool-btn" id="btnDownloadResponse" disabled title="Derniere reponse assistant">
+        Telecharger la reponse
+      </button>
+      <button type="button" class="ux-tool-btn" id="btnCopyResponse" disabled title="Copier la derniere reponse">
+        Copier la reponse
+      </button>
+    </div>
+    <div class="import-panel hidden" id="importPanel" aria-hidden="true">
+      <div class="import-panel-top">
+        <label for="importPaste">Coller un texte long (max 100 Ko)</label>
+        <input type="file" id="importFile" class="hidden" accept=".txt,.md,text/plain,text/markdown">
+        <button type="button" class="ux-tool-btn" id="btnPickImportFile">Fichier .txt / .md</button>
+        <button type="button" class="ux-tool-btn" id="btnInsertImport">Inserer dans le message</button>
+      </div>
+      <textarea id="importPaste" placeholder="Collez ici ou utilisez « Fichier .txt / .md »..." spellcheck="false"></textarea>
+      <div class="import-status" id="importStatus" aria-live="polite"></div>
+    </div>
     <div class="input-wrapper">
       <textarea id="input" rows="1" placeholder="Transmission..." autofocus></textarea>
       <button class="send-btn" id="sendBtn" title="Transmettre">
@@ -802,7 +919,170 @@ const dom = {
   sysUser: document.getElementById('sysUser'),
   logoutBtn: document.getElementById('logoutBtn'),
   continueGuest: document.getElementById('continueGuest'),
+  uxToolbar: document.getElementById('uxToolbar'),
+  toggleImportPanel: document.getElementById('toggleImportPanel'),
+  importPanel: document.getElementById('importPanel'),
+  importPaste: document.getElementById('importPaste'),
+  importFile: document.getElementById('importFile'),
+  importStatus: document.getElementById('importStatus'),
+  btnPickImportFile: document.getElementById('btnPickImportFile'),
+  btnInsertImport: document.getElementById('btnInsertImport'),
+  btnDownloadResponse: document.getElementById('btnDownloadResponse'),
+  btnCopyResponse: document.getElementById('btnCopyResponse'),
 };
+
+// ── V11.6.1 UX: text import / export (client-only; normal POST /chat) ──
+const OC_IMPORT_MAX_BYTES = 100 * 1024;
+const OC_ASSUMED_MAX_MESSAGE_CHARS = 4000;
+const OC_IMPORT_MESSAGE_PREFIX = 'Voici un texte à analyser :\n\n';
+let lastAssistantPlain = '';
+
+function ocUtf8Bytes(s) {
+  return new Blob([s]).size;
+}
+
+function setImportStatus(msg, opts) {
+  const o = typeof opts === 'boolean' ? { err: opts } : (opts || {});
+  dom.importStatus.textContent = msg || '';
+  dom.importStatus.classList.toggle('err', !!o.err);
+  dom.importStatus.classList.toggle('warn', !!o.warn && !o.err);
+}
+
+function isAllowedImportFile(f) {
+  if (!f || !f.name) return false;
+  const n = f.name.toLowerCase();
+  return n.endsWith('.txt') || n.endsWith('.md');
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.onerror = () => reject(new Error('Lecture fichier impossible'));
+    fr.readAsText(file);
+  });
+}
+
+function confirmImportPayload(raw, sourceLabel) {
+  const t = (raw || '').replace(/^\uFEFF/, '');
+  const bytes = ocUtf8Bytes(t);
+  if (!t.trim()) {
+    setImportStatus('Texte vide.', { err: true });
+    return null;
+  }
+  if (bytes > OC_IMPORT_MAX_BYTES) {
+    setImportStatus('Fichier ou texte trop volumineux (max 100 Ko en UTF-8).', { err: true });
+    return null;
+  }
+  setImportStatus(
+    sourceLabel ? 'Charge : ' + sourceLabel + ' (' + bytes + ' octets UTF-8)' : ' Pret (' + bytes + ' octets UTF-8).',
+    {}
+  );
+  return t;
+}
+
+function refreshExportButtons() {
+  const ok = !!(lastAssistantPlain && lastAssistantPlain.length);
+  dom.btnDownloadResponse.disabled = !ok;
+  dom.btnCopyResponse.disabled = !ok;
+}
+
+function insertImportIntoMainEditor(text) {
+  const body = OC_IMPORT_MESSAGE_PREFIX + text.trim();
+  if (body.length > OC_ASSUMED_MAX_MESSAGE_CHARS) {
+    setImportStatus(
+      'Attention: message long (~' +
+        body.length +
+        ' caracteres). La limite serveur est souvent ' +
+        OC_ASSUMED_MAX_MESSAGE_CHARS +
+        ' — la transmission peut etre refusee.',
+      { warn: true }
+    );
+  } else {
+    setImportStatus('Insere dans la zone de transmission.', {});
+  }
+  dom.input.value = body;
+  dom.importPaste.value = '';
+  dom.input.dispatchEvent(new Event('input'));
+  dom.input.focus();
+}
+
+function downloadAssistantTxt() {
+  if (!lastAssistantPlain) return;
+  const blob = new Blob([lastAssistantPlain], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'openchawn-response.txt';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copyAssistantPlain() {
+  if (!lastAssistantPlain) return;
+  try {
+    await navigator.clipboard.writeText(lastAssistantPlain);
+    setImportStatus('Reponse copiee dans le presse-papiers.', {});
+  } catch (_) {
+    const ta = document.createElement('textarea');
+    ta.value = lastAssistantPlain;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      setImportStatus('Reponse copiee (fallback).', {});
+    } catch {
+      setImportStatus('Copie impossible sur ce navigateur.', { err: true });
+    }
+    ta.remove();
+  }
+}
+
+dom.toggleImportPanel.addEventListener('click', () => {
+  dom.importPanel.classList.toggle('hidden');
+  const hiddenNow = dom.importPanel.classList.contains('hidden');
+  dom.importPanel.setAttribute('aria-hidden', hiddenNow ? 'true' : 'false');
+});
+
+dom.btnPickImportFile.addEventListener('click', () => dom.importFile.click());
+
+dom.importFile.addEventListener('change', async (ev) => {
+  const input = ev.target;
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+
+  if (!isAllowedImportFile(f)) {
+    setImportStatus('Formats acceptes : .txt et .md uniquement.', { err: true });
+    return;
+  }
+  if (f.size > OC_IMPORT_MAX_BYTES) {
+    setImportStatus('Fichier trop lourd (max 100 Ko).', { err: true });
+    return;
+  }
+
+  try {
+    const text = await readFileAsText(f);
+    const ok = confirmImportPayload(text, f.name);
+    if (ok !== null) dom.importPaste.value = ok;
+  } catch (e) {
+    setImportStatus(e.message || 'Erreur de lecture', { err: true });
+  }
+});
+
+dom.btnInsertImport.addEventListener('click', () => {
+  const ok = confirmImportPayload(dom.importPaste.value, '');
+  if (ok !== null) insertImportIntoMainEditor(ok);
+});
+
+dom.btnDownloadResponse.addEventListener('click', downloadAssistantTxt);
+dom.btnCopyResponse.addEventListener('click', () => { copyAssistantPlain(); });
 
 // ── Auth helpers ─────────────────────────────────────
 function authHeaders() {
@@ -1146,6 +1426,8 @@ async function send() {
     const raw = d.output || d.response || d.message || "...";
     const clean = (typeof raw === 'string') ? raw : JSON.stringify(raw, null, 2);
     addMsg('assistant', clean);
+    lastAssistantPlain = clean;
+    refreshExportButtons();
 
     // provider gardé en console pour debug, pas affiché
     if (d.provider) console.log('[OpenChawn] provider:', d.provider);
