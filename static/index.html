@@ -196,21 +196,21 @@ html.ux-legacy .oc-drawer-text-link {
   text-decoration-color: var(--cyan-soft);
 }
 
-/* Stage = zone scroll + composer (chat_clean : état vide centré ou conversation) */
-.oc-clean-stage {
+/* Shell = zone messages + composer (GPT-like en chat_clean) */
+.oc-chat-shell {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-html.ux-chat-clean .oc-clean-stage {
+html.ux-chat-clean .oc-chat-shell {
   flex: 1;
   min-height: 0;
 }
 
-/* État vide GPT-like : hero + composer centrés verticalement dans la colonne */
-html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state {
+/* État vide : hero + composer centrés verticalement */
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty {
   justify-content: center;
   align-items: center;
   padding-left: max(12px, env(safe-area-inset-left));
@@ -218,7 +218,7 @@ html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state {
   padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
-html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .messages {
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty .messages {
   flex: 0 0 auto;
   min-height: 0;
   overflow: visible;
@@ -228,17 +228,17 @@ html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .messages {
   padding-bottom: 0;
 }
 
-html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .oc-clean-hero {
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty .oc-clean-hero {
   flex: 0 0 auto;
   padding: 8px 12px 0;
   gap: 10px;
 }
 
-html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .oc-clean-hero .hero-system-ready {
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty .oc-clean-hero .hero-system-ready {
   margin-bottom: 0;
 }
 
-html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .oc-clean-hero p {
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty .oc-clean-hero p {
   margin: 0;
   max-width: min(520px, 92vw);
 }
@@ -248,45 +248,78 @@ html.ux-chat-clean .messages {
   min-height: 0;
 }
 
-html.ux-chat-clean.oc-chat-has-messages .messages {
+html.ux-chat-clean .oc-chat-shell.oc-chat-active .messages {
   flex: 1;
   min-height: 0;
   width: auto;
   max-width: none;
 }
 
-html.ux-chat-clean .input-area.oc-clean-composer-centered {
+/* Composer : largeur desktop ; mobile surchargé en @media */
+html.ux-chat-clean .input-area.oc-composer-centered {
   width: min(840px, calc(100vw - 48px));
   max-width: 840px;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0 auto;
   padding-left: max(2px, env(safe-area-inset-left));
   padding-right: max(2px, env(safe-area-inset-right));
   box-sizing: border-box;
 }
 
-/* 24–40 px entre la tagline et le composer ; pas de barre collée au bas */
-html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .input-area.oc-clean-composer-centered {
+/* Empty : sous le hero, pas collé au bas */
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
   flex-shrink: 0;
-  position: static;
+  position: relative;
   border-top: none;
   background: transparent;
   backdrop-filter: none;
   margin-top: clamp(24px, 3.5vh, 40px);
-  padding: 0 2px max(12px, env(safe-area-inset-bottom));
+  padding: 0 2px max(12px, env(safe-area-inset-bottom, 0px));
   z-index: auto;
 }
 
-html.ux-chat-clean.oc-chat-has-messages .input-area.oc-clean-composer-centered {
+/* Conversation : sticky bas + safe-area */
+html.ux-chat-clean .input-area.oc-composer-centered.oc-composer-sticky {
   flex-shrink: 0;
   position: sticky;
-  bottom: 0;
+  bottom: env(safe-area-inset-bottom, 0px);
   z-index: 24;
-  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
   margin-top: 0;
   background: linear-gradient(180deg, transparent 0%, rgba(237, 250, 252, 0.92) 22%, rgba(237, 250, 252, 0.98) 100%);
   backdrop-filter: blur(8px);
   border-top: 1px solid var(--border-cyan);
+}
+
+/* Bulles sans méta technique (lang, etc.) en chat_clean */
+html.ux-chat-clean .msg-meta {
+  display: none !important;
+}
+
+.owner-access-note-clean {
+  display: none;
+}
+
+/* Tiroir + chat_clean : pas de barre diagnostic ni bandeau accès dans l’UI propre */
+html.ux-chat-clean #sysBar,
+html.ux-chat-clean #ocSettingsDrawer .owner-access-strip {
+  display: none !important;
+}
+
+html.ux-chat-clean #ocSettingsDrawer .owner-access-note {
+  display: none !important;
+}
+
+html.ux-chat-clean #ocSettingsDrawer .owner-access-note-clean {
+  display: block !important;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  margin: 0 0 12px;
+}
+
+html.ux-legacy #ocSettingsDrawer .owner-access-note-clean {
+  display: none !important;
 }
 
 html.ux-chat-clean #uxToolbar {
@@ -494,7 +527,7 @@ html.ux-chat-clean #ocTechnicalBundle .owner-access-strip {
   display: none !important;
 }
 
-/* HUD technique : hors écran jusqu’à ouverture du tiroir (aucun ENGINE/… dans le flux principal) */
+/* Tiroir fermé : pas d’interaction tant qu’il est hors écran */
 html.ux-chat-clean .oc-settings-drawer:not(.is-open) {
   pointer-events: none;
 }
@@ -525,9 +558,18 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     gap: 10px;
   }
 
-  html.ux-chat-clean .oc-clean-stage.oc-clean-empty-state .messages {
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .messages {
     padding: 4px 10px 0;
     gap: 8px;
+  }
+
+  html.ux-chat-clean .input-area.oc-composer-centered {
+    width: calc(100vw - 24px);
+    max-width: none;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
@@ -1534,8 +1576,8 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     </div>
   </div>
 
-  <!-- CHAT SCREEN (hidden until auth) : stage = scroll + composer -->
-  <div class="oc-clean-stage oc-clean-empty-state" id="ocCleanStage">
+  <!-- CHAT SCREEN (hidden until auth) : shell messages + composer -->
+  <div class="oc-chat-shell oc-chat-empty" id="ocChatShell">
   <div class="messages" id="messages">
     <div class="welcome hero-cockpit oc-clean-hero" id="welcome">
       <div class="hero-emblem-wrap" aria-hidden="true">
@@ -1559,7 +1601,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     </div>
   </div>
 
-  <div class="input-area oc-clean-composer-centered" id="inputArea">
+  <div class="input-area oc-composer-centered" id="inputArea">
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
       <button type="button" class="ux-tool-btn tool-accent" id="toggleOwnerAccess" aria-expanded="false" aria-controls="ownerAccessPanel" title="Accès privé (owner)">
@@ -1598,7 +1640,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
       <span class="clean-gear-slot">
-        <button type="button" class="oc-clean-toolbar-btn gear-btn oc-clean-input-quick" id="btnUxSettingsGear" aria-label="Réglages et diagnostic" title="Réglages">⚙︎</button>
+        <button type="button" class="oc-clean-toolbar-btn gear-btn oc-clean-input-quick" id="btnUxSettingsGear" aria-label="Réglages" title="Réglages">⚙︎</button>
       </span>
     </div>
     </div>
@@ -1628,7 +1670,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 
         <button type="button" class="oc-drawer-text-link oc-settings-only-legacy" id="btnUxBackToChatClean">Revenir à chat_clean</button>
 
-        <!-- Bundle ENGINE / PROFILE / OWNER — déplaçable (chat_clean dans ce panneau) -->
+        <!-- Bundle diagnostic (visible surtout en mode technique / legacy) -->
         <div id="ocTechnicalMobilityDrawerSlot">
           <div id="ocTechnicalBundle">
             <div class="sys-bar hidden" id="sysBar">
@@ -1668,6 +1710,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
               </div>
               <div class="owner-access-panel hidden" id="ownerAccessPanel" aria-labelledby="toggleOwnerAccess">
                 <p class="owner-access-note"><strong>Accès privé (owner)</strong> — secret stocké uniquement dans ce navigateur (localStorage). Jamais affiché en clair après enregistrement. Transmis uniquement via l’en-tête Authorization sur POST /chat.</p>
+                <p class="owner-access-note-clean"><strong>Accès privé</strong> — réservé au propriétaire : collez votre secret une seule fois. Il reste dans ce navigateur et n’est plus affiché en clair.</p>
                 <input type="password" id="ownerTokenInput" autocomplete="off" spellcheck="false" placeholder="Coller le jeton">
                 <div class="owner-access-actions">
                   <button type="button" class="ux-tool-btn" id="btnSaveOwnerToken">Enregistrer le jeton</button>
@@ -1765,15 +1808,29 @@ const dom = {
   sysMode: document.getElementById('sysMode'),
   accessTierChip: document.getElementById('accessTierChip'),
   btnSpeech: document.getElementById('btnSpeech'),
+  chatShell: document.getElementById('ocChatShell'),
 };
 
 const OC_UX_LEGACY = document.documentElement.classList.contains('ux-legacy');
 console.log('[OpenChawn] ux_mode:', OC_UX_LEGACY ? 'legacy' : 'chat_clean');
 
-(function ocUxInitCleanEmptyStage() {
-  const st = document.getElementById('ocCleanStage');
-  if (!st) return;
-  if (OC_UX_LEGACY) st.classList.remove('oc-clean-empty-state');
+function ocSyncChatCleanLayout() {
+  if (OC_UX_LEGACY || !dom.chatShell || !dom.messages || !dom.inputArea) return;
+  const n = dom.messages.querySelectorAll('.msg').length;
+  const empty = n === 0;
+  dom.chatShell.classList.toggle('oc-chat-empty', empty);
+  dom.chatShell.classList.toggle('oc-chat-active', !empty);
+  dom.inputArea.classList.toggle('oc-composer-sticky', !empty);
+}
+
+(function ocUxInitChatShell() {
+  if (!dom.chatShell) return;
+  if (OC_UX_LEGACY) {
+    dom.chatShell.classList.remove('oc-chat-empty', 'oc-chat-active');
+    dom.inputArea?.classList.remove('oc-composer-sticky');
+  } else {
+    ocSyncChatCleanLayout();
+  }
 })();
 
 function ocUxPlaceTechnicalBundle() {
@@ -2414,6 +2471,7 @@ function enterChat() {
   }
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   ocApplySysBarDefaults();
+  ocSyncChatCleanLayout();
   dom.input.focus();
 }
 
@@ -2442,6 +2500,7 @@ function enterGuestChat() {
   dom.logoutBtn.textContent = 'Connexion';
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   ocApplySysBarDefaults();
+  ocSyncChatCleanLayout();
   dom.input.focus();
 }
 
@@ -2616,10 +2675,6 @@ function scrollDown() {
 
 // ── Add message ─────────────────────────────────────
 function addMsg(role, text, meta) {
-  if (!OC_UX_LEGACY) {
-    document.documentElement.classList.add('oc-chat-has-messages');
-    document.getElementById('ocCleanStage')?.classList.remove('oc-clean-empty-state');
-  }
   if (dom.welcome) dom.welcome.remove();
 
   const div = document.createElement('div');
@@ -2637,6 +2692,7 @@ function addMsg(role, text, meta) {
   }
 
   dom.messages.insertBefore(div, dom.typing);
+  ocSyncChatCleanLayout();
   scrollDown();
 }
 
