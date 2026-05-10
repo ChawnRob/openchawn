@@ -630,6 +630,26 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 }
 
 @media (max-width: 640px) {
+  html.ux-chat-clean .oc-mobile-composer-hud {
+    display: contents;
+  }
+
+  html.ux-chat-clean .input-area.oc-composer-centered {
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn,
+  html.ux-chat-clean .clean-input-shell .input-wrapper .clean-gear-slot {
+    display: none !important;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper {
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
   html.ux-chat-clean .header {
     padding: 8px 2px 10px;
     align-items: flex-start;
@@ -695,6 +715,11 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 
   html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
     margin-top: clamp(16px, 3vh, 28px);
+  }
+
+  html.ux-chat-clean .oc-mobile-composer-menu:not(.hidden) {
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    max-height: 36vh;
   }
 }
 
@@ -1414,6 +1439,61 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 .oc-composer-toast.is-visible {
   display: block;
 }
+
+/* chat_clean mobile : micro + réglages dans le menu « + » */
+html.ux-chat-clean .oc-mobile-composer-hud {
+  display: none;
+}
+
+html.ux-chat-clean .oc-mobile-composer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgba(6, 37, 54, 0.22);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.ux-chat-clean .oc-mobile-composer-menu {
+  position: fixed;
+  z-index: 26;
+  left: max(10px, env(safe-area-inset-left, 0px));
+  right: max(10px, env(safe-area-inset-right, 0px));
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  max-height: min(320px, 44vh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border-cyan);
+  box-shadow: 0 12px 40px rgba(6, 37, 54, 0.18);
+}
+
+html.ux-chat-clean .oc-mobile-composer-menu-item {
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--deep-blue);
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(237, 250, 252, 0.9);
+  cursor: pointer;
+}
+
+html.ux-chat-clean .oc-mobile-composer-menu-item:active {
+  background: rgba(56, 221, 245, 0.15);
+}
+
 .mic-btn:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
@@ -1757,7 +1837,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
       <div class="import-status" id="importStatus" aria-live="polite"></div>
     </div>
     <div class="input-wrapper">
-      <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte">+</button>
+      <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte" aria-expanded="false">+</button>
       <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
@@ -1772,6 +1852,14 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
         <button type="button" class="oc-clean-toolbar-btn gear-btn oc-clean-input-quick" id="btnUxSettingsGear" aria-label="Réglages" title="Réglages">⚙︎</button>
       </span>
     </div>
+    </div>
+    <div class="oc-mobile-composer-hud" id="ocMobileComposerHud" aria-hidden="true">
+      <button type="button" class="oc-mobile-composer-backdrop hidden" id="ocMobileComposerBackdrop" tabindex="-1" aria-hidden="true"></button>
+      <div class="oc-mobile-composer-menu hidden" id="ocMobileComposerMenu" role="menu" aria-label="Plus d’options">
+        <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuSpeech">Micro dictée</button>
+        <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuImport">Importer du texte</button>
+        <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuSettings">Réglages</button>
+      </div>
     </div>
   </div>
   </div>
@@ -1992,9 +2080,62 @@ function ocUxSetInputPlaceholder() {
       dom.input.placeholder = 'Transmettez votre requête… (Entrée pour envoyer)';
       return;
     }
-    const narrow = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 390px)').matches;
-    dom.input.placeholder = narrow ? 'Message…' : 'Message… (\u23CE pour envoyer)';
+    const mobile = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 640px)').matches;
+    dom.input.placeholder = mobile ? 'Message…' : 'Message… (\u23CE pour envoyer)';
   } catch (_) {}
+}
+
+function ocChatCleanMobileComposer() {
+  return document.documentElement.classList.contains('ux-chat-clean')
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 640px)').matches;
+}
+
+function ocUpdatePlusButtonForMobileClean() {
+  const btn = document.getElementById('btnImportPlus');
+  if (!btn || OC_UX_LEGACY) return;
+  if (ocChatCleanMobileComposer()) {
+    btn.setAttribute('aria-label', 'Plus d’options');
+    btn.title = 'Plus d’options';
+    btn.setAttribute('aria-haspopup', 'menu');
+  } else {
+    btn.setAttribute('aria-label', 'Importer du texte');
+    btn.title = 'Importer du texte';
+    btn.removeAttribute('aria-haspopup');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function ocCloseMobileComposerMenu() {
+  const b = document.getElementById('ocMobileComposerBackdrop');
+  const m = document.getElementById('ocMobileComposerMenu');
+  const btn = document.getElementById('btnImportPlus');
+  b?.classList.add('hidden');
+  m?.classList.add('hidden');
+  b?.setAttribute('aria-hidden', 'true');
+  m?.setAttribute('aria-hidden', 'true');
+  btn?.setAttribute('aria-expanded', 'false');
+}
+
+function ocOpenMobileComposerMenu() {
+  if (!ocChatCleanMobileComposer()) return;
+  const b = document.getElementById('ocMobileComposerBackdrop');
+  const m = document.getElementById('ocMobileComposerMenu');
+  const btn = document.getElementById('btnImportPlus');
+  if (!b || !m) return;
+  b.classList.remove('hidden');
+  m.classList.remove('hidden');
+  b.setAttribute('aria-hidden', 'false');
+  m.setAttribute('aria-hidden', 'false');
+  btn?.setAttribute('aria-expanded', 'true');
+  document.getElementById('ocMobileMenuSpeech')?.focus();
+}
+
+function ocToggleMobileComposerMenu() {
+  const m = document.getElementById('ocMobileComposerMenu');
+  if (!m || !ocChatCleanMobileComposer()) return;
+  if (m.classList.contains('hidden')) ocOpenMobileComposerMenu();
+  else ocCloseMobileComposerMenu();
 }
 
 /** Tiroir réglages ════════════════════════════════════════════════════ */
@@ -2024,13 +2165,22 @@ function ocCloseSettingsDrawer() {
   backdrop.setAttribute('aria-hidden', 'true');
   drawer.setAttribute('aria-hidden', 'true');
   drawer.setAttribute('inert', '');
-  if (!OC_UX_LEGACY) document.getElementById('btnUxSettingsGear')?.focus();
+  if (!OC_UX_LEGACY) {
+    const gear = document.getElementById('btnUxSettingsGear');
+    if (gear && gear.offsetParent !== null) gear.focus();
+    else document.getElementById('btnImportPlus')?.focus();
+  }
 }
 
 ocUxPlaceTechnicalBundle();
 ocUxCleanMountHeaderControls();
 ocUxSetInputPlaceholder();
-window.addEventListener('resize', () => { ocUxSetInputPlaceholder(); }, { passive: true });
+ocUpdatePlusButtonForMobileClean();
+window.addEventListener('resize', () => {
+  ocUxSetInputPlaceholder();
+  ocUpdatePlusButtonForMobileClean();
+  if (!ocChatCleanMobileComposer()) ocCloseMobileComposerMenu();
+}, { passive: true });
 
 document.getElementById('btnUxSettingsGear')?.addEventListener('click', () => ocOpenSettingsDrawer());
 document.getElementById('btnCloseOcSettings')?.addEventListener('click', () => ocCloseSettingsDrawer());
@@ -2055,8 +2205,32 @@ document.getElementById('btnMirrorSpeech')?.addEventListener('click', () => {
 document.getElementById('btnMirrorDownload')?.addEventListener('click', () => dom.btnDownloadResponse?.click?.());
 document.getElementById('btnMirrorCopy')?.addEventListener('click', () => dom.btnCopyResponse?.click?.());
 
-document.getElementById('btnImportPlus')?.addEventListener('click', () => {
+document.getElementById('btnImportPlus')?.addEventListener('click', (ev) => {
+  if (ocChatCleanMobileComposer()) {
+    ev.preventDefault();
+    ocToggleMobileComposerMenu();
+    return;
+  }
   dom.toggleImportPanel?.click?.();
+});
+
+document.getElementById('ocMobileComposerBackdrop')?.addEventListener('click', () => {
+  ocCloseMobileComposerMenu();
+});
+
+document.getElementById('ocMobileMenuSpeech')?.addEventListener('click', () => {
+  ocCloseMobileComposerMenu();
+  dom.btnSpeech?.click?.();
+});
+
+document.getElementById('ocMobileMenuImport')?.addEventListener('click', () => {
+  ocCloseMobileComposerMenu();
+  dom.toggleImportPanel?.click?.();
+});
+
+document.getElementById('ocMobileMenuSettings')?.addEventListener('click', () => {
+  ocCloseMobileComposerMenu();
+  ocOpenSettingsDrawer();
 });
 
 document.getElementById('btnUxSwitchToLegacy')?.addEventListener('click', () => {
@@ -2076,6 +2250,13 @@ document.getElementById('btnUxBackToChatClean')?.addEventListener('click', () =>
 
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape') return;
+  const m = document.getElementById('ocMobileComposerMenu');
+  if (m && !m.classList.contains('hidden')) {
+    ocCloseMobileComposerMenu();
+    document.getElementById('btnImportPlus')?.focus();
+    ev.preventDefault();
+    return;
+  }
   const d = ocSettingsDrawerEls().drawer;
   if (d && d.classList.contains('is-open')) {
     ocCloseSettingsDrawer();
