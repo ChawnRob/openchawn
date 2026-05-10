@@ -12,10 +12,17 @@
     var ls = (localStorage.getItem('openchawn_ux_mode') || '').trim().toLowerCase();
   } catch (e) { ls = ''; }
   var w = typeof window.OPENCHAWN_UX_MODE === 'string' ? window.OPENCHAWN_UX_MODE.toLowerCase().trim() : '';
-  var legacy =
+  /* Défaut UX_MODE=chat_clean ; legacy / debug seulement si demandé explicitement */
+  var legacy = false;
+  if (q === 'chat_clean' || w === 'chat_clean') {
+    legacy = false;
+  } else if (
     q === 'legacy' || q === 'full' || q === 'debug'
     || ls === 'legacy' || ls === 'debug'
-    || w === 'legacy' || w === 'debug';
+    || w === 'legacy' || w === 'debug'
+  ) {
+    legacy = true;
+  }
   document.documentElement.classList.add(legacy ? 'ux-legacy' : 'ux-chat-clean');
 })();
 </script>
@@ -198,6 +205,7 @@ html.ux-chat-clean .input-area {
   flex-shrink: 0;
   position: sticky;
   bottom: 0;
+  z-index: 24;
   padding-bottom: max(14px, env(safe-area-inset-bottom));
   background: linear-gradient(180deg, transparent 0%, rgba(237, 250, 252, 0.92) 22%, rgba(237, 250, 252, 0.98) 100%);
   backdrop-filter: blur(8px);
@@ -406,6 +414,15 @@ html.ux-chat-clean #ocTechnicalSlotLegacy {
 
 html.ux-chat-clean #ocTechnicalBundle .owner-access-strip {
   display: none !important;
+}
+
+/* HUD technique : hors écran jusqu’à ouverture du tiroir (aucun ENGINE/… dans le flux principal) */
+html.ux-chat-clean .oc-settings-drawer:not(.is-open) {
+  pointer-events: none;
+}
+
+html.ux-chat-clean .oc-settings-drawer.is-open {
+  pointer-events: auto;
 }
 
 .oc-technical-slot-legacy-host {
@@ -953,6 +970,24 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   border: 1px solid var(--border-cyan);
   padding: 2px 7px;
   border-radius: 6px;
+}
+
+.msg pre,
+.msg code,
+.msg samp,
+.msg kbd {
+  font-family: var(--font-tech);
+  font-size: 0.92em;
+}
+
+.msg pre {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(6, 37, 54, 0.04);
+  border: 1px solid var(--border-cyan);
+  margin: 0.5em 0;
 }
 
 .typing {
@@ -1505,7 +1540,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
         </div>
         <p class="oc-settings-section-label oc-settings-only-clean">Mode interface</p>
         <button type="button" class="ux-tool-btn ux-tool-wide oc-settings-only-clean" id="btnUxSwitchToLegacy">Afficher interface technique (legacy)</button>
-        <p class="oc-settings-helper oc-settings-only-clean" style="font-size:11px;color:var(--text-muted);font-family:var(--font-ui);">Réversible : rechargez avec <code>?ux=legacy</code> ou définissez <code>localStorage.openchawn_ux_mode=legacy</code>.</p>
+        <p class="oc-settings-helper oc-settings-only-clean" style="font-size:11px;color:var(--text-muted);font-family:var(--font-ui);">Réversible : <code>?ux=legacy</code> ou <code>localStorage.openchawn_ux_mode=legacy</code> ; retour propre : <code>?ux=chat_clean</code> ou effacer la clé.</p>
 
         <button type="button" class="oc-drawer-text-link oc-settings-only-legacy" id="btnUxBackToChatClean">Revenir à chat_clean</button>
 
