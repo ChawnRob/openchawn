@@ -970,7 +970,7 @@ body::after {
       <div class="logo-mark">OC</div>
       <div>
         <div class="header-title">OpenChawn</div>
-        <div class="header-sub">Neural Interface v11.6.2</div>
+        <div class="header-sub">Neural Interface v11.6.3</div>
       </div>
     </div>
     <div class="header-right">
@@ -1263,9 +1263,17 @@ function ocRefreshOwnerAccessSummary() {
   el.textContent = '';
 }
 
-function ocRefreshAccessChips() {
-  if (!dom.sysMode || !dom.accessTierChip) return;
+/**
+ * Source unique de vérité UI pour PROFILE / USER / MODE / ACCÈS (strip système).
+ * OWNER ACTIVE + Robert + owner + private uniquement si ocLastOwnerValidated === true
+ * (dernière réponse POST /chat avec owner_authenticated true) ET jeton owner local présent.
+ */
+function ocRenderSysAccessState() {
+  if (!dom.sysMode || !dom.accessTierChip || !dom.sysProfile || !dom.sysUser) return;
+
   const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  const ownerLocal = ocHasLocalOwnerToken();
+
   dom.accessTierChip.classList.remove(
     'tier-owner',
     'tier-guest',
@@ -1274,7 +1282,16 @@ function ocRefreshAccessChips() {
     'tier-refused',
   );
 
+  // ── Compte JWT : jamais réutiliser les labels owner invité du strip ──
   if (jwt) {
+    try {
+      const u = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+      dom.sysUser.textContent = (u && u.email) ? u.email : '---';
+      dom.sysProfile.textContent = (u && u.business_type) ? u.business_type : '---';
+    } catch (_) {
+      dom.sysUser.textContent = '---';
+      dom.sysProfile.textContent = '---';
+    }
     dom.sysMode.textContent = 'public';
     dom.accessTierChip.textContent = 'COMPTE';
     dom.accessTierChip.classList.add('tier-user');
@@ -1282,6 +1299,7 @@ function ocRefreshAccessChips() {
     return;
   }
 
+  // État rare : pas de JWT mais pas invité (transition) — rester cohérent « limité »
   if (!isGuestMode) {
     dom.sysProfile.textContent = dom.sysProfile.textContent || '---';
     dom.sysUser.textContent = dom.sysUser.textContent || '---';
@@ -1292,7 +1310,14 @@ function ocRefreshAccessChips() {
     return;
   }
 
-  if (ocLastOwnerValidated && ocHasLocalOwnerToken()) {
+  // ── Invité sans compte : pas de validation serveur sans jeton local ──
+  if (!ownerLocal && ocLastOwnerValidated) {
+    ocLastOwnerValidated = false;
+  }
+
+  const ownerFullyActive = ocLastOwnerValidated === true && ownerLocal === true;
+
+  if (ownerFullyActive) {
     dom.sysProfile.textContent = 'owner';
     dom.sysUser.textContent = 'Robert';
     dom.sysMode.textContent = 'private';
@@ -1305,15 +1330,15 @@ function ocRefreshAccessChips() {
   dom.sysProfile.textContent = 'guest';
   dom.sysUser.textContent = 'Invité';
 
-  if (ocOwnerTokenRejected && ocHasLocalOwnerToken()) {
+  if (ocOwnerTokenRejected && ownerLocal) {
     dom.sysMode.textContent = 'public';
-    dom.accessTierChip.textContent = 'JETON REFUSÉ';
+    dom.accessTierChip.textContent = 'TOKEN REFUSED';
     dom.accessTierChip.classList.add('tier-refused');
     ocRefreshOwnerAccessSummary();
     return;
   }
 
-  if (ocHasLocalOwnerToken()) {
+  if (ownerLocal) {
     dom.sysMode.textContent = 'pending';
     dom.accessTierChip.textContent = 'TOKEN LOCAL';
     dom.accessTierChip.classList.add('tier-pending');
@@ -1493,20 +1518,7 @@ function ocRefreshOwnerTokenHint() {
 }
 
 function ocApplySysBarDefaults() {
-  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
-  if (jwt) {
-    try {
-      const u = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
-      dom.sysUser.textContent = (u && u.email) ? u.email : '---';
-      dom.sysProfile.textContent = (u && u.business_type) ? u.business_type : '---';
-    } catch (_) {
-      dom.sysUser.textContent = '---';
-      dom.sysProfile.textContent = '---';
-    }
-    ocRefreshAccessChips();
-    return;
-  }
-  ocRefreshAccessChips();
+  ocRenderSysAccessState();
 }
 
 function ocSyncSysBarAfterChat(payload) {
@@ -1520,18 +1532,14 @@ function ocSyncSysBarAfterChat(payload) {
 
   if (payload.owner_authenticated) {
     ocOwnerTokenRejected = false;
-    dom.sysProfile.textContent = 'owner';
-    dom.sysUser.textContent = 'Robert';
     dom.ownerAccessStatus.textContent = '';
     dom.ownerAccessStatus.classList.remove('err');
-    ocRefreshAccessChips();
+    ocRenderSysAccessState();
     return;
   }
 
   if (ocHasLocalOwnerToken() && isGuestMode && !jwt) {
     ocOwnerTokenRejected = true;
-    dom.sysUser.textContent = 'Invité';
-    dom.sysProfile.textContent = 'guest';
     dom.ownerAccessStatus.textContent =
       'Jeton refusé — vérifier la configuration OPENCHAWN_OWNER_TOKEN.';
     dom.ownerAccessStatus.classList.add('err');
@@ -1541,7 +1549,7 @@ function ocSyncSysBarAfterChat(payload) {
     dom.ownerAccessStatus.classList.remove('err');
     return;
   }
-  ocRefreshAccessChips();
+  ocRenderSysAccessState();
 }
 
 function authHeaders() {
@@ -1732,18 +1740,31 @@ function enterChat() {
   dom.sysBar.classList.remove('hidden');
   dom.ownerAccessWrap.classList.remove('hidden');
   ocRefreshOwnerTokenHint();
-  ocApplySysBarDefaults();
   dom.logoutBtn.classList.remove('hidden');
   dom.logoutBtn.textContent = 'Déconnexion';
-  dom.sysUser.textContent = currentUser?.email || '---';
-  dom.sysProfile.textContent = currentUser?.business_type || '---';
+  if (currentUser) {
+    try {
+      sessionStorage.setItem('oc_user', JSON.stringify(currentUser));
+    } catch (_) {}
+  }
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
-  ocRefreshAccessChips();
+  ocApplySysBarDefaults();
   dom.input.focus();
 }
 
 // ── Enter chat (invité) ──────────────────────────────
 function enterGuestChat() {
+  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  if (jwt) {
+    try {
+      currentUser = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+    } catch (_) {
+      currentUser = null;
+    }
+    enterChat();
+    return;
+  }
+
   ocLastOwnerValidated = false;
   isGuestMode = true;
   dom.authScreen.classList.add('hidden');
@@ -1752,10 +1773,10 @@ function enterGuestChat() {
   dom.sysBar.classList.remove('hidden');
   dom.ownerAccessWrap.classList.remove('hidden');
   ocRefreshOwnerTokenHint();
-  ocApplySysBarDefaults();
   dom.logoutBtn.classList.remove('hidden');
   dom.logoutBtn.textContent = 'Connexion';
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
+  ocApplySysBarDefaults();
   dom.input.focus();
 }
 
@@ -1787,13 +1808,16 @@ async function tryAutoLogin() {
 }
 
 async function boot() {
-  // / ouvre directement le chat en invité (login optionnel)
-  enterGuestChat();
-
-  const ok = await tryAutoLogin();
-  if (ok) {
-    return;
+  // JWT valide → compte avant tout, pour ne jamais avoir isGuestMode=true avec strip COMPTE incohérent.
+  const jwtProbe = (token || sessionStorage.getItem('oc_token') || '').trim();
+  if (jwtProbe) {
+    const ok = await tryAutoLogin();
+    if (ok) {
+      return;
+    }
   }
+
+  enterGuestChat();
 
   try {
     await ensureGuestSession(false);
