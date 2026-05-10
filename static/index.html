@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>OpenChawn</title>
 <script>
 (function () {
@@ -70,6 +70,8 @@ html, body {
   font-family: var(--font-ui);
   color: var(--text);
   overflow: hidden;
+  overflow-x: hidden;
+  max-width: 100vw;
   background:
     radial-gradient(100% 70% at 50% -5%, rgba(255, 255, 255, 0.75) 0%, transparent 50%),
     radial-gradient(90% 55% at 100% 12%, rgba(56, 221, 245, 0.35) 0%, transparent 52%),
@@ -113,10 +115,6 @@ body::after {
   padding: 0 14px;
 }
 
-html.ux-chat-clean .app {
-  min-height: 0;
-}
-
 html.ux-chat-clean body::before {
   opacity: 0.45;
 }
@@ -125,14 +123,70 @@ html.ux-chat-clean .scanline {
   opacity: 0.35;
 }
 
+/* ── chat_clean : variables responsive (desktop / tablette / mobile) ── */
+html.ux-chat-clean {
+  min-height: 100dvh;
+  /* >= 1024 : desktop / laptop large */
+  --oc-content-w: min(840px, calc(100vw - 48px));
+  --oc-msg-scroll-pad: clamp(104px, 22vh, 138px);
+  --oc-composer-r: 16px;
+  --oc-header-title-size: 18px;
+  --oc-hero-ready-size: 15px;
+}
+
+@media (max-width: 1023px) and (min-width: 641px) {
+  html.ux-chat-clean {
+    --oc-content-w: min(720px, calc(100vw - 32px));
+    --oc-msg-scroll-pad: clamp(108px, 24vh, 148px);
+    --oc-header-title-size: 17px;
+  }
+}
+
+@media (max-width: 640px) {
+  html.ux-chat-clean {
+    --oc-content-w: calc(100vw - 24px);
+    --oc-msg-scroll-pad: clamp(118px, 30vh, 168px);
+    --oc-composer-r: 14px;
+    --oc-header-title-size: 16px;
+    --oc-hero-ready-size: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  html.ux-chat-clean {
+    --oc-content-w: calc(100vw - 20px);
+    --oc-msg-scroll-pad: clamp(120px, 32vh, 172px);
+  }
+}
+
+html.ux-chat-clean .app {
+  max-width: 100%;
+  width: 100%;
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
 /* ── chat_clean minimal header ── */
 html.ux-chat-clean .oc-header-logo-mark {
   display: none !important;
 }
 
+html.ux-chat-clean .header {
+  max-width: var(--oc-content-w);
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 html.ux-chat-clean .header-title {
   letter-spacing: 0.12em;
-  font-size: 18px;
+  font-size: var(--oc-header-title-size, 18px);
+  line-height: 1.25;
   font-family: var(--font-ui);
   font-weight: 700;
   text-transform: none;
@@ -218,12 +272,12 @@ html.ux-chat-clean .oc-chat-shell.oc-chat-empty {
   padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
-html.ux-chat-clean .oc-chat-shell.oc-chat-empty .messages {
+html.ux-chat-clean .oc-chat-shell.oc-chat-empty .messages.oc-message-list {
   flex: 0 0 auto;
   min-height: 0;
   overflow: visible;
-  width: min(840px, calc(100vw - 48px));
-  max-width: 840px;
+  width: var(--oc-content-w);
+  max-width: 100%;
   padding-top: 0;
   padding-bottom: 0;
 }
@@ -248,20 +302,24 @@ html.ux-chat-clean .messages {
   min-height: 0;
 }
 
-html.ux-chat-clean .oc-chat-shell.oc-chat-active .messages {
+html.ux-chat-clean .oc-chat-shell.oc-chat-active .messages.oc-message-list {
   flex: 1;
   min-height: 0;
   width: auto;
   max-width: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--oc-msg-scroll-pad) + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: calc(var(--oc-msg-scroll-pad) + env(safe-area-inset-bottom, 0px));
 }
 
-/* Composer : largeur desktop ; mobile surchargé en @media */
+/* Composer : largeur alignée sur --oc-content-w */
 html.ux-chat-clean .input-area.oc-composer-centered {
-  width: min(840px, calc(100vw - 48px));
-  max-width: 840px;
+  width: var(--oc-content-w);
+  max-width: 100%;
   margin: 0 auto;
-  padding-left: max(2px, env(safe-area-inset-left));
-  padding-right: max(2px, env(safe-area-inset-right));
+  padding-left: max(2px, env(safe-area-inset-left, 0px));
+  padding-right: max(2px, env(safe-area-inset-right, 0px));
   box-sizing: border-box;
 }
 
@@ -337,6 +395,7 @@ html.ux-chat-clean .clean-input-shell .input-wrapper {
   flex-wrap: nowrap;
   align-items: flex-end;
   gap: 8px;
+  border-radius: var(--oc-composer-r, 16px);
 }
 
 html.ux-chat-clean .clean-input-shell .input-wrapper textarea {
@@ -358,7 +417,8 @@ html.ux-chat-clean .welcome.hero-cockpit h2.hero-system-ready::before {
 
 html.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
   letter-spacing: 0.12em !important;
-  font-size: 15px !important;
+  font-size: var(--oc-hero-ready-size, 15px) !important;
+  line-height: 1.3 !important;
   font-family: var(--font-ui);
   padding: 0 !important;
   border: none !important;
@@ -367,7 +427,8 @@ html.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
 
 html.ux-chat-clean .welcome.hero-cockpit p {
   font-size: 14px;
-  max-width: 320px;
+  line-height: 1.55;
+  max-width: min(320px, 88vw);
 }
 
 html.ux-legacy .oc-clean-input-quick {
@@ -440,6 +501,28 @@ html:not(.ux-legacy) .oc-clean-input-quick {
 
 .oc-settings-drawer.is-open {
   transform: translateX(0);
+}
+
+html.ux-chat-clean .oc-settings-drawer {
+  width: min(480px, calc(100vw - 24px));
+  max-width: min(480px, 100%);
+}
+
+@media (max-width: 640px) {
+  html.ux-chat-clean .oc-settings-drawer {
+    width: min(calc(100vw - 16px), 420px);
+    max-width: calc(100vw - 16px);
+  }
+
+  html.ux-chat-clean .oc-settings-dash-grid .ux-tool-btn {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+html.ux-chat-clean .oc-settings-body {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .oc-settings-drawer-inner {
@@ -540,37 +623,45 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   display: none;
 }
 
+@media (max-width: 1023px) and (min-width: 641px) {
+  html.ux-chat-clean .header {
+    padding: 12px 4px;
+  }
+}
+
 @media (max-width: 640px) {
   html.ux-chat-clean .header {
-    padding: 10px 2px;
+    padding: 8px 2px 10px;
+    align-items: flex-start;
   }
 
-  html.ux-chat-clean .header-title {
-    font-size: 16px;
+  html.ux-chat-clean .header-left {
+    min-width: 0;
+    flex: 1;
   }
 
-  html.ux-chat-clean .messages {
+  html.ux-chat-clean .messages.oc-message-list {
     padding: 8px 2px;
     gap: 10px;
   }
 
-  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .messages {
-    padding: 4px 10px 0;
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .messages.oc-message-list {
+    padding: 4px 8px 0;
     gap: 8px;
   }
 
-  html.ux-chat-clean .input-area.oc-composer-centered {
-    width: calc(100vw - 24px);
-    max-width: none;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: max(0px, env(safe-area-inset-left));
-    padding-right: max(0px, env(safe-area-inset-right));
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty {
+    justify-content: flex-start;
+    padding-top: clamp(40px, 9vh, 80px);
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
     gap: 6px;
-    padding: 8px;
+    padding: 8px 8px 10px;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper textarea {
+    font-size: 16px; /* évite zoom iOS au focus */
   }
 
   html.ux-chat-clean .msg {
@@ -587,6 +678,23 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .oc-clean-toolbar-btn {
     width: 46px;
     height: 46px;
+  }
+}
+
+@media (max-width: 896px) and (orientation: landscape) and (max-height: 520px) {
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty {
+    justify-content: flex-start;
+    padding-top: 12px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .oc-clean-hero {
+    gap: 6px;
+    padding-top: 0;
+  }
+
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
+    margin-top: clamp(16px, 3vh, 28px);
   }
 }
 
@@ -1599,7 +1707,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 
   <!-- CHAT SCREEN (hidden until auth) : shell messages + composer -->
   <div class="oc-chat-shell oc-chat-empty" id="ocChatShell">
-  <div class="messages" id="messages">
+  <div class="messages oc-message-list" id="messages">
     <div class="welcome hero-cockpit oc-clean-hero" id="welcome">
       <div class="hero-emblem-wrap" aria-hidden="true">
         <div class="hero-ring"></div>
@@ -1880,9 +1988,12 @@ function ocUxCleanMountHeaderControls() {
 function ocUxSetInputPlaceholder() {
   try {
     if (!dom.input) return;
-    dom.input.placeholder = OC_UX_LEGACY
-      ? 'Transmettez votre requête… (Entrée pour envoyer)'
-      : 'Message… (\u23CE pour envoyer)';
+    if (OC_UX_LEGACY) {
+      dom.input.placeholder = 'Transmettez votre requête… (Entrée pour envoyer)';
+      return;
+    }
+    const narrow = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 390px)').matches;
+    dom.input.placeholder = narrow ? 'Message…' : 'Message… (\u23CE pour envoyer)';
   } catch (_) {}
 }
 
@@ -1919,6 +2030,7 @@ function ocCloseSettingsDrawer() {
 ocUxPlaceTechnicalBundle();
 ocUxCleanMountHeaderControls();
 ocUxSetInputPlaceholder();
+window.addEventListener('resize', () => { ocUxSetInputPlaceholder(); }, { passive: true });
 
 document.getElementById('btnUxSettingsGear')?.addEventListener('click', () => ocOpenSettingsDrawer());
 document.getElementById('btnCloseOcSettings')?.addEventListener('click', () => ocCloseSettingsDrawer());
