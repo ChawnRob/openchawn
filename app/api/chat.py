@@ -16,7 +16,10 @@ from app.core.language_policy import (
     detect_user_language,
     derive_response_language_trace,
 )
-from app.core.runtime_language_policy import OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN
+from app.core.runtime_language_policy import (
+    OPENCHAWN_ENVIRONMENTAL_IDENTITY_EN,
+    OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN,
+)
 from app.core.runtime_language_guard import (
     assistant_reply_violates_english_user_expectation,
     prompt_contains_forced_french,
@@ -110,6 +113,7 @@ def build_openchawn_base_system_prompt() -> str:
         "Follow the OUTPUT LANGUAGE / language block at the start of the user message when present. "
         "Keep answers concise. Never mention model providers or engine names.\n\n"
         f"{OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN}\n\n"
+        f"{OPENCHAWN_ENVIRONMENTAL_IDENTITY_EN}\n\n"
         f"{LANGUAGE_POLICY_VERSION_LINE}"
     )
 
