@@ -332,10 +332,6 @@ html.ux-chat-clean .clean-input-shell {
   gap: 10px;
 }
 
-html.ux-chat-clean .clean-input-shell .mic-btn {
-  display: none !important;
-}
-
 html.ux-chat-clean .clean-input-shell .input-wrapper {
   display: flex;
   flex-wrap: nowrap;
@@ -1285,6 +1281,31 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   box-shadow: 0 0 0 4px rgba(232, 93, 117, 0.25);
   animation: breathe 2s infinite;
 }
+
+.mic-btn[aria-pressed="true"] {
+  border-color: rgba(56, 221, 245, 0.85);
+}
+
+.oc-composer-toast {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.45;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  color: var(--deep-blue);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border-cyan);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.oc-composer-toast.is-visible {
+  display: block;
+}
 .mic-btn:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
@@ -1629,7 +1650,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     </div>
     <div class="input-wrapper">
       <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte">+</button>
-      <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée">
+      <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
           <path d="M19 11a7 7 0 0 1-14 0M12 17v4M9 21h6"/>
@@ -2587,49 +2608,124 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
   dom.ownerAccessStatus.classList.remove('err');
 });
 
-// ── Dictée locale (pas d’envoi auto) ───────────────────
+// ── Dictée locale (pas d’envoi auto) — Web Speech API ───
 (function ocInitSpeechInput() {
   const btn = dom.btnSpeech;
+  const mirror = document.getElementById('btnMirrorSpeech');
   if (!btn) return;
+
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const supported = !!SR;
+  console.log('[OpenChawn] voice dictation supported:', supported);
+
+  function setMirrorForAvailability() {
+    if (!mirror) return;
+    if (!SR) {
+      mirror.disabled = true;
+      mirror.title = 'Dictée non disponible sur ce navigateur';
+    } else {
+      mirror.disabled = false;
+      mirror.title = 'Micro dictée';
+    }
+  }
+
   if (!SR) {
     btn.disabled = true;
-    btn.title = 'Dictée vocale non disponible dans ce navigateur';
+    btn.title = 'Dictée non disponible sur ce navigateur';
+    btn.setAttribute('aria-pressed', 'false');
+    setMirrorForAvailability();
     return;
   }
-  const rec = new SR();
-  rec.lang = navigator.language || 'fr-FR';
-  rec.continuous = false;
-  rec.interimResults = false;
-  rec.onresult = (ev) => {
-    let t = '';
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      t += ev.results[i][0].transcript;
+
+  let rec = null;
+  let listening = false;
+
+  function ocShowComposerToast(message) {
+    const shell = dom.inputArea?.querySelector('.clean-input-shell');
+    if (!shell) return;
+    let el = document.getElementById('ocComposerToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ocComposerToast';
+      el.className = 'oc-composer-toast';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      shell.insertBefore(el, shell.firstChild);
     }
-    t = (t || '').trim();
-    if (t) {
-      const cur = dom.input.value.trim();
-      dom.input.value = cur ? cur + ' ' + t : t;
-      dom.input.dispatchEvent(new Event('input'));
-    }
-    btn.classList.remove('recording');
-  };
-  rec.onerror = () => { btn.classList.remove('recording'); };
-  rec.onend = () => { btn.classList.remove('recording'); };
+    el.textContent = message;
+    el.classList.add('is-visible');
+    clearTimeout(ocShowComposerToast._t);
+    ocShowComposerToast._t = setTimeout(() => el.classList.remove('is-visible'), 4500);
+  }
+
+  function wireInstance(r) {
+    r.lang = (navigator.language || 'fr-FR').replace(/_/g, '-');
+    r.continuous = true;
+    r.interimResults = true;
+    r.onresult = (ev) => {
+      let finalText = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const row = ev.results[i];
+        if (row.isFinal) finalText += row[0].transcript;
+      }
+      finalText = finalText.trim();
+      if (!finalText) return;
+      console.log('[OpenChawn] voice dictation result:', finalText);
+      const cur = dom.input.value.replace(/\s+$/, '');
+      dom.input.value = cur ? (cur + ' ' + finalText) : finalText;
+      dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    r.onerror = (ev) => {
+      const err = (ev && ev.error) ? ev.error : 'unknown';
+      console.log('[OpenChawn] voice dictation error:', err);
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        ocShowComposerToast('Accès micro refusé. Autorisez le micro dans le navigateur.');
+      }
+      listening = false;
+      btn.classList.remove('recording');
+      btn.setAttribute('aria-pressed', 'false');
+      rec = null;
+    };
+    r.onend = () => {
+      listening = false;
+      btn.classList.remove('recording');
+      btn.setAttribute('aria-pressed', 'false');
+      rec = null;
+    };
+  }
+
   btn.addEventListener('click', () => {
     if (btn.disabled || sending) return;
-    try {
-      if (btn.classList.contains('recording')) {
+    if (listening && rec) {
+      try {
         rec.stop();
-        btn.classList.remove('recording');
-        return;
+      } catch (e) {
+        console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
       }
-      btn.classList.add('recording');
-      rec.start();
-    } catch (_) {
+      listening = false;
       btn.classList.remove('recording');
+      btn.setAttribute('aria-pressed', 'false');
+      rec = null;
+      return;
+    }
+    try {
+      console.log('[OpenChawn] voice dictation start');
+      rec = new SR();
+      wireInstance(rec);
+      btn.classList.add('recording');
+      btn.setAttribute('aria-pressed', 'true');
+      rec.start();
+      listening = true;
+    } catch (e) {
+      console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
+      listening = false;
+      btn.classList.remove('recording');
+      btn.setAttribute('aria-pressed', 'false');
+      rec = null;
     }
   });
+
+  setMirrorForAvailability();
 })();
 
 // ── Health check ─────────────────────────────────────
