@@ -155,6 +155,40 @@ html:not(.ux-chat-clean) .oc-settings-only-clean {
   display: none !important;
 }
 
+html.ux-chat-clean .oc-settings-only-legacy {
+  display: none !important;
+}
+
+/* Legacy : ⚙ visible seul (sans +) pour ouvrir le drawer (raccourci chat_clean). */
+html.ux-legacy #btnUxSettingsGear.oc-clean-toolbar-btn.oc-clean-input-quick {
+  display: flex !important;
+}
+
+html.ux-legacy .oc-drawer-text-link {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.oc-drawer-text-link {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(26, 74, 92, 0.35);
+}
+
+.oc-drawer-text-link:hover {
+  color: var(--deep-blue);
+  text-decoration-color: var(--cyan-soft);
+}
+
 html.ux-chat-clean .messages {
   flex: 1;
   min-height: 0;
@@ -1473,6 +1507,8 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
         <button type="button" class="ux-tool-btn ux-tool-wide oc-settings-only-clean" id="btnUxSwitchToLegacy">Afficher interface technique (legacy)</button>
         <p class="oc-settings-helper oc-settings-only-clean" style="font-size:11px;color:var(--text-muted);font-family:var(--font-ui);">Réversible : rechargez avec <code>?ux=legacy</code> ou définissez <code>localStorage.openchawn_ux_mode=legacy</code>.</p>
 
+        <button type="button" class="oc-drawer-text-link oc-settings-only-legacy" id="btnUxBackToChatClean">Revenir à chat_clean</button>
+
         <!-- Bundle ENGINE / PROFILE / OWNER — déplaçable (chat_clean dans ce panneau) -->
         <div id="ocTechnicalMobilityDrawerSlot">
           <div id="ocTechnicalBundle">
@@ -1712,6 +1748,14 @@ document.getElementById('btnUxSwitchToLegacy')?.addEventListener('click', () => 
   try {
     localStorage.setItem('openchawn_ux_mode', 'legacy');
   } catch (_) {}
+  location.reload();
+});
+
+document.getElementById('btnUxBackToChatClean')?.addEventListener('click', () => {
+  try {
+    localStorage.removeItem('openchawn_ux_mode');
+  } catch (_) {}
+  window.OPENCHAWN_UX_MODE = 'chat_clean';
   location.reload();
 });
 
