@@ -1108,7 +1108,6 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     overflow-x: hidden;
   }
 
-  html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn,
   html.ux-chat-clean .clean-input-shell .input-wrapper .clean-gear-slot {
     display: none !important;
   }
@@ -1143,11 +1142,39 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .oc-chat-shell.oc-chat-empty {
     justify-content: flex-start;
     padding-top: clamp(40px, 9vh, 80px);
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
+    margin-top: clamp(14px, 2.6vh, 22px);
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+  }
+
+  html.ux-chat-clean .clean-input-shell {
+    gap: 6px;
+  }
+
+  html.ux-chat-clean .oc-mobile-composer-plus-wrap {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+    padding-left: 2px;
+    pointer-events: none;
+  }
+
+  html.ux-chat-clean .oc-mobile-composer-plus-wrap #btnImportPlus {
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
+    display: grid !important;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
-    gap: 6px;
-    padding: 8px 8px 10px;
+    gap: 8px;
+    padding: 8px;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper,
@@ -1193,7 +1220,10 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean #btnImportPlus {
     position: relative;
     z-index: 2;
+    width: 44px;
+    height: 44px;
   }
+
 }
 
 @media (max-width: 896px) and (orientation: landscape) and (max-height: 520px) {
@@ -1935,8 +1965,12 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   display: block;
 }
 
-/* chat_clean mobile : micro + réglages dans le menu « + » */
+/* chat_clean mobile : micro dans le chip, + secondaire au-dessus */
 html.ux-chat-clean .oc-mobile-composer-hud {
+  display: none;
+}
+
+html.ux-chat-clean .oc-mobile-composer-plus-wrap {
   display: none;
 }
 
@@ -2339,6 +2373,7 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
       <textarea id="importPaste" placeholder="Collez ici ou utilisez « Fichier .txt / .md »..." spellcheck="false"></textarea>
       <div class="import-status" id="importStatus" aria-live="polite"></div>
     </div>
+    <div class="oc-mobile-composer-plus-wrap" id="ocMobileComposerPlusWrap" aria-hidden="true"></div>
     <div class="input-wrapper">
       <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte" aria-expanded="false">+</button>
       <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée" aria-pressed="false">
@@ -2359,7 +2394,6 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
     <div class="oc-mobile-composer-hud" id="ocMobileComposerHud" aria-hidden="true">
       <button type="button" class="oc-mobile-composer-backdrop hidden" id="ocMobileComposerBackdrop" tabindex="-1" aria-hidden="true"></button>
       <div class="oc-mobile-composer-menu hidden" id="ocMobileComposerMenu" role="menu" aria-label="Plus d’options">
-        <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuSpeech">Micro dictée</button>
         <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuImport">Importer du texte</button>
         <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuSettings">Réglages</button>
       </div>
@@ -2789,12 +2823,21 @@ function ocChatCleanMobileComposer() {
 
 function ocUpdatePlusButtonForMobileClean() {
   const btn = document.getElementById('btnImportPlus');
+  const wrap = document.getElementById('ocMobileComposerPlusWrap');
+  const inputWrapper = dom.inputArea?.querySelector('.input-wrapper');
+  const mic = document.getElementById('btnSpeech');
   if (!btn || OC_UX_LEGACY) return;
   if (ocChatCleanMobileComposer()) {
+    if (wrap && btn.parentElement !== wrap) wrap.appendChild(btn);
+    wrap?.setAttribute('aria-hidden', 'false');
     btn.setAttribute('aria-label', 'Plus d’options');
     btn.title = 'Plus d’options';
     btn.setAttribute('aria-haspopup', 'menu');
   } else {
+    if (wrap) wrap.setAttribute('aria-hidden', 'true');
+    if (inputWrapper && btn.parentElement !== inputWrapper) {
+      inputWrapper.insertBefore(btn, mic || inputWrapper.firstChild);
+    }
     btn.setAttribute('aria-label', 'Importer du texte');
     btn.title = 'Importer du texte';
     btn.removeAttribute('aria-haspopup');
@@ -2812,7 +2855,7 @@ function ocCloseMobileComposerMenu() {
   b?.setAttribute('aria-hidden', 'true');
   m?.setAttribute('aria-hidden', 'true');
   btn?.setAttribute('aria-expanded', 'false');
-  if (wasOpen) console.log('[OpenChawn] mobile action menu close');
+  if (wasOpen) console.log('[OpenChawn] mobile plus menu close');
 }
 
 function ocOpenMobileComposerMenu() {
@@ -2826,8 +2869,8 @@ function ocOpenMobileComposerMenu() {
   b.setAttribute('aria-hidden', 'false');
   m.setAttribute('aria-hidden', 'false');
   btn?.setAttribute('aria-expanded', 'true');
-  console.log('[OpenChawn] mobile action menu open');
-  document.getElementById('ocMobileMenuSpeech')?.focus();
+  console.log('[OpenChawn] mobile plus menu open');
+  document.getElementById('ocMobileMenuImport')?.focus();
 }
 
 function ocToggleMobileComposerMenu() {
@@ -2918,19 +2961,12 @@ document.getElementById('ocMobileComposerBackdrop')?.addEventListener('click', (
   ocCloseMobileComposerMenu();
 });
 
-document.getElementById('ocMobileMenuSpeech')?.addEventListener('click', () => {
-  console.log('[OpenChawn] mobile mic action clicked');
-  ocCloseMobileComposerMenu();
-  dom.btnSpeech?.click?.();
-});
-
 document.getElementById('ocMobileMenuImport')?.addEventListener('click', () => {
   ocCloseMobileComposerMenu();
   dom.toggleImportPanel?.click?.();
 });
 
 document.getElementById('ocMobileMenuSettings')?.addEventListener('click', () => {
-  console.log('[OpenChawn] mobile settings action clicked');
   ocCloseMobileComposerMenu();
   ocOpenSettingsDrawer();
 });
@@ -3607,7 +3643,6 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 (function ocInitSpeechInput() {
   const btn = dom.btnSpeech;
   const mirror = document.getElementById('btnMirrorSpeech');
-  const mobileAction = document.getElementById('ocMobileMenuSpeech');
   if (!btn) return;
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3620,12 +3655,6 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     if (mirror) {
       mirror.disabled = unavailable;
       mirror.title = title;
-    }
-    if (mobileAction) {
-      mobileAction.disabled = unavailable;
-      mobileAction.title = title;
-      mobileAction.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
-      mobileAction.setAttribute('aria-label', title);
     }
   }
 
@@ -3673,10 +3702,6 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
     btn.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
     if (mirror) mirror.title = listening ? 'Dictée en cours' : 'Micro dictée';
-    if (mobileAction && !mobileAction.disabled) {
-      mobileAction.title = listening ? 'Dictée en cours' : 'Micro dictée';
-      mobileAction.setAttribute('aria-label', listening ? 'Dictée en cours' : 'Micro dictée');
-    }
     if (dom.input) {
       if (listening) dom.input.placeholder = 'Écoute en cours…';
       else ocResetInputPlaceholder();
@@ -3746,6 +3771,7 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 
   btn.addEventListener('click', () => {
     if (btn.disabled || sending) return;
+    if (ocChatCleanMobileComposer()) console.log('[OpenChawn] mobile mic tapped');
     if (listening && rec) {
       try {
         rec.stop();
