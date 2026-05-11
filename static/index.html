@@ -3594,6 +3594,9 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 
   let rec = null;
   let listening = false;
+  let dictationBaseText = '';
+  let dictationFinalTranscript = '';
+  let dictationInterimTranscript = '';
 
   function ocShowComposerToast(message) {
     const shell = dom.inputArea?.querySelector('.clean-input-shell');
@@ -3613,22 +3616,67 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     ocShowComposerToast._t = setTimeout(() => el.classList.remove('is-visible'), 4500);
   }
 
+  function ocResetInputPlaceholder() {
+    try {
+      if (typeof ocUxSetInputPlaceholder === 'function') ocUxSetInputPlaceholder();
+    } catch (_) {}
+  }
+
+  function ocSetDictationUiState(active) {
+    listening = !!active;
+    btn.classList.toggle('recording', listening);
+    btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+    btn.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
+    if (mirror) mirror.title = listening ? 'Dictée en cours' : 'Micro dictée';
+    if (dom.input) {
+      if (listening) dom.input.placeholder = 'Écoute en cours…';
+      else ocResetInputPlaceholder();
+    }
+  }
+
+  function ocComposeSpeechValue(baseText, finalTranscript, interimTranscript) {
+    const base = String(baseText || '');
+    const finalText = String(finalTranscript || '').replace(/\s+/g, ' ').trim();
+    const interimText = String(interimTranscript || '').replace(/\s+/g, ' ').trim();
+    const speechText = [finalText, interimText].filter(Boolean).join(' ').trim();
+    if (!speechText) return base;
+    if (!base) return speechText;
+    return /\s$/.test(base) ? (base + speechText) : (base + ' ' + speechText);
+  }
+
+  function ocSyncSpeechToComposer() {
+    if (!dom.input) return;
+    dom.input.value = ocComposeSpeechValue(
+      dictationBaseText,
+      dictationFinalTranscript,
+      dictationInterimTranscript
+    );
+    dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function ocResetSpeechBuffers() {
+    dictationBaseText = '';
+    dictationFinalTranscript = '';
+    dictationInterimTranscript = '';
+  }
+
   function wireInstance(r) {
     r.lang = (navigator.language || 'fr-FR').replace(/_/g, '-');
     r.continuous = true;
     r.interimResults = true;
     r.onresult = (ev) => {
       let finalText = '';
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      let interimText = '';
+      for (let i = 0; i < ev.results.length; i++) {
         const row = ev.results[i];
-        if (row.isFinal) finalText += row[0].transcript;
+        const transcript = row && row[0] ? row[0].transcript : '';
+        if (!transcript) continue;
+        if (row.isFinal) finalText += transcript + ' ';
+        else interimText += transcript + ' ';
       }
-      finalText = finalText.trim();
-      if (!finalText) return;
-      console.log('[OpenChawn] voice dictation result:', finalText);
-      const cur = dom.input.value.replace(/\s+$/, '');
-      dom.input.value = cur ? (cur + ' ' + finalText) : finalText;
-      dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+      dictationFinalTranscript = finalText.trim();
+      dictationInterimTranscript = interimText.trim();
+      ocSyncSpeechToComposer();
     };
     r.onerror = (ev) => {
       const err = (ev && ev.error) ? ev.error : 'unknown';
@@ -3636,16 +3684,14 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         ocShowComposerToast('Accès micro refusé. Autorisez le micro dans le navigateur.');
       }
-      listening = false;
-      btn.classList.remove('recording');
-      btn.setAttribute('aria-pressed', 'false');
+      ocSetDictationUiState(false);
       rec = null;
+      ocResetSpeechBuffers();
     };
     r.onend = () => {
-      listening = false;
-      btn.classList.remove('recording');
-      btn.setAttribute('aria-pressed', 'false');
+      ocSetDictationUiState(false);
       rec = null;
+      ocResetSpeechBuffers();
     };
   }
 
@@ -3657,9 +3703,7 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
       } catch (e) {
         console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
       }
-      listening = false;
-      btn.classList.remove('recording');
-      btn.setAttribute('aria-pressed', 'false');
+      ocSetDictationUiState(false);
       rec = null;
       return;
     }
@@ -3667,16 +3711,16 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
       console.log('[OpenChawn] voice dictation start');
       rec = new SR();
       wireInstance(rec);
-      btn.classList.add('recording');
-      btn.setAttribute('aria-pressed', 'true');
+      dictationBaseText = dom.input ? dom.input.value : '';
+      dictationFinalTranscript = '';
+      dictationInterimTranscript = '';
+      ocSetDictationUiState(true);
       rec.start();
-      listening = true;
     } catch (e) {
       console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
-      listening = false;
-      btn.classList.remove('recording');
-      btn.setAttribute('aria-pressed', 'false');
+      ocSetDictationUiState(false);
       rec = null;
+      ocResetSpeechBuffers();
     }
   });
 
