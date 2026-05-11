@@ -306,6 +306,142 @@ html.oc-theme-night .auth-field select option {
   color: var(--text);
 }
 
+/* Night mobile (≤640px) : aurora / profondeur — même direction que desktop, grille [+][message][envoyer] inchangée */
+@media (max-width: 640px) {
+  html.oc-theme-night,
+  html.oc-theme-night body {
+    background:
+      radial-gradient(115% 80% at 50% -10%, rgba(66, 232, 255, 0.11) 0%, transparent 52%),
+      radial-gradient(95% 55% at 104% -2%, rgba(56, 221, 245, 0.2) 0%, transparent 54%),
+      radial-gradient(88% 50% at -5% 78%, rgba(25, 90, 110, 0.32) 0%, transparent 50%),
+      radial-gradient(70% 42% at 92% 96%, rgba(255, 184, 108, 0.09) 0%, transparent 46%),
+      linear-gradient(180deg, var(--sky) 0%, var(--oc-bg-grad-2) 36%, var(--oc-bg-grad-3) 70%, var(--oc-bg-grad-4) 100%);
+  }
+
+  html.oc-theme-night body::after {
+    opacity: 1;
+    background:
+      radial-gradient(1px 1px at 7% 14%, rgba(255, 255, 255, 0.55) 0%, transparent 100%),
+      radial-gradient(1px 1px at 18% 9%, rgba(255, 255, 255, 0.38) 0%, transparent 100%),
+      radial-gradient(1px 1px at 74% 11%, rgba(255, 255, 255, 0.45) 0%, transparent 100%),
+      radial-gradient(1px 1px at 91% 19%, rgba(255, 255, 255, 0.32) 0%, transparent 100%),
+      radial-gradient(1px 1px at 42% 5%, rgba(200, 240, 255, 0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 62% 24%, rgba(255, 255, 255, 0.22) 0%, transparent 100%),
+      radial-gradient(ellipse 130% 90% at 78% -5%, rgba(66, 232, 255, 0.14) 0%, transparent 52%),
+      radial-gradient(ellipse 100% 75% at 12% 100%, rgba(56, 221, 245, 0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at 52% 0%, rgba(255, 179, 92, 0.08) 0%, transparent 48%),
+      radial-gradient(ellipse at 82% 18%, rgba(56, 221, 245, 0.09) 0%, transparent 44%);
+  }
+
+  html.oc-theme-night.ux-chat-clean body::before {
+    opacity: 0.4;
+    background-size: 40px 40px;
+    background-image:
+      linear-gradient(rgba(56, 221, 245, 0.075) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56, 221, 245, 0.075) 1px, transparent 1px);
+  }
+
+  html.oc-theme-night.ux-chat-clean .oc-chat-shell {
+    position: relative;
+  }
+
+  html.oc-theme-night.ux-chat-clean .oc-chat-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(100% 65% at 88% 8%, rgba(66, 232, 255, 0.14) 0%, transparent 58%),
+      radial-gradient(90% 55% at 12% 92%, rgba(56, 221, 245, 0.07) 0%, transparent 54%),
+      radial-gradient(80% 50% at 50% 50%, rgba(12, 50, 70, 0.18) 0%, transparent 68%);
+    opacity: 0.82;
+  }
+
+  html.oc-theme-night.ux-chat-clean .oc-chat-shell > .messages,
+  html.oc-theme-night.ux-chat-clean .oc-chat-shell > .input-area {
+    position: relative;
+    z-index: 1;
+  }
+
+  html.oc-theme-night.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
+    z-index: 1;
+  }
+
+  html.oc-theme-night.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
+    text-shadow: 0 0 22px rgba(56, 221, 245, 0.22), 0 2px 10px rgba(0, 0, 0, 0.5);
+  }
+
+  html.oc-theme-night.ux-chat-clean .welcome.hero-cockpit p {
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
+  }
+
+  html.oc-theme-night.ux-chat-clean .input-area.oc-composer-centered.oc-composer-sticky {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper {
+    background: linear-gradient(
+      168deg,
+      rgba(26, 52, 70, 0.94) 0%,
+      rgba(14, 38, 54, 0.9) 42%,
+      rgba(10, 28, 42, 0.93) 100%
+    );
+    border-color: rgba(66, 232, 255, 0.28);
+    box-shadow:
+      0 10px 40px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 0 32px rgba(56, 221, 245, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper:focus-within {
+    border-color: rgba(66, 232, 255, 0.42);
+    box-shadow:
+      0 0 0 3px rgba(56, 221, 245, 0.18),
+      0 12px 40px rgba(0, 0, 0, 0.52),
+      0 0 36px rgba(56, 221, 245, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper textarea::placeholder {
+    color: #7eb8cc;
+  }
+
+  html.oc-theme-night .oc-clean-toolbar-btn.oc-clean-input-quick {
+    background: linear-gradient(158deg, rgba(26, 50, 66, 0.96), rgba(16, 36, 50, 0.94));
+    color: var(--text);
+    border-color: rgba(66, 232, 255, 0.3);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  html.oc-theme-night .send-btn {
+    background: linear-gradient(155deg, #45e8ff 0%, #18b8d4 48%, #0b7f97 100%);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 6px 22px rgba(8, 145, 178, 0.55),
+      0 0 0 1px rgba(56, 221, 245, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  html.oc-theme-night .send-btn:disabled {
+    opacity: 0.38;
+  }
+
+  html.oc-theme-night.ux-chat-clean .oc-mobile-composer-menu {
+    border: 1px solid rgba(66, 232, 255, 0.22);
+    box-shadow:
+      0 14px 48px rgba(0, 0, 0, 0.52),
+      0 0 0 1px rgba(0, 0, 0, 0.25),
+      0 0 28px rgba(56, 221, 245, 0.08);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
