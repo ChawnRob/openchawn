@@ -1117,6 +1117,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     flex-wrap: nowrap;
     min-width: 0;
     overflow-x: hidden;
+    align-items: center;
   }
 
   html.ux-chat-clean .header {
@@ -1149,8 +1150,18 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     padding: 8px 8px 10px;
   }
 
+  html.ux-chat-clean .clean-input-shell .input-wrapper,
+  html.ux-chat-clean .clean-input-shell .input-wrapper > * {
+    pointer-events: auto;
+  }
+
   html.ux-chat-clean .clean-input-shell .input-wrapper textarea {
     font-size: 16px; /* évite zoom iOS au focus */
+    line-height: 1.35;
+    min-height: 44px !important;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin: 0;
   }
 
   html.ux-chat-clean .msg {
@@ -1167,6 +1178,21 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .oc-clean-toolbar-btn {
     width: 46px;
     height: 46px;
+  }
+
+  html.ux-chat-clean #btnImportPlus,
+  html.ux-chat-clean .send-btn,
+  html.ux-chat-clean .oc-mobile-composer-backdrop,
+  html.ux-chat-clean .oc-mobile-composer-menu,
+  html.ux-chat-clean .oc-mobile-composer-menu-item {
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html.ux-chat-clean #btnImportPlus {
+    position: relative;
+    z-index: 2;
   }
 }
 
@@ -1947,6 +1973,9 @@ html.ux-chat-clean .oc-mobile-composer-menu {
 
 html.ux-chat-clean .oc-mobile-composer-menu-item {
   width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
   text-align: left;
   font-family: var(--font-ui);
   font-size: 15px;
@@ -1961,6 +1990,11 @@ html.ux-chat-clean .oc-mobile-composer-menu-item {
 
 html.ux-chat-clean .oc-mobile-composer-menu-item:active {
   background: rgba(56, 221, 245, 0.15);
+}
+
+html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .mic-btn:focus-visible {
@@ -2772,11 +2806,13 @@ function ocCloseMobileComposerMenu() {
   const b = document.getElementById('ocMobileComposerBackdrop');
   const m = document.getElementById('ocMobileComposerMenu');
   const btn = document.getElementById('btnImportPlus');
+  const wasOpen = !!m && !m.classList.contains('hidden');
   b?.classList.add('hidden');
   m?.classList.add('hidden');
   b?.setAttribute('aria-hidden', 'true');
   m?.setAttribute('aria-hidden', 'true');
   btn?.setAttribute('aria-expanded', 'false');
+  if (wasOpen) console.log('[OpenChawn] mobile action menu close');
 }
 
 function ocOpenMobileComposerMenu() {
@@ -2790,6 +2826,7 @@ function ocOpenMobileComposerMenu() {
   b.setAttribute('aria-hidden', 'false');
   m.setAttribute('aria-hidden', 'false');
   btn?.setAttribute('aria-expanded', 'true');
+  console.log('[OpenChawn] mobile action menu open');
   document.getElementById('ocMobileMenuSpeech')?.focus();
 }
 
@@ -2870,6 +2907,7 @@ document.getElementById('btnMirrorCopy')?.addEventListener('click', () => dom.bt
 document.getElementById('btnImportPlus')?.addEventListener('click', (ev) => {
   if (ocChatCleanMobileComposer()) {
     ev.preventDefault();
+    ev.stopPropagation();
     ocToggleMobileComposerMenu();
     return;
   }
@@ -2881,6 +2919,7 @@ document.getElementById('ocMobileComposerBackdrop')?.addEventListener('click', (
 });
 
 document.getElementById('ocMobileMenuSpeech')?.addEventListener('click', () => {
+  console.log('[OpenChawn] mobile mic action clicked');
   ocCloseMobileComposerMenu();
   dom.btnSpeech?.click?.();
 });
@@ -2891,6 +2930,7 @@ document.getElementById('ocMobileMenuImport')?.addEventListener('click', () => {
 });
 
 document.getElementById('ocMobileMenuSettings')?.addEventListener('click', () => {
+  console.log('[OpenChawn] mobile settings action clicked');
   ocCloseMobileComposerMenu();
   ocOpenSettingsDrawer();
 });
@@ -3567,6 +3607,7 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 (function ocInitSpeechInput() {
   const btn = dom.btnSpeech;
   const mirror = document.getElementById('btnMirrorSpeech');
+  const mobileAction = document.getElementById('ocMobileMenuSpeech');
   if (!btn) return;
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3574,13 +3615,17 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
   console.log('[OpenChawn] voice dictation supported:', supported);
 
   function setMirrorForAvailability() {
-    if (!mirror) return;
-    if (!SR) {
-      mirror.disabled = true;
-      mirror.title = 'Dictée non disponible sur ce navigateur';
-    } else {
-      mirror.disabled = false;
-      mirror.title = 'Micro dictée';
+    const unavailable = !SR;
+    const title = unavailable ? 'Dictée non disponible sur ce navigateur' : 'Micro dictée';
+    if (mirror) {
+      mirror.disabled = unavailable;
+      mirror.title = title;
+    }
+    if (mobileAction) {
+      mobileAction.disabled = unavailable;
+      mobileAction.title = title;
+      mobileAction.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+      mobileAction.setAttribute('aria-label', title);
     }
   }
 
@@ -3628,6 +3673,10 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
     btn.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
     if (mirror) mirror.title = listening ? 'Dictée en cours' : 'Micro dictée';
+    if (mobileAction && !mobileAction.disabled) {
+      mobileAction.title = listening ? 'Dictée en cours' : 'Micro dictée';
+      mobileAction.setAttribute('aria-label', listening ? 'Dictée en cours' : 'Micro dictée');
+    }
     if (dom.input) {
       if (listening) dom.input.placeholder = 'Écoute en cours…';
       else ocResetInputPlaceholder();
