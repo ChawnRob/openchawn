@@ -582,6 +582,33 @@ html.ux-chat-clean .oc-settings-body {
   margin-top: 4px;
 }
 
+.oc-drawer-disclaimer {
+  margin-top: 4px;
+  padding: 8px 2px 0;
+  border-top: 1px solid rgba(30, 160, 180, 0.18);
+}
+
+.oc-drawer-disclaimer-title {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+  opacity: 0.92;
+}
+
+.oc-drawer-disclaimer-text {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 100%;
+}
+
 .oc-settings-dash-grid {
   display: flex;
   flex-wrap: wrap;
@@ -1884,6 +1911,10 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:active {
         </div>
         <p class="oc-settings-section-label oc-settings-only-clean">Mode interface</p>
         <button type="button" class="ux-tool-btn ux-tool-wide oc-settings-only-clean" id="btnUxSwitchToLegacy">Afficher interface technique (legacy)</button>
+        <div class="oc-drawer-disclaimer oc-settings-only-clean" role="note">
+          <p class="oc-drawer-disclaimer-title">Décharge</p>
+          <p class="oc-drawer-disclaimer-text">OpenChawn peut se tromper. Vérifiez les informations importantes. Ne partagez pas de données sensibles inutiles. L’usage des réponses reste sous votre responsabilité.</p>
+        </div>
 
         <button type="button" class="oc-drawer-text-link oc-settings-only-legacy" id="btnUxBackToChatClean">Revenir à chat_clean</button>
 
