@@ -3,8 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>OpenChawn</title>
 <script>
+(function () {
+  function ocParisHour() {
+    var d = new Date();
+    try {
+      var parts = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: 'Europe/Paris',
+        hour: 'numeric',
+        hour12: false
+      }).formatToParts(d);
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === 'hour') {
+          var hp = parseInt(parts[i].value, 10);
+          if (!isNaN(hp) && hp >= 0 && hp <= 23) return hp;
+        }
+      }
+    } catch (e) {}
+    /* Safari / engines sans formatToParts fiable : chaîne 24h Europe/Paris */
+    try {
+      var s = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Paris',
+        hour: '2-digit',
+        hour12: false
+      }).format(d);
+      var m = String(s).match(/(\d{1,2})/);
+      if (m) {
+        var hf = parseInt(m[1], 10);
+        if (!isNaN(hf) && hf >= 0 && hf <= 23) return hf;
+      }
+    } catch (e2) {}
+    return null;
+  }
+  function ocParisAutoNight(h) {
+    if (h === null || typeof h !== 'number' || isNaN(h)) return false;
+    return h >= 21 || h < 7;
+  }
+  window.ocApplyOpenChawnTheme = function ocApplyOpenChawnTheme() {
+    var params = new URLSearchParams(window.location.search || '');
+    var tq = (params.get('theme') || '').trim().toLowerCase();
+    var h = ocParisHour();
+    var mode = 'default';
+    var night = false;
+    if (tq === 'night') {
+      night = true;
+      mode = 'night-force';
+    } else if (tq === 'light') {
+      night = false;
+      mode = 'light-force';
+    } else {
+      night = ocParisAutoNight(h);
+      mode = night ? 'auto-night' : 'default';
+    }
+    if (night) document.documentElement.classList.add('oc-theme-night');
+    else document.documentElement.classList.remove('oc-theme-night');
+    console.log('[OpenChawn] Paris hour:', h === null ? 'n/a' : h);
+    console.log('[OpenChawn] theme mode:', mode);
+  };
+  ocApplyOpenChawnTheme();
+  try {
+    setInterval(ocApplyOpenChawnTheme, 60000);
+  } catch (e3) {}
+  try {
+    window.addEventListener('pageshow', function (ev) {
+      if (ev.persisted) ocApplyOpenChawnTheme();
+    });
+  } catch (e4) {}
+})();
 (function () {
   window.OPENCHAWN_DEFAULT_UX = window.OPENCHAWN_DEFAULT_UX || 'chat_clean';
   var q = (new URLSearchParams(location.search).get('ux') || '').trim().toLowerCase();
@@ -24,21 +91,6 @@
     legacy = true;
   }
   document.documentElement.classList.add(legacy ? 'ux-legacy' : 'ux-chat-clean');
-})();
-(function () {
-  function ocApplyThemePref() {
-    try {
-      var mq = window.matchMedia('(prefers-color-scheme: dark)');
-      if (mq && mq.matches) document.documentElement.classList.add('oc-theme-dark');
-      else document.documentElement.classList.remove('oc-theme-dark');
-    } catch (e) {}
-  }
-  ocApplyThemePref();
-  try {
-    var m = window.matchMedia('(prefers-color-scheme: dark)');
-    if (m.addEventListener) m.addEventListener('change', ocApplyThemePref);
-    else if (m.addListener) m.addListener(ocApplyThemePref);
-  } catch (e2) {}
 })();
 </script>
 <style>
@@ -70,10 +122,19 @@
   /* Conversation & formulaires lisibles — HUD monospace séparé (V11.6.3 typography) */
   --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-tech: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  /* Alias sémantiques (jour) — mobile ne doit pas forcer de couleurs hors variables */
+  --oc-bg: var(--sky);
+  --oc-surface: var(--glass-strong);
+  --oc-text: var(--text);
+  --oc-text-muted: var(--text-muted);
+  --oc-border: var(--border-cyan);
+  --oc-accent: var(--cyan);
+  --oc-composer-sticky-mid: rgba(237, 250, 252, 0.92);
+  --oc-composer-sticky-end: rgba(237, 250, 252, 0.98);
 }
 
-/* Thème nuit auto : suit prefers-color-scheme (une seule couche de variables, pas de double UI) */
-html.oc-theme-dark {
+/* Thème nuit auto : Europe/Paris 21h–07h (ou ?theme=night|light) — variables partagées desktop / mobile */
+html.oc-theme-night {
   color-scheme: dark;
   --sky: #0b1a28;
   --cyan: #42e8ff;
@@ -95,10 +156,18 @@ html.oc-theme-dark {
   --oc-bg-grad-2: #102a3d;
   --oc-bg-grad-3: #081a28;
   --oc-bg-grad-4: #050f18;
+  --oc-bg: var(--sky);
+  --oc-surface: var(--glass-strong);
+  --oc-text: var(--text);
+  --oc-text-muted: var(--text-muted);
+  --oc-border: var(--border-cyan);
+  --oc-accent: var(--cyan);
+  --oc-composer-sticky-mid: rgba(8, 22, 34, 0.9);
+  --oc-composer-sticky-end: rgba(5, 14, 24, 0.97);
 }
 
-html.oc-theme-dark,
-html.oc-theme-dark body {
+html.oc-theme-night,
+html.oc-theme-night body {
   color: var(--text);
   background:
     radial-gradient(100% 70% at 50% -5%, rgba(56, 221, 245, 0.07) 0%, transparent 50%),
@@ -108,107 +177,131 @@ html.oc-theme-dark body {
     linear-gradient(180deg, var(--sky) 0%, var(--oc-bg-grad-2) 38%, var(--oc-bg-grad-3) 72%, var(--oc-bg-grad-4) 100%);
 }
 
-html.oc-theme-dark body::before {
+html.oc-theme-night body::before {
   opacity: 0.32;
   background-image:
     linear-gradient(rgba(56, 221, 245, 0.055) 1px, transparent 1px),
     linear-gradient(90deg, rgba(56, 221, 245, 0.055) 1px, transparent 1px);
 }
 
-html.oc-theme-dark body::after {
-  background: radial-gradient(ellipse at 50% 0%, rgba(255, 179, 92, 0.07) 0%, transparent 48%);
+html.oc-theme-night body::after {
+  background:
+    radial-gradient(1px 1px at 8% 12%, rgba(255, 255, 255, 0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 22% 8%, rgba(255, 255, 255, 0.35) 0%, transparent 100%),
+    radial-gradient(1px 1px at 78% 15%, rgba(255, 255, 255, 0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 92% 22%, rgba(255, 255, 255, 0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 45% 6%, rgba(200, 240, 255, 0.25) 0%, transparent 100%),
+    radial-gradient(ellipse at 50% 0%, rgba(255, 179, 92, 0.07) 0%, transparent 48%),
+    radial-gradient(ellipse at 80% 20%, rgba(56, 221, 245, 0.06) 0%, transparent 42%);
+  opacity: 0.9;
 }
 
-html.oc-theme-dark.ux-chat-clean body::before {
+html.oc-theme-night.ux-chat-clean body::before {
   opacity: 0.22;
 }
 
-html.oc-theme-dark .oc-settings-drawer {
+html.oc-theme-night .oc-settings-drawer {
   background: linear-gradient(195deg, #0f1f2e 0%, #081820 100%);
   border-left-color: rgba(56, 221, 245, 0.22);
   box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5);
 }
 
-html.oc-theme-dark .oc-settings-backdrop {
+html.oc-theme-night .oc-settings-backdrop {
   background: rgba(2, 8, 14, 0.55);
 }
 
-html.oc-theme-dark .input-area {
+html.oc-theme-night .input-area {
   border-top-color: var(--border-cyan);
   background: linear-gradient(180deg, transparent 0%, rgba(6, 20, 32, 0.55) 100%);
 }
 
-html.oc-theme-dark.ux-chat-clean .input-area.oc-composer-centered.oc-composer-sticky {
-  background: linear-gradient(180deg, transparent 0%, rgba(8, 22, 34, 0.9) 22%, rgba(5, 14, 24, 0.97) 100%);
-}
-
-html.oc-theme-dark .input-wrapper {
+html.oc-theme-night .input-wrapper {
   background: linear-gradient(180deg, rgba(18, 44, 62, 0.95) 0%, rgba(10, 30, 46, 0.92) 100%);
   box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-html.oc-theme-dark .input-wrapper textarea {
+html.oc-theme-night .input-wrapper textarea {
   background: rgba(6, 18, 30, 0.72);
   color: var(--text);
   border-color: rgba(56, 221, 245, 0.22);
 }
 
-html.oc-theme-dark .input-wrapper textarea::placeholder {
+html.oc-theme-night .input-wrapper textarea::placeholder {
   color: #6a9aad;
 }
 
-html.oc-theme-dark .mic-btn {
+html.oc-theme-night .input-wrapper:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(56, 221, 245, 0.22), 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper {
+  background: linear-gradient(180deg, rgba(18, 44, 62, 0.95) 0%, rgba(10, 30, 46, 0.92) 100%);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper textarea {
+  background: rgba(6, 18, 30, 0.72);
+  color: var(--oc-text);
+  border-color: rgba(56, 221, 245, 0.22);
+}
+
+html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper textarea::placeholder {
+  color: #6a9aad;
+}
+
+html.oc-theme-night .mic-btn {
   background: linear-gradient(160deg, rgba(30, 52, 68, 0.95) 0%, rgba(20, 44, 60, 0.92) 45%, var(--phoenix-soft) 100%);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
-html.oc-theme-dark .oc-composer-toast {
+html.oc-theme-night .oc-composer-toast {
   color: var(--text);
   background: rgba(10, 26, 40, 0.96);
   border-color: var(--border-cyan);
 }
 
-html.oc-theme-dark.ux-chat-clean .oc-mobile-composer-menu {
+html.oc-theme-night.ux-chat-clean .oc-mobile-composer-menu {
   background: rgba(12, 30, 46, 0.98);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
-html.oc-theme-dark.ux-chat-clean .oc-mobile-composer-menu-item {
+html.oc-theme-night.ux-chat-clean .oc-mobile-composer-menu-item {
   background: rgba(18, 42, 58, 0.88);
   color: var(--text);
 }
 
-html.oc-theme-dark.ux-chat-clean .oc-mobile-composer-menu-item:active {
+html.oc-theme-night.ux-chat-clean .oc-mobile-composer-menu-item:active {
   background: rgba(56, 221, 245, 0.12);
 }
 
-html.oc-theme-dark .msg pre {
+html.oc-theme-night .msg pre {
   background: rgba(0, 0, 0, 0.22);
 }
 
-html.oc-theme-dark .msg-meta span {
+html.oc-theme-night .msg-meta span {
   background: rgba(20, 50, 68, 0.75);
 }
 
-html.oc-theme-dark .msg.error {
+html.oc-theme-night .msg.error {
   color: #ff9eae;
 }
 
-html.oc-theme-dark .tier-pill.tier-guest {
+html.oc-theme-night .tier-pill.tier-guest {
   background: linear-gradient(135deg, rgba(30, 60, 78, 0.9), rgba(18, 44, 60, 0.95));
 }
 
-html.oc-theme-dark .tier-pill.tier-user {
+html.oc-theme-night .tier-pill.tier-user {
   background: linear-gradient(135deg, rgba(28, 56, 74, 0.95), rgba(18, 46, 64, 0.92));
 }
 
-html.oc-theme-dark .auth-field input,
-html.oc-theme-dark .auth-field select {
+html.oc-theme-night .auth-field input,
+html.oc-theme-night .auth-field select {
   background: rgba(8, 22, 34, 0.85);
   color: var(--text);
 }
 
-html.oc-theme-dark .auth-field select option {
+html.oc-theme-night .auth-field select option {
   background: #0a1824;
   color: var(--text);
 }
@@ -499,7 +592,7 @@ html.ux-chat-clean .input-area.oc-composer-centered.oc-composer-sticky {
   z-index: 24;
   padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
   margin-top: 0;
-  background: linear-gradient(180deg, transparent 0%, rgba(237, 250, 252, 0.92) 22%, rgba(237, 250, 252, 0.98) 100%);
+  background: linear-gradient(180deg, transparent 0%, var(--oc-composer-sticky-mid) 22%, var(--oc-composer-sticky-end) 100%);
   backdrop-filter: blur(8px);
   border-top: 1px solid var(--border-cyan);
 }
