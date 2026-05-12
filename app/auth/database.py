@@ -2,18 +2,62 @@
 Base de données SQLite — users + métiers.
 Zéro dépendance externe, stdlib uniquement.
 """
-import sqlite3
 import os
+import sqlite3
+import tempfile
+from pathlib import Path
+
 from app.config import DATABASE_PATH
 
 
+def _configured_database_path() -> Path:
+    raw = (DATABASE_PATH or "").strip() or "./data/openchawn.db"
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        repo_root = Path(__file__).resolve().parents[2]
+        path = (repo_root / path).resolve()
+    return path
+
+
+def _temporary_database_path() -> Path:
+    raw = (os.getenv("OPENCHAWN_TEST_DB_PATH") or "").strip()
+    if raw:
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        return path.resolve()
+    return Path(tempfile.gettempdir()) / "openchawn" / "openchawn-test.db"
+
+
+def _candidate_database_paths() -> list[Path]:
+    primary = _configured_database_path()
+    candidates = [primary]
+    test_mode = bool(os.getenv("PYTEST_CURRENT_TEST")) or (os.getenv("OPENCHAWN_ENV", "").lower() == "test")
+    if test_mode:
+        temp_path = _temporary_database_path()
+        if temp_path != primary:
+            candidates.insert(0, temp_path)
+    elif os.getenv("OPENCHAWN_ENV", "").lower() != "production":
+        temp_path = _temporary_database_path()
+        if temp_path != primary:
+            candidates.append(temp_path)
+    return candidates
+
+
 def _get_connection() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    errors: list[str] = []
+    for path in _candidate_database_paths():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(path))
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            return conn
+        except sqlite3.OperationalError as e:
+            errors.append(f"{path}: {e}")
+    detail = " | ".join(errors) if errors else "no database candidates"
+    raise sqlite3.OperationalError(f"unable to open database file ({detail})")
 
 
 def init_db():

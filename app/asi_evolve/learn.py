@@ -2,6 +2,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 from app.mempalace import add_memory, search_memory, MemoryEntry
+from app.mempalace.store import load_memories
 
 # ─── Seuils ──────────────────────────────────────────────────────────────
 _MIN_RESPONSE_LEN = 30        # réponses trop courtes = aucun signal
@@ -55,14 +56,23 @@ def learn_from_exchange(
     if len(clean) < _MIN_RESPONSE_LEN:
         return None
 
-    # Dédup : ne pas réécrire une entrée quasi-identique
+    # Dédup stricte d'abord sur le prompt déjà mémorisé pour éviter une seconde
+    # écriture identique lorsque la recherche heuristique ne score pas assez haut.
+    norm_summary = _redact(prompt.strip().replace("\n", " "))[:200]
+    for row in load_memories():
+        if row.project != project:
+            continue
+        if (row.summary or "") == norm_summary:
+            return None
+
+    # Dédup heuristique : ne pas réécrire une entrée quasi-identique
     existing = search_memory(prompt, project=project, top_k=1, touch=False)
     if existing and existing[0].score >= _DUPLICATE_THRESHOLD:
         return None
 
     importance = _TIER_IMPORTANCE.get(tier, 0.5)
     content = _summarize(prompt, clean)
-    summary = _redact(prompt.strip().replace("\n", " "))[:200]
+    summary = norm_summary
 
     return add_memory(
         content=content,

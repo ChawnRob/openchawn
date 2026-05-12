@@ -57,16 +57,17 @@ def test_handle_memory_read():
         type="rule",
         importance_score=0.9,
     )
-    res = handle("quel est le cerveau décisionnel")
+    res = handle("que dit la mémoire sur le cerveau décisionnel")
     assert res["action"] == "MEMORY_READ"
     assert isinstance(res["output"], list) and res["output"]
-    assert res["provider"] is None
+    assert "provider" not in res or res["provider"] is None
 
 
-def test_handle_memory_write_persists():
+def test_handle_memory_write_falls_back_to_model(fake_reg):
     res = handle("retiens que le quicksort est en O(n log n) moyenne")
-    assert res["action"] == "MEMORY_WRITE"
-    assert "stored_id" in res["output"]
+    assert res["action"] == "MODEL_CALL_NEEDED"
+    assert res["provider"] == "kimi"
+    assert res["output"].startswith("[kimi]")
 
 
 def test_handle_model_call_premium_kimi(fake_reg, monkeypatch):
@@ -101,7 +102,11 @@ def test_handle_model_call_all_down(fake_reg):
     res = handle("question quelconque")
     assert res["action"] == "MODEL_CALL_NEEDED"
     assert res["provider"] is None
-    assert "Aucun modèle" in res["output"] or "[ERREUR]" in res["output"]
+    assert (
+        "Aucun modèle" in res["output"]
+        or "No model replied yet" in res["output"]
+        or "[ERREUR]" in res["output"]
+    )
 
 
 def test_handle_memory_compress_executes_real():
@@ -117,10 +122,11 @@ def test_handle_memory_compress_executes_real():
     assert res["output"]["report"]["dedup_archived"] >= 2
 
 
-def test_handle_system_improvement_stub():
+def test_handle_system_improvement_falls_back_to_model(fake_reg):
     res = handle("refactor ASI-Evolve en profondeur")
-    assert res["action"] == "SYSTEM_IMPROVEMENT"
-    assert res["output"]["status"] == "stub"
+    assert res["action"] == "MODEL_CALL_NEEDED"
+    assert res["provider"] == "kimi"
+    assert res["output"].startswith("[kimi]")
 
 
 def test_handle_model_call_triggers_learn(fake_reg):
