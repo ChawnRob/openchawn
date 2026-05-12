@@ -1371,6 +1371,8 @@ def build_layered_memory_context(
     is_guest: bool = True,
     persist_memory_side_effects: bool = True,
 ) -> tuple[str, list[dict]]:
+    # Official V11.7 chat memory read boundary; keep docs/OPENCHAWN_MEMORY_MAP_V11_7.md
+    # updated if the main chat runtime stops reading memory through this function.
     q = (query or "").strip()
     project_slug = _normalize_project_slug(project_name_hint) or detect_project_slug_from_text(q)
 
@@ -1901,6 +1903,8 @@ def write_exchange(
     project_name_hint: str = "",
     is_guest: bool = True,
 ) -> MemoryWriteResult:
+    # Official V11.7 chat memory write boundary; keep docs/OPENCHAWN_MEMORY_MAP_V11_7.md
+    # updated if the main chat runtime stops writing memory through this function.
     try:
         _ = _get_backend()
     except MemoryBackendConfigError as e:

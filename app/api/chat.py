@@ -152,7 +152,8 @@ def assemble_chat_generation_inputs(
     # Phase 2 — language policy applied to outbound instruction (sans état mémoire).
     lang_instruction = build_language_instruction(req.message)
 
-    # Phase 3 — memory retrieval (+ effets annexes légers hors réponse brute).
+    # Phase 3 — official V11.7 chat memory read path. Keep in sync with
+    # docs/OPENCHAWN_MEMORY_MAP_V11_7.md if this routing changes.
     memory_used = False
     memory_context, memories = build_layered_memory_context(
         req.message,
@@ -360,7 +361,8 @@ def handle_chat_request(
         )
         raise HTTPException(status_code=503, detail=detail)
 
-    # ── Phase 7: memory writeback (après réponse finale valide uniquement) ──
+    # ── Phase 7: official V11.7 chat memory write path. Keep in sync with
+    # docs/OPENCHAWN_MEMORY_MAP_V11_7.md if this routing changes. ──
     source = "chat_guest" if is_guest else "chat_user"
     write_result = write_exchange(
         source=source,
