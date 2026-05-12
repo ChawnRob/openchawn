@@ -1106,6 +1106,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .input-area.oc-composer-centered {
     position: relative;
     overflow-x: hidden;
+    z-index: 2;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper .clean-gear-slot {
@@ -1157,12 +1158,17 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .oc-mobile-composer-plus-wrap {
     display: flex;
     justify-content: flex-start;
+    align-items: center;
     width: 100%;
+    min-height: 44px;
     padding-left: 2px;
+    position: relative;
+    z-index: 3;
     pointer-events: none;
   }
 
   html.ux-chat-clean .oc-mobile-composer-plus-wrap #btnImportPlus {
+    display: grid !important;
     pointer-events: auto;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -2373,7 +2379,7 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
       <textarea id="importPaste" placeholder="Collez ici ou utilisez « Fichier .txt / .md »..." spellcheck="false"></textarea>
       <div class="import-status" id="importStatus" aria-live="polite"></div>
     </div>
-    <div class="oc-mobile-composer-plus-wrap" id="ocMobileComposerPlusWrap" aria-hidden="true"></div>
+    <div class="oc-mobile-composer-plus-wrap" id="ocMobileComposerPlusWrap"></div>
     <div class="input-wrapper">
       <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte" aria-expanded="false">+</button>
       <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée" aria-pressed="false">
@@ -2829,7 +2835,7 @@ function ocUpdatePlusButtonForMobileClean() {
   if (!btn || OC_UX_LEGACY) return;
   if (ocChatCleanMobileComposer()) {
     if (wrap && btn.parentElement !== wrap) wrap.appendChild(btn);
-    wrap?.setAttribute('aria-hidden', 'false');
+    wrap?.removeAttribute('aria-hidden');
     btn.setAttribute('aria-label', 'Plus d’options');
     btn.title = 'Plus d’options';
     btn.setAttribute('aria-haspopup', 'menu');
