@@ -561,6 +561,33 @@ html.ux-chat-clean .app {
   box-sizing: border-box;
 }
 
+@media (min-width: 641px) {
+  /* V11.7 desktop background cleanup: hide grid and restore soft premium effect */
+  body::before {
+    opacity: 0 !important;
+    background-image: none !important;
+  }
+
+  html:not(.oc-theme-night).ux-chat-clean body::after {
+    background:
+      radial-gradient(115% 72% at 50% -12%, rgba(255, 255, 255, 0.72) 0%, transparent 54%),
+      radial-gradient(95% 58% at 96% 10%, rgba(56, 221, 245, 0.2) 0%, transparent 52%),
+      radial-gradient(88% 52% at 4% 68%, rgba(56, 221, 245, 0.12) 0%, transparent 50%),
+      radial-gradient(72% 46% at 82% 94%, rgba(255, 179, 92, 0.07) 0%, transparent 48%),
+      radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.32) 0%, transparent 44%),
+      radial-gradient(ellipse at 50% 0%, rgba(255, 179, 92, 0.1) 0%, transparent 46%);
+    opacity: 0.92;
+  }
+
+  html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
+    margin-top: clamp(32px, 4.8vh, 52px);
+  }
+
+  html.ux-chat-clean .input-area.oc-composer-centered.oc-composer-sticky {
+    margin-top: 10px;
+  }
+}
+
 /* ── chat_clean minimal header ── */
 html.ux-chat-clean .oc-header-logo-mark {
   display: none !important;
@@ -856,10 +883,13 @@ html.ux-chat-clean .clean-input-shell .clean-gear-slot {
   flex-shrink: 0;
 }
 
-html.ux-chat-clean .welcome.hero-cockpit .hero-emblem-wrap,
-html.ux-chat-clean .welcome.hero-cockpit .welcome-line,
-html.ux-chat-clean .welcome.hero-cockpit h2.hero-system-ready::before {
-  display: none !important;
+/* chat_clean mobile : masquer cockpit HUD (desktop >= 641px conserve l’emblème) */
+@media (max-width: 640px) {
+  html.ux-chat-clean .welcome.hero-cockpit .hero-emblem-wrap,
+  html.ux-chat-clean .welcome.hero-cockpit .welcome-line,
+  html.ux-chat-clean .welcome.hero-cockpit h2.hero-system-ready::before {
+    display: none !important;
+  }
 }
 
 html.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
