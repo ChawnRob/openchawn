@@ -1,126 +1,133 @@
 # Railway Staging Setup — OpenChawn
 
 **Source of truth:** `/Users/chawn-mbp-15/projects/openchawn`  
+**GitHub:** `ChawnRob/openchawn`  
 **Staging branch:** `sandbox/staging-v11-7`  
-**Production branch:** `main` (must stay untouched during staging setup)
+**Production branch:** `main` (production only — do not deploy experiments here)
 
-This document is **instructions only**. It does not deploy anything automatically.
+This document is **instructions only**. Cursor/docs workflow only — no automatic deploy.
 
 ---
 
-## Deployment structure (repo)
+## Service model
+
+| Service | Name | Branch | Domain / URL |
+|---------|------|--------|----------------|
+| **Staging** | `openchawn-staging` | `sandbox/staging-v11-7` | Separate Railway URL (e.g. `https://<service>.up.railway.app`) |
+| **Production** | existing prod service | `main` | `https://www.openchawn.com` — **must remain untouched** |
+
+**Optional future staging domain:** `staging.openchawn.com` (CNAME → staging service only, after smoke tests pass).
+
+---
+
+## Critical warnings
+
+1. **Never point `openchawn.com` or `www.openchawn.com` to staging.**  
+   Production DNS must stay on the **production** Railway service only.
+
+2. **Never edit Railway production variables** during staging setup.
+
+3. **Staging variables must be a separate set** on `openchawn-staging` — do not share production DB, secrets, or API keys.
+
+4. **Do not merge `sandbox/staging-v11-7` into `main`** until PR review + staging smoke pass.
+
+---
+
+## Repo deployment structure (reference)
 
 | Item | Value |
 |------|--------|
-| **Package manager** | `pip` + `requirements.txt` (no root `package.json`) |
-| **Runtime** | Python 3.x (match local `.venv`, currently 3.14.x locally) |
-| **Start command** | `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` (see `Procfile`) |
-| **Build command** | None required — Railway/Nixpacks installs deps from `requirements.txt` |
-| **Entrypoints** | `Procfile` (Railway), `main.py` (alternate wrapper) |
-| **Backend** | `app/` — FastAPI (`app.main:app`) |
-| **Frontend** | `static/index.html` served at `/` and `/static` |
-| **Railway config in repo** | `Procfile` only (no `railway.toml` in tree) |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (`Procfile`) |
+| Build | Nixpacks / `pip install -r requirements.txt` |
+| Backend | `app/` (FastAPI) |
+| Frontend | `static/index.html` at `/` |
 
 ---
 
-## Service naming
+## Railway staging setup checklist
 
-| Service | Recommendation | Rule |
-|---------|----------------|------|
-| **Staging** | `openchawn-staging` | New service; deploy from `sandbox/staging-v11-7` |
-| **Production** | existing production service (e.g. current OpenChawn prod) | **Do not modify** branch, variables, or domain without explicit approval |
+### 1. Create staging service (production untouched)
 
----
+- [ ] Railway project → **Add service** → name: **`openchawn-staging`**
+- [ ] Connect repo: `ChawnRob/openchawn`
+- [ ] **Do not** change production service name, branch, or domains
 
-## URLs and domains
+### 2. Required branch connection
 
-| Environment | URL |
-|-------------|-----|
-| **Staging (Railway default)** | `https://<openchawn-staging>.up.railway.app` (assigned by Railway) |
-| **Staging (optional future)** | `staging.openchawn.com` — DNS CNAME only after staging smoke passes |
-| **Production** | `https://www.openchawn.com` — **never point production DNS to staging** |
+- [ ] **Deploy branch:** `sandbox/staging-v11-7` (not `main`)
+- [ ] Root directory: `/` (repo root)
+- [ ] Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- [ ] Confirm auto-deploy is **only** for this branch on **this** service
 
-**Warning:** Never point the production domain (`www.openchawn.com`) at the staging service. Staging uses a **separate** Railway service and **separate** variable set.
+### 3. Required environment variable separation
 
----
+- [ ] Open **Variables** tab on **`openchawn-staging` only**
+- [ ] Paste from `docs/STAGING_ENV_TEMPLATE.md` (replace placeholders)
+- [ ] Use **staging-only** `DATABASE_URL` / DB path (never production DB)
+- [ ] Use **staging-only** JWT/secret (`JWT_SECRET` / `SECRET_KEY` — unique value)
+- [ ] Set `ALLOWED_ORIGINS` / CORS to **staging URL only** (+ local dev if needed)
+- [ ] **Do not** copy production variable values in bulk
+- [ ] **Do not** add Anthropic keys to production (Anthropic is dormant in app — see env template)
 
-## Railway setup checklist
+### 4. Staging URL (separate from production)
 
-Complete in the Railway dashboard (human operator).
+- [ ] Note Railway-generated URL: `https://<openchawn-staging>.up.railway.app`
+- [ ] Verify it is **not** `www.openchawn.com`
+- [ ] Update staging env: `APP_BASE_URL`, `FRONTEND_URL`, `ALLOWED_ORIGINS` with this URL
 
-### A. Create staging service (do not touch production)
+### 5. First deploy (staging only)
 
-- [ ] In the OpenChawn Railway project, **Add service** → name: **`openchawn-staging`**
-- [ ] Connect GitHub repo: `ChawnRob/openchawn`
-- [ ] Set **branch** to: `sandbox/staging-v11-7` (not `main`)
-- [ ] Confirm **root directory** is repo root `/`
-- [ ] Confirm start command matches `Procfile`:  
-      `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- [ ] Leave **production service** settings unchanged
+- [ ] Deploy `openchawn-staging` from `sandbox/staging-v11-7`
+- [ ] Build succeeds, service healthy
+- [ ] `GET /` returns 200 on staging URL
 
-### B. Staging variables (separate from production)
+### 6. Optional: `staging.openchawn.com` (later)
 
-- [ ] Open **Variables** on **`openchawn-staging` only**
-- [ ] Copy structure from `docs/STAGING_ENV_TEMPLATE.md` (placeholders → real staging values)
-- [ ] Use **`OPENCHAWN_ENV=staging`** or `development` (not `production` unless intentional)
-- [ ] Set **`OPENCHAWN_CORS_ORIGINS`** to the staging Railway URL (and local dev if needed)
-- [ ] Set **`APP_BASE_URL`** / **`FRONTEND_URL`** to staging URL when known
-- [ ] Use **staging-only** API keys or low-quota keys where possible
-- [ ] **Do not** copy production secrets into a shared doc or commit
-- [ ] **Do not** edit production service variables in this step
-
-### C. Data isolation
-
-- [ ] Prefer a **separate** `OPENCHAWN_DB_PATH` or staging `DATABASE_URL` (do not share prod DB)
-- [ ] Prefer separate memory paths / `MEMORY_BACKEND=json` with staging volume if applicable
-- [ ] Confirm guest quota limits are acceptable for staging (`GUEST_DAILY_MESSAGE_LIMIT`)
-
-### D. First deploy (staging only)
-
-- [ ] Trigger deploy on `openchawn-staging` from `sandbox/staging-v11-7`
-- [ ] Wait for build + deploy green
-- [ ] Open staging public URL — homepage loads
-
-### E. Optional custom domain (later)
-
-- [ ] Add `staging.openchawn.com` in Railway → staging service only
-- [ ] DNS CNAME to Railway target
-- [ ] Update `OPENCHAWN_CORS_ORIGINS` and `APP_BASE_URL` to include `https://staging.openchawn.com`
+- [ ] Add custom domain on **staging service only**
+- [ ] DNS CNAME to Railway
+- [ ] Update CORS / `ALLOWED_ORIGINS` to include `https://staging.openchawn.com`
 - [ ] Re-run smoke tests
 
 ---
 
-## Smoke test after staging deploy
+## Smoke test checklist (before PR to `main`)
 
-Use `docs/SMOKE_TEST_CHECKLIST.md` against the **staging URL** (not production).
+Run on **staging URL only**. Production must stay unchanged.
 
-Minimum:
+| # | Check | PASS |
+|---|--------|------|
+| 1 | Staging homepage loads (`/`) | |
+| 2 | OpenChawn / COCO UI visible | |
+| 3 | Message input + send works | |
+| 4 | Provider response returns (configured LLM key) | |
+| 5 | Language auto — English in → English out (no forced French) | |
+| 6 | Mobile ≤640px — composer OK, no major regression | |
+| 7 | Desktop ≥641px — no grid bug (if V11.7 UX merged) | |
+| 8 | No critical browser console errors | |
+| 9 | `www.openchawn.com` still production (spot-check) | |
+| 10 | `pytest -q` + language smoke passed locally on same commit | |
 
-1. Staging URL returns **200** on `/`
-2. OpenChawn / COCO UI loads
-3. Send one English message — reply in English (no forced French)
-4. Mobile width (≤640px) — composer OK, emblem hidden on mobile
-5. Desktop width (≥641px) — no grid bug, cockpit visible if merged
-6. Browser console — no critical errors
-7. **`www.openchawn.com`** still serves production build (unchanged)
+Full detail: `docs/SMOKE_TEST_CHECKLIST.md`
+
+**Do not open PR to `main` until staging smoke passes.**
 
 ---
 
 ## Rollback rule
 
-| Layer | Rollback |
-|-------|----------|
-| **Production** | Redeploy last stable tag on `main` (e.g. `v11.6.3-stable`, `v11.7-ux`) or revert merge on `main` |
-| **Staging** | Redeploy previous staging commit or disable `openchawn-staging` service |
-| **Git** | `main` remains production; staging experiments stay on `sandbox/staging-v11-7` until PR merge |
+| Environment | Rollback action |
+|-------------|-----------------|
+| **Production** | Redeploy last **stable tag** on `main` (e.g. `v11.6.3-stable`, `v11.7-ux`) or revert merge commit |
+| **Staging** | Redeploy previous staging commit or pause `openchawn-staging` |
+| **Git** | `main` stays production; staging work stays on `sandbox/staging-v11-7` until approved PR |
 
-Production can always be restored from the **last stable tag** on `main`. Staging failures must not require production changes.
+Production can always be restored from the **last stable tag**. Staging failures must not force production changes.
 
 ---
 
 ## Related docs
 
+- `docs/STAGING_ENV_TEMPLATE.md`
 - `docs/SANDBOX_WORKFLOW.md`
 - `docs/SMOKE_TEST_CHECKLIST.md`
 - `docs/DEPLOYMENT_RULES.md`
-- `docs/STAGING_ENV_TEMPLATE.md`
