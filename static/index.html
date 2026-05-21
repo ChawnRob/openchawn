@@ -93,6 +93,17 @@
   }
   document.documentElement.classList.add(legacy ? 'ux-legacy' : 'ux-chat-clean');
 })();
+(function () {
+  var h = (location.hostname || '').toLowerCase();
+  if (
+    h === 'localhost' || h === '127.0.0.1'
+    || h.indexOf('staging') !== -1
+    || /\.railway\.app$/.test(h)
+    || (location.search || '').indexOf('sandbox=1') !== -1
+  ) {
+    document.documentElement.classList.add('oc-sandbox-host');
+  }
+})();
 </script>
 <style>
 /* OpenChawn hero cockpit — light / sky / cyan / phoenix. No CDN: --font-ui (lecture) vs --font-tech (HUD). */
@@ -1763,15 +1774,32 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 /* Bubbles — user droite / assistant gauche */
 .msg {
   max-width: 82%;
-  padding: 13px 16px;
+  padding: 11px 14px 12px;
   border-radius: 14px;
   font-size: 15px;
   line-height: 1.65;
   word-wrap: break-word;
-  white-space: pre-wrap;
   position: relative;
   box-shadow: 0 2px 14px rgba(11, 59, 90, 0.05);
   font-family: var(--font-ui);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msg-body {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.msg-role-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: var(--font-ui);
+  opacity: 0.72;
+  line-height: 1;
 }
 
 .msg.user {
@@ -1781,11 +1809,21 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   color: var(--deep-blue);
 }
 
+.msg.user .msg-role-label {
+  align-self: flex-end;
+  color: var(--deep-blue);
+}
+
 .msg.assistant {
   align-self: flex-start;
   background: var(--assistant-bubble);
   border: 1px solid var(--border-cyan);
   color: var(--deep-blue);
+}
+
+.msg.assistant .msg-role-label {
+  align-self: flex-start;
+  color: var(--cyan);
 }
 
 .msg.error {
@@ -1797,6 +1835,55 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   font-family: var(--font-ui);
   font-weight: 500;
   max-width: 94%;
+}
+
+.msg.error .msg-role-label {
+  color: #c23d52;
+  opacity: 0.9;
+}
+
+/* COCO AI message actions placeholder */
+.coco-msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.coco-msg-action {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-cyan);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.coco-msg-action:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--deep-blue);
+}
+
+.coco-msg-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+html.oc-theme-night .coco-msg-action {
+  background: rgba(12, 32, 48, 0.45);
+}
+
+html.ux-chat-clean .coco-msg-actions {
+  display: flex;
+}
+
+html.ux-legacy .coco-msg-actions {
+  display: none !important;
 }
 
 .msg-meta {
@@ -2355,19 +2442,143 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
   color: var(--text-muted);
 }
 
-.coco-companion-presence.coco-state-ready .coco-state-label { color: var(--text-muted); }
-.coco-companion-presence.coco-state-listening .coco-state-label { color: var(--cyan); }
-.coco-companion-presence.coco-state-thinking .coco-state-label { color: var(--phoenix); }
-.coco-companion-presence.coco-state-speaking .coco-state-label { color: var(--deep-blue); }
+.coco-companion-presence.coco-state-ready .coco-state-label,
+.coco-header-presence.coco-state-ready .coco-header-state-label { color: var(--text-muted); }
+.coco-companion-presence.coco-state-thinking .coco-state-label,
+.coco-header-presence.coco-state-thinking .coco-header-state-label { color: var(--phoenix); }
+.coco-companion-presence.coco-state-error .coco-state-label,
+.coco-header-presence.coco-state-error .coco-header-state-label { color: var(--error-soft); }
+.coco-companion-presence.coco-state-retry .coco-state-label,
+.coco-header-presence.coco-state-retry .coco-header-state-label { color: var(--phoenix); }
 
-.coco-companion-presence.coco-state-listening .coco-face-frame {
-  box-shadow: 0 0 0 1px rgba(56, 221, 245, 0.45), 0 0 48px rgba(56, 221, 245, 0.28);
-}
-.coco-companion-presence.coco-state-thinking .coco-face-frame {
+.coco-companion-presence.coco-state-thinking .coco-face-frame,
+.coco-header-presence.coco-state-thinking .coco-header-state-dot {
   box-shadow: 0 0 0 1px rgba(244, 160, 70, 0.35), 0 0 40px rgba(255, 179, 92, 0.18);
 }
-.coco-companion-presence.coco-state-speaking .coco-face-frame {
-  box-shadow: 0 0 0 1px rgba(56, 221, 245, 0.5), 0 0 52px rgba(56, 221, 245, 0.32);
+.coco-companion-presence.coco-state-error .coco-face-frame,
+.coco-header-presence.coco-state-error .coco-header-state-dot {
+  box-shadow: 0 0 0 1px rgba(232, 93, 117, 0.35), 0 0 28px rgba(232, 93, 117, 0.12);
+}
+.coco-companion-presence.coco-state-retry .coco-face-frame,
+.coco-header-presence.coco-state-retry .coco-header-state-dot {
+  box-shadow: 0 0 0 1px rgba(244, 160, 70, 0.4), 0 0 36px rgba(255, 179, 92, 0.2);
+}
+
+.coco-header-presence {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-cyan);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+html.ux-chat-clean .header {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+html.ux-chat-clean .header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+html.ux-chat-clean .coco-header-presence {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.coco-header-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #bffff8 0%, var(--cyan) 55%, #0891b2 100%);
+  box-shadow: 0 0 10px rgba(56, 221, 245, 0.45);
+}
+
+.coco-header-state-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.oc-sandbox-badge {
+  display: none;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--text-muted);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-cyan);
+  background: rgba(255, 255, 255, 0.4);
+  opacity: 0.75;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+html.oc-sandbox-host .oc-sandbox-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+/* COCO prompt suggestions placeholder */
+.coco-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0 2px 6px;
+}
+
+.coco-prompt-chip {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-cyan);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.coco-prompt-chip:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--deep-blue);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.coco-prompt-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+html.oc-theme-night .coco-prompt-chip {
+  background: rgba(12, 32, 48, 0.5);
+}
+
+html.ux-chat-clean .coco-prompt-chips {
+  display: flex;
+}
+
+html.ux-legacy .coco-prompt-chips {
+  display: none !important;
 }
 
 html.ux-chat-clean .welcome.hero-cockpit .coco-companion-presence {
@@ -2427,6 +2638,14 @@ html.ux-legacy .coco-companion-presence {
   :root { --coco-face-size: clamp(108px, 36vw, 148px); }
   .coco-future-controls { gap: 6px; }
   .coco-future-btn { font-size: 11px; padding: 7px 12px; }
+  .coco-prompt-chips { gap: 5px; justify-content: flex-start; }
+  .coco-prompt-chip { font-size: 10px; padding: 6px 10px; }
+  html.ux-chat-clean .coco-header-presence {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
+  }
+  html.ux-chat-clean .header-left { flex-wrap: wrap; }
 }
 </style>
 
@@ -2440,13 +2659,20 @@ html.ux-legacy .coco-companion-presence {
   <div class="header">
     <div class="header-left">
       <div class="logo-mark oc-header-logo-mark">C</div>
-      <div>
-        <div class="header-title">COCO</div>
+      <div class="header-brand-block">
+        <div class="header-title-row">
+          <div class="header-title">COCO</div>
+          <span class="oc-sandbox-badge" id="ocSandboxBadge" aria-label="Sandbox environment">sandbox mode</span>
+        </div>
         <div class="header-sub-wrap">
           <span class="header-sub header-sub-legacy-vis" id="headerSubLegacyLine">Neural Interface v11.6.3</span>
           <span class="header-sub header-sub-clean-vis oc-clean-subtitle">powered by OpenChawn</span>
         </div>
       </div>
+    </div>
+    <div class="coco-header-presence coco-state-ready" id="cocoHeaderPresence" data-coco-state="ready" aria-live="polite">
+      <span class="coco-header-state-dot" aria-hidden="true"></span>
+      <span class="coco-header-state-label" id="cocoHeaderStateLabel">Ready</span>
     </div>
     <div class="header-right oc-header-actions-legacy">
       <div class="link-cluster" id="ocHeaderHudCluster">
@@ -2565,7 +2791,7 @@ html.ux-legacy .coco-companion-presence {
     </div>
 
     <div class="typing" id="typing">
-      <span class="typing-label">ANALYSE</span>
+      <span class="typing-label">Thinking</span>
       <div class="typing-dots">
         <div class="dot"></div>
         <div class="dot"></div>
@@ -2577,6 +2803,13 @@ html.ux-legacy .coco-companion-presence {
   <div class="input-area oc-composer-centered" id="inputArea">
     <!-- COCO voice layer placeholder -->
     <!-- COCO second brain placeholder -->
+    <!-- COCO prompt suggestions placeholder -->
+    <div class="coco-prompt-chips" id="cocoPromptChips" role="group" aria-label="Prompt suggestions">
+      <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
+      <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
+      <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
+      <button type="button" class="coco-prompt-chip" disabled aria-disabled="true" title="Second Brain (coming soon)">Open Second Brain</button>
+    </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
@@ -4079,13 +4312,103 @@ function scrollDown() {
   dom.messages.scrollTop = dom.messages.scrollHeight;
 }
 
+// ── COCO companion UI state (v1.1) ─────────────────
+var COCO_STATE_CLASSES = ['ready', 'thinking', 'error', 'retry', 'listening', 'speaking'];
+var COCO_STATE_LABELS = { ready: 'Ready', thinking: 'Thinking', error: 'Error', retry: 'Retry available' };
+
+function ocSetCocoState(state, label) {
+  var text = label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
+  [document.getElementById('cocoCompanionPresence'), document.getElementById('cocoHeaderPresence')].forEach(function (el) {
+    if (!el) return;
+    COCO_STATE_CLASSES.forEach(function (s) { el.classList.remove('coco-state-' + s); });
+    if (state) el.classList.add('coco-state-' + state);
+    el.setAttribute('data-coco-state', state || 'ready');
+    var lab = el.querySelector('.coco-state-label, .coco-header-state-label');
+    if (lab) lab.textContent = text;
+  });
+}
+
+function ocMsgRoleLabel(role) {
+  if (role === 'user') return 'You';
+  if (role === 'assistant') return 'COCO';
+  if (role === 'error') return 'Error';
+  return '';
+}
+
+function ocBuildAssistantMsgActions() {
+  var bar = document.createElement('div');
+  bar.className = 'coco-msg-actions';
+  bar.setAttribute('aria-label', 'Message actions');
+  [['copy', 'Copy', false], ['retry', 'Retry', true], ['feedback', 'Feedback', true]].forEach(function (item) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'coco-msg-action';
+    btn.setAttribute('data-coco-action', item[0]);
+    btn.textContent = item[1];
+    if (item[2]) {
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+      btn.title = item[1] + ' (coming soon)';
+    }
+    bar.appendChild(btn);
+  });
+  return bar;
+}
+
+function ocBuildErrorMsgActions() {
+  var bar = document.createElement('div');
+  bar.className = 'coco-msg-actions';
+  bar.setAttribute('aria-label', 'Error actions');
+  var retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'coco-msg-action';
+  retry.setAttribute('data-coco-action', 'retry-last');
+  retry.textContent = 'Retry';
+  bar.appendChild(retry);
+  var fb = document.createElement('button');
+  fb.type = 'button';
+  fb.className = 'coco-msg-action';
+  fb.disabled = true;
+  fb.setAttribute('aria-disabled', 'true');
+  fb.setAttribute('data-coco-action', 'feedback');
+  fb.textContent = 'Feedback';
+  fb.title = 'Feedback (coming soon)';
+  bar.appendChild(fb);
+  return bar;
+}
+
+function ocGetLastUserMessageText() {
+  var users = dom.messages ? dom.messages.querySelectorAll('.msg.user') : [];
+  if (!users.length) return '';
+  var last = users[users.length - 1];
+  var body = last.querySelector('.msg-body');
+  return (body ? body.textContent : last.textContent) || '';
+}
+
 // ── Add message ─────────────────────────────────────
 function addMsg(role, text, meta) {
   if (dom.welcome) dom.welcome.remove();
 
   const div = document.createElement('div');
   div.className = 'msg ' + role;
-  div.textContent = text;
+
+  const roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel(role);
+  div.appendChild(roleLabel);
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = text;
+  div.appendChild(body);
+
+  if (role === 'assistant') {
+    div.appendChild(ocBuildAssistantMsgActions());
+  }
+  if (role === 'error') {
+    div.appendChild(ocBuildErrorMsgActions());
+    ocSetCocoState('retry', 'Retry available');
+  }
 
   if (meta) {
     const m = document.createElement('div');
@@ -4114,6 +4437,7 @@ async function send() {
 
   addMsg('user', text);
   dom.typing.classList.add('visible');
+  ocSetCocoState('thinking', 'Thinking');
   triggerScan();
   scrollDown();
 
@@ -4135,6 +4459,7 @@ async function send() {
     addMsg('assistant', clean);
     lastAssistantPlain = clean;
     refreshExportButtons();
+    ocSetCocoState('ready', 'Ready');
 
     // provider gardé en console pour debug, pas affiché
     if (d.provider) console.log('[OpenChawn] provider:', d.provider);
@@ -4143,6 +4468,7 @@ async function send() {
 
   } catch (err) {
     addMsg('error', 'TRANSMISSION FAILED — ' + err.message);
+    ocSetCocoState('retry', 'Retry available');
   } finally {
     dom.typing.classList.remove('visible');
     sending = false;
@@ -4150,6 +4476,42 @@ async function send() {
     dom.input.focus();
   }
 }
+
+(function ocCocoChatUxV11() {
+  document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
+    var chip = e.target.closest('.coco-prompt-chip');
+    if (!chip || chip.disabled || !dom.input) return;
+    var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();
+    if (!prompt) return;
+    dom.input.value = prompt;
+    dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+    dom.input.focus();
+  });
+
+  dom.messages?.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-coco-action]');
+    if (!btn || btn.disabled) return;
+    var msg = btn.closest('.msg');
+    var action = btn.getAttribute('data-coco-action');
+    if (action === 'copy' && msg) {
+      var body = msg.querySelector('.msg-body');
+      var txt = (body ? body.textContent : msg.textContent) || '';
+      if (!txt) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).catch(function () {});
+      }
+      return;
+    }
+    if (action === 'retry-last' || action === 'retry') {
+      var lastUser = ocGetLastUserMessageText();
+      if (!lastUser || !dom.input) return;
+      dom.input.value = lastUser;
+      dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+      dom.input.focus();
+      ocSetCocoState('ready', 'Ready');
+    }
+  });
+})();
 </script>
 </body>
 </html>
