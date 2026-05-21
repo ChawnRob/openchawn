@@ -1842,7 +1842,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   opacity: 0.9;
 }
 
-/* COCO AI message actions placeholder */
+/* COCO v1.2 message actions */
 .coco-msg-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1872,6 +1872,12 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 .coco-msg-action:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.coco-msg-action.is-copied {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(37, 199, 122, 0.12);
 }
 
 html.oc-theme-night .coco-msg-action {
@@ -4339,7 +4345,7 @@ function ocBuildAssistantMsgActions() {
   var bar = document.createElement('div');
   bar.className = 'coco-msg-actions';
   bar.setAttribute('aria-label', 'Message actions');
-  [['copy', 'Copy', false], ['retry', 'Retry', true], ['feedback', 'Feedback', true]].forEach(function (item) {
+  [['copy', 'Copy', false], ['retry', 'Retry', false], ['feedback', 'Feedback', true]].forEach(function (item) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'coco-msg-action';
@@ -4377,12 +4383,86 @@ function ocBuildErrorMsgActions() {
   return bar;
 }
 
+function ocGetMsgBodyText(msgEl) {
+  if (!msgEl) return '';
+  var body = msgEl.querySelector('.msg-body');
+  return (body && body.textContent) ? body.textContent : '';
+}
+
 function ocGetLastUserMessageText() {
   var users = dom.messages ? dom.messages.querySelectorAll('.msg.user') : [];
   if (!users.length) return '';
-  var last = users[users.length - 1];
-  var body = last.querySelector('.msg-body');
-  return (body ? body.textContent : last.textContent) || '';
+  return ocGetMsgBodyText(users[users.length - 1]);
+}
+
+/** User prompt immediately before a given assistant message (DOM order). */
+function ocGetUserPromptBeforeAssistant(assistantMsg) {
+  if (!assistantMsg || !dom.messages) return '';
+  var node = assistantMsg.previousElementSibling;
+  while (node) {
+    if (node.id === 'typing') {
+      node = node.previousElementSibling;
+      continue;
+    }
+    if (node.classList && node.classList.contains('msg')) {
+      if (node.classList.contains('user')) return ocGetMsgBodyText(node);
+      if (node.classList.contains('assistant') || node.classList.contains('error')) return '';
+    }
+    node = node.previousElementSibling;
+  }
+  return '';
+}
+
+function ocRefillComposerPrompt(text) {
+  if (!dom.input || !text) return false;
+  dom.input.value = text;
+  dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+  dom.input.focus();
+  return true;
+}
+
+function ocShowCopyConfirmation(btn, ok) {
+  if (!btn) return;
+  var prev = btn.textContent;
+  btn.textContent = ok ? 'Copied' : 'Copy failed';
+  btn.classList.add('is-copied');
+  btn.disabled = true;
+  window.setTimeout(function () {
+    btn.textContent = prev;
+    btn.classList.remove('is-copied');
+    btn.disabled = false;
+  }, 1600);
+}
+
+function ocCopyAssistantMessage(btn, assistantMsg) {
+  if (!assistantMsg || !assistantMsg.classList.contains('assistant')) return;
+  var txt = ocGetMsgBodyText(assistantMsg);
+  if (!txt) return;
+  function fallbackCopy() {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) {
+      return false;
+    }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function () {
+      ocShowCopyConfirmation(btn, true);
+    }).catch(function () {
+      ocShowCopyConfirmation(btn, fallbackCopy());
+    });
+    return;
+  }
+  ocShowCopyConfirmation(btn, fallbackCopy());
 }
 
 // ── Add message ─────────────────────────────────────
@@ -4477,39 +4557,45 @@ async function send() {
   }
 }
 
-(function ocCocoChatUxV11() {
-  document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
-    var chip = e.target.closest('.coco-prompt-chip');
-    if (!chip || chip.disabled || !dom.input) return;
-    var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();
-    if (!prompt) return;
-    dom.input.value = prompt;
-    dom.input.dispatchEvent(new Event('input', { bubbles: true }));
-    dom.input.focus();
-  });
+document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
+  var chip = e.target.closest('.coco-prompt-chip');
+  if (!chip || chip.disabled || !dom.input) return;
+  var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();
+  if (!prompt) return;
+  ocRefillComposerPrompt(prompt);
+});
 
-  dom.messages?.addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-coco-action]');
+// COCO v1.2 message actions — event delegation on #messages only
+(function ocCocoMessageActionsV12() {
+  if (!dom.messages) return;
+  dom.messages.addEventListener('click', function (e) {
+    var btn = e.target.closest('.coco-msg-action[data-coco-action]');
     if (!btn || btn.disabled) return;
     var msg = btn.closest('.msg');
+    if (!msg) return;
     var action = btn.getAttribute('data-coco-action');
-    if (action === 'copy' && msg) {
-      var body = msg.querySelector('.msg-body');
-      var txt = (body ? body.textContent : msg.textContent) || '';
-      if (!txt) return;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).catch(function () {});
+
+    if (action === 'copy') {
+      if (!msg.classList.contains('assistant')) return;
+      e.preventDefault();
+      ocCopyAssistantMessage(btn, msg);
+      return;
+    }
+
+    if (action === 'retry-last' || action === 'retry') {
+      var prompt = '';
+      if (msg.classList.contains('error')) {
+        prompt = ocGetLastUserMessageText();
+      } else if (msg.classList.contains('assistant')) {
+        prompt = ocGetUserPromptBeforeAssistant(msg) || ocGetLastUserMessageText();
+      }
+      if (ocRefillComposerPrompt(prompt)) {
+        ocSetCocoState('ready', 'Ready');
       }
       return;
     }
-    if (action === 'retry-last' || action === 'retry') {
-      var lastUser = ocGetLastUserMessageText();
-      if (!lastUser || !dom.input) return;
-      dom.input.value = lastUser;
-      dom.input.dispatchEvent(new Event('input', { bubbles: true }));
-      dom.input.focus();
-      ocSetCocoState('ready', 'Ready');
-    }
+
+    /* feedback: placeholder only — no handler */
   });
 })();
 </script>
