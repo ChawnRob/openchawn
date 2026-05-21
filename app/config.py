@@ -47,10 +47,6 @@ OPENAI_BASE_URL = _s.openai_base_url
 OPENAI_PROMPT_ID = _s.openai_prompt_id
 OPENAI_PROMPT_VERSION = _s.openai_prompt_version
 
-ANTHROPIC_API_KEY = _s.anthropic_api_key
-ANTHROPIC_MODEL = _s.anthropic_model
-ANTHROPIC_BASE_URL = _s.anthropic_base_url
-
 DEEPSEEK_API_KEY = _s.deepseek_api_key
 DEEPSEEK_MODEL = _s.deepseek_model
 DEEPSEEK_BASE_URL = _s.deepseek_base_url

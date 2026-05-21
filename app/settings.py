@@ -143,10 +143,6 @@ class Settings:
     openai_prompt_id: str
     openai_prompt_version: str
 
-    anthropic_api_key: str
-    anthropic_model: str
-    anthropic_base_url: str
-
     deepseek_api_key: str
     deepseek_model: str
     deepseek_base_url: str
@@ -283,11 +279,6 @@ def _build_settings() -> Settings:
         openai_base_url=_str("OPENAI_BASE_URL", default="https://api.openai.com/v1").rstrip("/"),
         openai_prompt_id=_str("OPENAI_PROMPT_ID", default=""),
         openai_prompt_version=_str("OPENAI_PROMPT_VERSION", default="1"),
-        anthropic_api_key=_str("ANTHROPIC_API_KEY", default=""),
-        anthropic_model=_str("ANTHROPIC_MODEL", default="claude-3-5-sonnet-20241022"),
-        anthropic_base_url=_str("ANTHROPIC_BASE_URL", default="https://api.anthropic.com/v1").rstrip(
-            "/"
-        ),
         deepseek_api_key=_str(*DEEPSEEK_API_KEY_ENV_ALIASES, default=""),
         deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro").strip() or "deepseek-v4-pro",
         deepseek_base_url=deepseek_base,
