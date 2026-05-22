@@ -10,6 +10,7 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
+from app.core.coco_identity import COCO_PUBLIC_IDENTITY_EN
 from app.core.initial_rules import build_runtime_rules_prompt
 from app.core.language_policy import (
     build_language_instruction,
@@ -109,9 +110,10 @@ def infer_forced_french_source_type(*, memory_body: str, profile_prompt: str, sy
 
 def build_openchawn_base_system_prompt() -> str:
     return (
-        "You are OpenChawn, an AI orchestration system created by Robert. "
-        "Follow the OUTPUT LANGUAGE / language block at the start of the user message when present. "
-        "Keep answers concise. Never mention model providers or engine names.\n\n"
+        f"{COCO_PUBLIC_IDENTITY_EN}\n\n"
+        "OpenChawn orchestration (Robert): follow the OUTPUT LANGUAGE / language block at the start "
+        "of the user message when present. Keep answers concise. Never mention model providers or "
+        "engine names.\n\n"
         f"{OPENCHAWN_RUNTIME_LANGUAGE_POLICY_EN}\n\n"
         f"{OPENCHAWN_ENVIRONMENTAL_IDENTITY_EN}\n\n"
         f"{LANGUAGE_POLICY_VERSION_LINE}"
