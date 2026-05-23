@@ -911,10 +911,8 @@ html.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
   box-shadow: none !important;
 }
 
-html.ux-chat-clean .welcome.hero-cockpit p {
-  font-size: 14px;
-  line-height: 1.55;
-  max-width: min(320px, 88vw);
+html.ux-chat-clean .welcome.hero-cockpit > p {
+  display: none !important;
 }
 
 html.ux-legacy .oc-clean-input-quick {
@@ -2791,9 +2789,8 @@ html.ux-legacy .coco-companion-presence {
         <div class="hero-ring ring-3"></div>
         <div class="welcome-icon hero-logo">OC</div>
       </div>
-      <div class="welcome-line"></div>
-      <h2 class="hero-system-ready">Ready</h2>
-      <p>COCO — Conversational OpenChawn Core Orchestrator. Powered by OpenChawn.</p>
+      <div class="welcome-line" aria-hidden="true"></div>
+      <h2 class="hero-system-ready" aria-hidden="true">Ready</h2>
     </div>
 
     <div class="typing" id="typing">
@@ -2814,12 +2811,12 @@ html.ux-legacy .coco-companion-presence {
       <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
       <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
       <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
-      <button type="button" class="coco-prompt-chip" disabled aria-disabled="true" title="Second Brain (coming soon)">Open Second Brain</button>
+      <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Open Second Brain</button>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
-      <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Second Brain (coming soon)">Second Brain</button>
+      <button type="button" class="coco-future-btn coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Second Brain</button>
     </div>
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
@@ -4557,9 +4554,70 @@ async function send() {
   }
 }
 
+var COCO_AFFINE_FALLBACK_URL = 'https://app.affine.pro';
+
+function ocResolveAffineUrl(btn) {
+  var local = (typeof window.OPENCHAWN_AFFINE_LOCAL_URL === 'string' && window.OPENCHAWN_AFFINE_LOCAL_URL.trim()) || '';
+  var configured = (typeof window.OPENCHAWN_AFFINE_URL === 'string' && window.OPENCHAWN_AFFINE_URL.trim()) || '';
+  var data = btn && btn.getAttribute ? (btn.getAttribute('data-affine-url') || '').trim() : '';
+  return local || configured || data || COCO_AFFINE_FALLBACK_URL;
+}
+
+function ocShowCocoSecondBrainToast() {
+  var shell = dom.inputArea?.querySelector('.clean-input-shell');
+  if (!shell) return;
+  var el = document.getElementById('ocComposerToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ocComposerToast';
+    el.className = 'oc-composer-toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    shell.insertBefore(el, shell.firstChild);
+  }
+  el.textContent = 'Opening AFFiNE Second Brain. Your workspace stays under your control.';
+  el.classList.add('is-visible');
+  clearTimeout(ocShowCocoSecondBrainToast._t);
+  ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 4500);
+}
+
+/* COCO second brain placeholder — AFFiNE local-first open (no OpenChawn document storage) */
+function ocOpenAffineSecondBrain(btn) {
+  /*
+  TODO:
+  Future AFFiNE bridge must support local-first user ownership:
+  - desktop/local workspace preference
+  - optional self-host URL
+  - explicit user consent before sync
+  - no OpenChawn document storage by default
+  - backend bridge only for retrieval/indexing if user enables it
+  */
+  var affineUrl = ocResolveAffineUrl(btn);
+  ocShowCocoSecondBrainToast();
+  var opened = null;
+  try {
+    opened = window.open(affineUrl, '_blank', 'noopener,noreferrer');
+  } catch (e) {}
+  if (!opened) {
+    try {
+      window.location.href = affineUrl;
+    } catch (e2) {}
+  }
+}
+
+document.addEventListener('click', function (e) {
+  var sb = e.target.closest('[data-coco-action="open-affine-second-brain"], .coco-second-brain-btn');
+  if (!sb) return;
+  e.preventDefault();
+  ocOpenAffineSecondBrain(sb);
+});
+
 document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
   var chip = e.target.closest('.coco-prompt-chip');
   if (!chip || chip.disabled || !dom.input) return;
+  if (chip.classList.contains('coco-second-brain-btn') || chip.getAttribute('data-coco-action') === 'open-affine-second-brain') {
+    return;
+  }
   var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();
   if (!prompt) return;
   ocRefillComposerPrompt(prompt);

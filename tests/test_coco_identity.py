@@ -37,8 +37,8 @@ def test_static_index_html_coco_branding():
     assert "<title>COCO</title>" in html
     assert "COCO</div>" in html
     assert "powered by OpenChawn" in html
-    assert "Conversational OpenChawn Core Orchestrator" in html
     assert "coco-companion-presence" in html
+    assert "<p>COCO — Conversational OpenChawn Core Orchestrator. Powered by OpenChawn.</p>" not in html
 
 
 def test_chat_qui_es_tu_mocked_output_mentions_coco():
