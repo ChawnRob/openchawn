@@ -4133,6 +4133,7 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 });
 
 // ── Dictée locale (pas d’envoi auto) — Web Speech API ───
+// Mobile composer: draft-only dictation; send button is the only submit path.
 (function ocInitSpeechInput() {
   const btn = dom.btnSpeech;
   const mirror = document.getElementById('btnMirrorSpeech');
@@ -4140,7 +4141,20 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const supported = !!SR;
+  const VOICE_RESTART_DEBOUNCE_MS = 320;
   console.log('[OpenChawn] voice dictation supported:', supported);
+
+  const voiceState = {
+    isVoiceActive: false,
+    isVoiceManuallyStopped: false,
+    isRecognitionRestarting: false,
+    composerDraft: '',
+    rec: null,
+    dictationBaseText: '',
+    dictationFinalTranscript: '',
+    dictationInterimTranscript: '',
+    restartTimer: null,
+  };
 
   function setMirrorForAvailability() {
     const unavailable = !SR;
@@ -4158,12 +4172,6 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     setMirrorForAvailability();
     return;
   }
-
-  let rec = null;
-  let listening = false;
-  let dictationBaseText = '';
-  let dictationFinalTranscript = '';
-  let dictationInterimTranscript = '';
 
   function ocShowComposerToast(message) {
     const shell = dom.inputArea?.querySelector('.clean-input-shell');
@@ -4189,18 +4197,6 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     } catch (_) {}
   }
 
-  function ocSetDictationUiState(active) {
-    listening = !!active;
-    btn.classList.toggle('recording', listening);
-    btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
-    btn.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
-    if (mirror) mirror.title = listening ? 'Dictée en cours' : 'Micro dictée';
-    if (dom.input) {
-      if (listening) dom.input.placeholder = 'Écoute en cours…';
-      else ocResetInputPlaceholder();
-    }
-  }
-
   function ocComposeSpeechValue(baseText, finalTranscript, interimTranscript) {
     const base = String(baseText || '');
     const finalText = String(finalTranscript || '').replace(/\s+/g, ' ').trim();
@@ -4211,38 +4207,127 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     return /\s$/.test(base) ? (base + speechText) : (base + ' ' + speechText);
   }
 
-  function ocSyncSpeechToComposer() {
-    if (!dom.input) return;
-    dom.input.value = ocComposeSpeechValue(
-      dictationBaseText,
-      dictationFinalTranscript,
-      dictationInterimTranscript
+  function ocCommitDraftFromSpeechBuffers() {
+    voiceState.composerDraft = ocComposeSpeechValue(
+      voiceState.dictationBaseText,
+      voiceState.dictationFinalTranscript,
+      voiceState.dictationInterimTranscript
     );
+  }
+
+  function ocRenderComposerDraft() {
+    if (!dom.input) return;
+    dom.input.value = voiceState.composerDraft;
     dom.input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function ocResetSpeechBuffers() {
-    dictationBaseText = '';
-    dictationFinalTranscript = '';
-    dictationInterimTranscript = '';
+  function ocSyncSpeechToComposer() {
+    ocCommitDraftFromSpeechBuffers();
+    ocRenderComposerDraft();
   }
 
-  function wireInstance(r) {
+  function ocFreezeDraftAsBase() {
+    ocCommitDraftFromSpeechBuffers();
+    voiceState.dictationBaseText = voiceState.composerDraft;
+    voiceState.dictationFinalTranscript = '';
+    voiceState.dictationInterimTranscript = '';
+  }
+
+  function ocClearRestartTimer() {
+    if (voiceState.restartTimer) {
+      clearTimeout(voiceState.restartTimer);
+      voiceState.restartTimer = null;
+    }
+  }
+
+  function ocSetDictationUiState(active) {
+    voiceState.isVoiceActive = !!active;
+    btn.classList.toggle('recording', voiceState.isVoiceActive);
+    btn.setAttribute('aria-pressed', voiceState.isVoiceActive ? 'true' : 'false');
+    btn.title = voiceState.isVoiceActive
+      ? 'Dictée en cours — appuyez pour arrêter'
+      : 'Dictée navigateur — ne envoie pas automatiquement';
+    if (mirror) {
+      mirror.title = voiceState.isVoiceActive ? 'Dictée en cours' : 'Micro dictée';
+    }
+    if (dom.input) {
+      if (voiceState.isVoiceActive) dom.input.placeholder = 'Écoute en cours…';
+      else ocResetInputPlaceholder();
+    }
+  }
+
+  function ocDetachRecognitionInstance() {
+    const r = voiceState.rec;
+    voiceState.rec = null;
+    if (!r) return;
+    r.onresult = null;
+    r.onerror = null;
+    r.onend = null;
+    r.onstart = null;
+    try {
+      r.stop();
+    } catch (_) {}
+    try {
+      r.abort();
+    } catch (_) {}
+  }
+
+  function ocShouldRestartAfterEnd() {
+    return (
+      voiceState.isVoiceActive
+      && !voiceState.isVoiceManuallyStopped
+      && !voiceState.isRecognitionRestarting
+      && !sending
+      && ocChatCleanMobileComposer()
+    );
+  }
+
+  function ocScheduleRecognitionRestart() {
+    if (!ocShouldRestartAfterEnd()) return;
+    ocClearRestartTimer();
+    voiceState.restartTimer = setTimeout(() => {
+      voiceState.restartTimer = null;
+      if (!ocShouldRestartAfterEnd()) return;
+      ocFreezeDraftAsBase();
+      try {
+        voiceState.isRecognitionRestarting = true;
+        const next = new SR();
+        ocWireRecognitionInstance(next);
+        voiceState.rec = next;
+        next.start();
+      } catch (e) {
+        voiceState.isRecognitionRestarting = false;
+        console.log('[OpenChawn] voice dictation restart error:', String(e && e.message ? e.message : e));
+        voiceState.isVoiceManuallyStopped = true;
+        voiceState.isVoiceActive = false;
+        ocSetDictationUiState(false);
+      }
+    }, VOICE_RESTART_DEBOUNCE_MS);
+  }
+
+  function ocWireRecognitionInstance(r) {
     r.lang = (navigator.language || 'fr-FR').replace(/_/g, '-');
-    r.continuous = true;
+    r.continuous = !ocChatCleanMobileComposer();
     r.interimResults = true;
+    r.onstart = () => {
+      voiceState.isRecognitionRestarting = false;
+    };
     r.onresult = (ev) => {
-      let finalText = '';
+      if (sending) return;
       let interimText = '';
-      for (let i = 0; i < ev.results.length; i++) {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const row = ev.results[i];
         const transcript = row && row[0] ? row[0].transcript : '';
         if (!transcript) continue;
-        if (row.isFinal) finalText += transcript + ' ';
-        else interimText += transcript + ' ';
+        if (row.isFinal) {
+          voiceState.dictationFinalTranscript = (
+            voiceState.dictationFinalTranscript + ' ' + transcript
+          ).replace(/\s+/g, ' ').trim();
+        } else {
+          interimText += transcript + ' ';
+        }
       }
-      dictationFinalTranscript = finalText.trim();
-      dictationInterimTranscript = interimText.trim();
+      voiceState.dictationInterimTranscript = interimText.replace(/\s+/g, ' ').trim();
       ocSyncSpeechToComposer();
     };
     r.onerror = (ev) => {
@@ -4251,46 +4336,106 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         ocShowComposerToast('Accès micro refusé. Autorisez le micro dans le navigateur.');
       }
+      voiceState.isVoiceManuallyStopped = true;
+      ocClearRestartTimer();
+      ocDetachRecognitionInstance();
+      ocFreezeDraftAsBase();
+      voiceState.isVoiceActive = false;
       ocSetDictationUiState(false);
-      rec = null;
-      ocResetSpeechBuffers();
     };
     r.onend = () => {
+      voiceState.rec = null;
+      voiceState.isRecognitionRestarting = false;
+      ocFreezeDraftAsBase();
+      if (voiceState.isVoiceManuallyStopped || sending) {
+        voiceState.isVoiceActive = false;
+        ocSetDictationUiState(false);
+        return;
+      }
+      if (voiceState.isVoiceActive) {
+        ocSetDictationUiState(true);
+        ocScheduleRecognitionRestart();
+        return;
+      }
       ocSetDictationUiState(false);
-      rec = null;
-      ocResetSpeechBuffers();
     };
+  }
+
+  function ocStartVoiceRecognition() {
+    voiceState.isVoiceManuallyStopped = false;
+    voiceState.isRecognitionRestarting = false;
+    ocClearRestartTimer();
+    voiceState.composerDraft = dom.input ? dom.input.value : '';
+    voiceState.dictationBaseText = voiceState.composerDraft;
+    voiceState.dictationFinalTranscript = '';
+    voiceState.dictationInterimTranscript = '';
+    const instance = new SR();
+    ocWireRecognitionInstance(instance);
+    voiceState.rec = instance;
+    voiceState.isVoiceActive = true;
+    ocSetDictationUiState(true);
+    instance.start();
+  }
+
+  function ocStopVoiceRecognition(manual) {
+    voiceState.isVoiceManuallyStopped = !!manual;
+    ocClearRestartTimer();
+    ocDetachRecognitionInstance();
+    ocFreezeDraftAsBase();
+    voiceState.isVoiceActive = false;
+    voiceState.isRecognitionRestarting = false;
+    ocSetDictationUiState(false);
   }
 
   btn.addEventListener('click', () => {
     if (btn.disabled || sending) return;
     if (ocChatCleanMobileComposer()) console.log('[OpenChawn] mobile mic tapped');
-    if (listening && rec) {
-      try {
-        rec.stop();
-      } catch (e) {
-        console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
-      }
-      ocSetDictationUiState(false);
-      rec = null;
+    if (voiceState.isVoiceActive) {
+      ocStopVoiceRecognition(true);
       return;
     }
     try {
       console.log('[OpenChawn] voice dictation start');
-      rec = new SR();
-      wireInstance(rec);
-      dictationBaseText = dom.input ? dom.input.value : '';
-      dictationFinalTranscript = '';
-      dictationInterimTranscript = '';
-      ocSetDictationUiState(true);
-      rec.start();
+      ocStartVoiceRecognition();
     } catch (e) {
       console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
-      ocSetDictationUiState(false);
-      rec = null;
-      ocResetSpeechBuffers();
+      ocStopVoiceRecognition(true);
     }
   });
+
+  if (dom.input) {
+    dom.input.addEventListener('input', () => {
+      if (!voiceState.isVoiceActive || sending) return;
+      voiceState.composerDraft = dom.input.value;
+      voiceState.dictationBaseText = dom.input.value;
+      voiceState.dictationFinalTranscript = '';
+      voiceState.dictationInterimTranscript = '';
+    });
+  }
+
+  window.ocVoicePrepareSend = function ocVoicePrepareSend() {
+    if (voiceState.isVoiceActive) {
+      ocFreezeDraftAsBase();
+      voiceState.isVoiceManuallyStopped = true;
+      ocClearRestartTimer();
+      ocDetachRecognitionInstance();
+      voiceState.isVoiceActive = false;
+      voiceState.isRecognitionRestarting = false;
+      ocSetDictationUiState(false);
+    } else {
+      ocCommitDraftFromSpeechBuffers();
+    }
+    const text = String(voiceState.composerDraft || (dom.input && dom.input.value) || '').trim();
+    voiceState.composerDraft = '';
+    voiceState.dictationBaseText = '';
+    voiceState.dictationFinalTranscript = '';
+    voiceState.dictationInterimTranscript = '';
+    if (dom.input) {
+      dom.input.value = '';
+      dom.input.style.height = 'auto';
+    }
+    return text;
+  };
 
   setMirrorForAvailability();
 })();
@@ -4525,13 +4670,18 @@ function addMsg(role, text, meta) {
 
 // ── Send ─────────────────────────────────────────────
 async function send() {
-  const text = dom.input.value.trim();
+  const text =
+    typeof window.ocVoicePrepareSend === 'function'
+      ? window.ocVoicePrepareSend()
+      : dom.input.value.trim();
   if (!text || sending) return;
 
   sending = true;
   dom.send.disabled = true;
-  dom.input.value = '';
-  dom.input.style.height = 'auto';
+  if (typeof window.ocVoicePrepareSend !== 'function') {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+  }
 
   addMsg('user', text);
   dom.typing.classList.add('visible');
