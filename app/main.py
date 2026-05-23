@@ -277,6 +277,14 @@ def health():
     }
 
 
+@app.get("/api/memory/runtime-status")
+def memory_runtime_status(verify: bool = False):
+    """Safe memory/database audit fields (no secrets). verify=true runs isolated RW probe."""
+    from app.core.memory_runtime_status import get_memory_runtime_status
+
+    return get_memory_runtime_status(verify_read_write=bool(verify))
+
+
 @app.get("/api/second-brain/status")
 def second_brain_status():
     """Safe Second Brain runtime status (AFFiNE, user-owned, no secrets)."""
