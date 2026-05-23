@@ -39,6 +39,13 @@ OPENCHAWN_AFFINE_URL=
 - Toast on open: *Opening AFFiNE Second Brain. Your workspace stays under your control.*
 - Do **not** use: "AFFiNE is connected", "OpenChawn stores your documents", "Memory sync is active"
 
+## Backend runtime (COCO)
+
+- Module: `app/core/second_brain.py`
+- Status: `GET /api/second-brain/status` (safe fields only, no URLs)
+- Injected into COCO system prompt via `build_openchawn_base_system_prompt()` in `app/api/chat.py`
+- `api_sync_active` is **false** unless `OPENCHAWN_AFFINE_API_SYNC_ACTIVE=true` (explicit opt-in)
+
 ## Future bridge (TODO in `static/index.html`)
 
 - Desktop/local workspace preference
