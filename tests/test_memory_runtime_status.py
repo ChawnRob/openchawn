@@ -18,11 +18,13 @@ def test_memory_runtime_status_defaults():
     assert st["memory_read_write_verified"] is False
 
 
-def test_memory_runtime_status_read_write_verified():
+def test_memory_runtime_status_read_write_verified_json_backend():
+    """JSON dev path: verify=true does not set durable verified (Postgres-only)."""
     from app.core.memory_runtime_status import get_memory_runtime_status
 
     st = get_memory_runtime_status(verify_read_write=True)
-    assert st["memory_read_write_verified"] is True
+    assert st["fractal_memory_backend"] == "json"
+    assert st["memory_read_write_verified"] is False
 
 
 def test_api_memory_runtime_status_endpoint():

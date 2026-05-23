@@ -4,3 +4,4 @@ httpx
 requests
 python-dotenv
 pydantic
+psycopg[binary]>=3.1

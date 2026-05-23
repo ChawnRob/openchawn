@@ -52,18 +52,33 @@ POST /chat
 
 ## Current Storage Reality
 
-The active official memory path currently uses the backend selected inside `app/memory/fractal_memory.py`.
+The active official memory path uses the backend selected inside `app/memory/fractal_memory.py`.
 
-Today that means:
+| `MEMORY_BACKEND` | Use case | Durable |
+|------------------|----------|---------|
+| `json` (default) | Local development only | No — file at `data/memory/fractal_memory.json` |
+| `postgres` | Railway / production chat memory | Yes — table `fractal_memories` |
 
-- `LocalJsonMemoryBackend` is the practical default path
-- `PostgresMemoryBackend` exists as the intended durable production target
-- the Postgres path is prepared but not yet the completed durable production source of truth
+### Environment variables
 
-Important production note:
+- `MEMORY_BACKEND` — `json` or `postgres`
+- `MEMORY_DB_URL` — preferred Postgres URL for fractal memory (overrides `DATABASE_URL`)
+- `DATABASE_URL` — fallback when `MEMORY_DB_URL` is unset
+- `MEMORY_ALLOW_EPHEMERAL_JSON` — set `true` only if production must temporarily use ephemeral JSON (not recommended)
 
-- local JSON storage is acceptable for local and development usage
-- local JSON must not be treated as the final durable production memory backend on Railway
+Production rules:
+
+- `OPENCHAWN_ENV=production` with `MEMORY_BACKEND=postgres` requires `MEMORY_DB_URL` or `DATABASE_URL`
+- Do not rely on local JSON on Railway — containers are ephemeral
+- `GET /api/memory/runtime-status?verify=true` sets `memory_read_write_verified` only after a real Postgres read/write probe
+
+### Postgres schema (`fractal_memories`)
+
+Indexed columns: `id`, `timestamp`, `memory_type`, `memory_level`, `project_name`, `user_id`, plus message fields and `tags` / `children_ids` / `metadata` JSONB.
+
+Full round-trip fidelity: `entry_payload` JSONB stores the complete normalized fractal entry (lifecycle, decay, concept merge metadata, etc.).
+
+Auth SQLite (`OPENCHAWN_DB_PATH`) remains separate from fractal chat memory.
 
 ## Warning: Parallel Memory Families Are Not Official Chat Runtime
 
@@ -83,20 +98,25 @@ Treat these as experimental, parallel, legacy, or future-facing layers unless a 
 
 Do not route `POST /chat` to these families implicitly or by partial refactor.
 
+## Railway production checklist
+
+```bash
+MEMORY_BACKEND=postgres
+MEMORY_DB_URL=${{Postgres.DATABASE_URL}}   # or reuse service DATABASE_URL
+OPENCHAWN_ENV=production
+```
+
+Verify after deploy:
+
+```bash
+curl -s 'https://www.openchawn.com/api/memory/runtime-status?verify=true'
+```
+
+Expect: `fractal_memory_backend=postgres`, `fractal_persistent=true`, `database_provider=postgres`, and `memory_read_write_verified=true` when the DB probe succeeds.
+
 ## Future Migration
 
-When durable production memory is added later, the migration point should stay inside the official fractal path rather than bypassing it.
-
-Recommended future target:
-
-- keep `app/api/chat.py` as the official chat entrypoint
-- keep `build_layered_memory_context()` as the official read boundary
-- keep `write_exchange()` as the official write boundary
-- add the durable backend behind `app/memory/fractal_memory.py`
-- complete `PostgresMemoryBackend` there for Railway production durability
-- keep JSON as a local/dev fallback only
-
-In other words, future durability should be added behind the existing official runtime contract, not by silently switching `POST /chat` to a parallel memory family.
+Durable memory stays behind the official fractal contract (`build_layered_memory_context` / `write_exchange`). Do not route `POST /chat` to parallel memory families without updating this file.
 
 ## Change Control Note
 
