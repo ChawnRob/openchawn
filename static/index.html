@@ -2122,6 +2122,12 @@ html.ux-legacy .coco-msg-actions {
   display: block;
 }
 
+.oc-composer-toast a {
+  color: var(--cyan);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 /* chat_clean mobile : micro dans le chip, + secondaire au-dessus */
 html.ux-chat-clean .oc-mobile-composer-hud {
   display: none;
@@ -4735,7 +4741,7 @@ function ocResolveAffineUrl(btn) {
   return local || configured || data || COCO_AFFINE_FALLBACK_URL;
 }
 
-function ocShowCocoSecondBrainToast() {
+function ocShowCocoSecondBrainToast(message, linkUrl) {
   var shell = dom.inputArea?.querySelector('.clean-input-shell');
   if (!shell) return;
   var el = document.getElementById('ocComposerToast');
@@ -4747,13 +4753,25 @@ function ocShowCocoSecondBrainToast() {
     el.setAttribute('aria-live', 'polite');
     shell.insertBefore(el, shell.firstChild);
   }
-  el.textContent = 'Opening AFFiNE Second Brain. Your workspace stays under your control.';
+  el.textContent = '';
+  var msg = message || 'Second Brain opened in a new tab';
+  if (linkUrl) {
+    el.appendChild(document.createTextNode(msg + ' '));
+    var link = document.createElement('a');
+    link.href = linkUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = linkUrl;
+    el.appendChild(link);
+  } else {
+    el.textContent = msg;
+  }
   el.classList.add('is-visible');
   clearTimeout(ocShowCocoSecondBrainToast._t);
-  ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 4500);
+  ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 6000);
 }
 
-/* COCO second brain — AFFiNE local-first open (no OpenChawn document storage) */
+/* COCO second brain — AFFiNE opens in a new tab; COCO stays on this page */
 function ocOpenAffineSecondBrain(btn) {
   /*
   Future AFFiNE bridge must support local-first user ownership:
@@ -4764,16 +4782,21 @@ function ocOpenAffineSecondBrain(btn) {
   - backend bridge only for retrieval/indexing if user enables it
   */
   var affineUrl = ocResolveAffineUrl(btn);
-  ocShowCocoSecondBrainToast();
   var opened = null;
   try {
     opened = window.open(affineUrl, '_blank', 'noopener,noreferrer');
   } catch (e) {}
-  if (!opened) {
+  if (opened) {
     try {
-      window.location.href = affineUrl;
+      opened.opener = null;
     } catch (e2) {}
+    ocShowCocoSecondBrainToast('Second Brain opened in a new tab');
+    return;
   }
+  ocShowCocoSecondBrainToast(
+    'Popup blocked. Open AFFiNE in a new tab manually:',
+    affineUrl
+  );
 }
 
 document.addEventListener('click', function (e) {

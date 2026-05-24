@@ -49,12 +49,12 @@ def test_affine_url_resolution_and_fallback():
     assert "data-affine-url" in html
     assert "https://app.affine.pro" in html
     assert "window.open(affineUrl, '_blank', 'noopener,noreferrer')" in html
-    assert "window.location.href = affineUrl" in html
+    assert "window.location.href = affineUrl" not in html
 
 
 def test_second_brain_microcopy_safe():
     html = _html()
-    assert "Opening AFFiNE Second Brain. Your workspace stays under your control." in html
+    assert "Second Brain opened in a new tab" in html
     assert "AFFiNE is connected" not in html
     assert "OpenChawn stores your documents" not in html
     assert "Memory sync is active" not in html

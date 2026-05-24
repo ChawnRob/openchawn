@@ -35,8 +35,10 @@ def test_second_brain_affine_open_handler():
     html = _html()
     assert "ocOpenAffineSecondBrain" in html
     assert "ocResolveAffineUrl" in html
-    assert "Opening AFFiNE Second Brain. Your workspace stays under your control." in html
+    assert "Second Brain opened in a new tab" in html
     assert "window.open(affineUrl, '_blank', 'noopener,noreferrer')" in html
+    assert "window.location.href = affineUrl" not in html
+    assert "Popup blocked" in html
     assert "second-brain-bridge" not in html
 
 
