@@ -35,10 +35,13 @@ def test_static_index_html_coco_branding():
 
     html = Path(__file__).resolve().parents[1].joinpath("static", "index.html").read_text(encoding="utf-8")
     assert "<title>COCO</title>" in html
-    assert "COCO</div>" in html
+    assert '<div class="header-title">COCO</div>' in html
     assert "powered by OpenChawn" in html
-    assert "Conversational OpenChawn Core Orchestrator" in html
     assert "coco-companion-presence" in html
+    # Full expansion: discreet metadata anchor only (not visible header or hero copy)
+    assert 'meta name="description"' in html
+    assert "Conversational OpenChawn Core Orchestrator" in html
+    assert "<p>COCO — Conversational OpenChawn Core Orchestrator" not in html
 
 
 def test_chat_qui_es_tu_mocked_output_mentions_coco():
