@@ -1695,46 +1695,280 @@ def store_indexes_snapshot() -> dict[str, object]:
     return rebuild_logical_indexes(entries)
 
 
+def resolve_memory_db_url() -> str:
+    """MEMORY_DB_URL takes priority over DATABASE_URL."""
+    return (os.environ.get("MEMORY_DB_URL") or os.environ.get("DATABASE_URL") or "").strip()
+
+
+def _production_allows_ephemeral_json() -> bool:
+    raw = (os.environ.get("MEMORY_ALLOW_EPHEMERAL_JSON") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 class PostgresMemoryBackend(MemoryBackend):
     name = "postgres"
 
-    # Colonnes futures alignées V11.6 lifecycle + observabilité (JSON metadata / hors schéma) :
-    # created_at, last_accessed_at, access_count, decay_score, lifecycle_status, contradiction_detected
     CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS fractal_memories (
         id TEXT PRIMARY KEY,
         timestamp TIMESTAMPTZ NOT NULL,
         memory_type TEXT NOT NULL DEFAULT 'session',
+        memory_level TEXT NOT NULL DEFAULT 'raw_memory',
         project_name TEXT NOT NULL DEFAULT '',
         user_id TEXT NOT NULL DEFAULT '',
-        source TEXT NOT NULL,
-        user_message TEXT NOT NULL,
-        assistant_response TEXT NOT NULL,
-        summary TEXT NOT NULL,
-        tags JSONB NOT NULL,
-        importance_score DOUBLE PRECISION NOT NULL,
-        project TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'chat',
+        user_message TEXT NOT NULL DEFAULT '',
+        assistant_response TEXT NOT NULL DEFAULT '',
+        summary TEXT NOT NULL DEFAULT '',
+        tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+        importance_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+        project TEXT NOT NULL DEFAULT '',
         parent_id TEXT NULL,
-        children_ids JSONB NOT NULL,
-        metadata JSONB NOT NULL
+        children_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        entry_payload JSONB NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_fractal_memories_type_ts
+        ON fractal_memories (memory_type, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_fractal_memories_user_ts
+        ON fractal_memories (user_id, timestamp DESC);
     """
 
     def __init__(self, database_url: str) -> None:
         self.database_url = (database_url or "").strip()
         if not self.database_url:
             raise MemoryBackendConfigError(
-                "MEMORY_BACKEND=postgres requires DATABASE_URL (or MEMORY_DB_URL)."
+                "MEMORY_BACKEND=postgres requires MEMORY_DB_URL or DATABASE_URL."
             )
+        self._schema_ready = False
+
+    def _connect(self):
+        import psycopg
+        from psycopg.rows import dict_row
+
+        return psycopg.connect(self.database_url, row_factory=dict_row)
+
+    def _ensure_schema(self, conn) -> None:
+        if self._schema_ready:
+            return
+        with conn.cursor() as cur:
+            cur.execute(self.CREATE_TABLE_SQL)
+        conn.commit()
+        self._schema_ready = True
+
+    @staticmethod
+    def _entry_to_payload(entry: dict) -> dict:
+        normalized = _ensure_entry_defaults(copy.deepcopy(entry))
+        return normalized
+
+    @staticmethod
+    def _payload_to_entry(payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            return {}
+        return _ensure_entry_defaults(copy.deepcopy(payload))
+
+    @staticmethod
+    def _entry_timestamp(entry: dict):
+        ts = _parse_iso_ts(str(entry.get("timestamp") or entry.get("created_at") or ""))
+        if ts is None:
+            ts = datetime.now(timezone.utc)
+        return ts
+
+    def _row_to_entry(self, row: dict) -> dict:
+        payload = row.get("entry_payload")
+        if isinstance(payload, dict):
+            return self._payload_to_entry(payload)
+        rebuilt = {
+            "id": row.get("id"),
+            "timestamp": row.get("timestamp"),
+            "memory_type": row.get("memory_type"),
+            "memory_level": row.get("memory_level"),
+            "project_name": row.get("project_name"),
+            "user_id": row.get("user_id"),
+            "source": row.get("source"),
+            "user_message": row.get("user_message"),
+            "assistant_response": row.get("assistant_response"),
+            "summary": row.get("summary"),
+            "tags": row.get("tags") or [],
+            "importance_score": row.get("importance_score"),
+            "project": row.get("project"),
+            "parent_id": row.get("parent_id"),
+            "children_ids": row.get("children_ids") or [],
+            "metadata": row.get("metadata") or {},
+        }
+        if isinstance(rebuilt.get("timestamp"), datetime):
+            rebuilt["timestamp"] = rebuilt["timestamp"].astimezone(timezone.utc).isoformat()
+        return self._payload_to_entry(rebuilt)
 
     def load_entries(self) -> list[dict]:
-        # Prepared for future Railway persistent storage; no migration yet.
-        logger.info("postgres memory backend selected (read path prepared, no migration executed yet)")
-        return []
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, timestamp, memory_type, memory_level, project_name, user_id,
+                               source, user_message, assistant_response, summary, tags,
+                               importance_score, project, parent_id, children_ids, metadata,
+                               entry_payload
+                        FROM fractal_memories
+                        ORDER BY timestamp ASC
+                        """
+                    )
+                    rows = cur.fetchall()
+        except MemoryBackendConfigError:
+            raise
+        except Exception as e:
+            raise MemoryBackendConfigError(f"postgres memory load failed: {e}") from e
+
+        return [self._row_to_entry(dict(row)) for row in rows]
 
     def save_entries(self, entries: list[dict]) -> None:
-        _ = entries
-        logger.info("postgres memory backend selected (write path prepared, no migration executed yet)")
+        normalized = [self._entry_to_payload(e) for e in entries if isinstance(e, dict)]
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM fractal_memories")
+                    for entry in normalized:
+                        payload = json.loads(json.dumps(entry, ensure_ascii=False, default=str))
+                        tags = payload.get("tags") or []
+                        children_ids = payload.get("children_ids") or []
+                        metadata = payload.get("metadata") or {}
+                        if not isinstance(metadata, dict):
+                            metadata = {}
+                        cur.execute(
+                            """
+                            INSERT INTO fractal_memories (
+                                id, timestamp, memory_type, memory_level, project_name, user_id,
+                                source, user_message, assistant_response, summary, tags,
+                                importance_score, project, parent_id, children_ids, metadata,
+                                entry_payload
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s::jsonb,
+                                %s, %s, %s, %s::jsonb, %s::jsonb,
+                                %s::jsonb
+                            )
+                            """,
+                            (
+                                str(payload.get("id") or ""),
+                                self._entry_timestamp(payload),
+                                str(payload.get("memory_type") or "session"),
+                                str(payload.get("memory_level") or "raw_memory"),
+                                str(payload.get("project_name") or ""),
+                                str(payload.get("user_id") or ""),
+                                str(payload.get("source") or "chat"),
+                                str(payload.get("user_message") or ""),
+                                str(payload.get("assistant_response") or ""),
+                                str(payload.get("summary") or ""),
+                                json.dumps(tags, ensure_ascii=False),
+                                float(payload.get("importance_score") or 0.0),
+                                str(payload.get("project") or ""),
+                                payload.get("parent_id"),
+                                json.dumps(children_ids, ensure_ascii=False),
+                                json.dumps(metadata, ensure_ascii=False, default=str),
+                                json.dumps(payload, ensure_ascii=False, default=str),
+                            ),
+                        )
+                conn.commit()
+        except MemoryBackendConfigError:
+            raise
+        except Exception as e:
+            raise MemoryBackendConfigError(f"postgres memory save failed: {e}") from e
+
+    def verify_read_write(self) -> bool:
+        """Isolated probe row; does not touch unrelated production rows beyond one id."""
+        probe_id = f"mem_rw_probe_{uuid.uuid4().hex[:12]}"
+        now = _now_iso()
+        probe = _ensure_entry_defaults(
+            {
+                "id": probe_id,
+                "timestamp": now,
+                "created_at": now,
+                "last_accessed_at": now,
+                "memory_type": "session",
+                "memory_level": "summary_memory",
+                "project_name": "openchawn",
+                "user_id": "memory-rw-probe",
+                "source": "memory_runtime_audit",
+                "user_message": "Postgres fractal memory read/write probe.",
+                "assistant_response": "Probe OK.",
+                "summary": "Probe: Postgres fractal memory durable.",
+                "tags": ["memory", "probe"],
+                "importance_score": 0.42,
+                "project": "openchawn",
+                "parent_id": None,
+                "children_ids": [],
+                "metadata": {"probe": True},
+            }
+        )
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                payload = json.loads(json.dumps(probe, ensure_ascii=False, default=str))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO fractal_memories (
+                            id, timestamp, memory_type, memory_level, project_name, user_id,
+                            source, user_message, assistant_response, summary, tags,
+                            importance_score, project, parent_id, children_ids, metadata,
+                            entry_payload
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s::jsonb,
+                            %s, %s, %s, %s::jsonb, %s::jsonb,
+                            %s::jsonb
+                        )
+                        """,
+                        (
+                            probe_id,
+                            self._entry_timestamp(probe),
+                            "session",
+                            "summary_memory",
+                            "openchawn",
+                            "memory-rw-probe",
+                            "memory_runtime_audit",
+                            probe["user_message"],
+                            probe["assistant_response"],
+                            probe["summary"],
+                            json.dumps(probe.get("tags") or [], ensure_ascii=False),
+                            0.42,
+                            "openchawn",
+                            None,
+                            "[]",
+                            json.dumps({"probe": True}, ensure_ascii=False),
+                            json.dumps(payload, ensure_ascii=False, default=str),
+                        ),
+                    )
+                    cur.execute(
+                        "SELECT entry_payload FROM fractal_memories WHERE id = %s",
+                        (probe_id,),
+                    )
+                    row = cur.fetchone()
+                    cur.execute("DELETE FROM fractal_memories WHERE id = %s", (probe_id,))
+                conn.commit()
+        except Exception:
+            logger.exception("postgres memory read/write probe failed")
+            return False
+
+        if not row:
+            return False
+        if isinstance(row, dict):
+            stored = row.get("entry_payload")
+        elif isinstance(row, (tuple, list)):
+            stored = row[0]
+        else:
+            stored = getattr(row, "entry_payload", None)
+        if isinstance(stored, str):
+            try:
+                stored = json.loads(stored)
+            except json.JSONDecodeError:
+                return False
+        if not isinstance(stored, dict):
+            return False
+        return str(stored.get("id")) == probe_id and str(stored.get("memory_type")) == "session"
 
     def persistent_storage(self) -> bool:
         return True
@@ -1743,14 +1977,28 @@ class PostgresMemoryBackend(MemoryBackend):
         return "postgres://fractal_memories"
 
     def backend_status(self) -> str:
-        return "prepared_not_migrated"
+        return "ok"
+
+
+def fractal_backend_name() -> str:
+    return (get_settings().memory_backend or "json").strip().lower() or "json"
 
 
 def _build_backend() -> MemoryBackend:
     s = get_settings()
     backend = (s.memory_backend or "json").strip().lower() or "json"
     if backend == "postgres":
-        return PostgresMemoryBackend(database_url=s.memory_db_url)
+        url = (s.memory_db_url or resolve_memory_db_url() or "").strip()
+        if not url:
+            raise MemoryBackendConfigError(
+                "MEMORY_BACKEND=postgres requires MEMORY_DB_URL or DATABASE_URL."
+            )
+        return PostgresMemoryBackend(database_url=url)
+    if s.is_production and not _production_allows_ephemeral_json():
+        raise MemoryBackendConfigError(
+            "Production requires MEMORY_BACKEND=postgres with MEMORY_DB_URL or DATABASE_URL. "
+            "Set MEMORY_ALLOW_EPHEMERAL_JSON=true only for explicit ephemeral JSON."
+        )
     return LocalJsonMemoryBackend(STORE_PATH)
 
 

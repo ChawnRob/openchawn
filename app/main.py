@@ -277,6 +277,31 @@ def health():
     }
 
 
+@app.get("/api/memory/runtime-status")
+def memory_runtime_status(verify: bool = False):
+    """Safe memory/database audit fields (no secrets). verify=true runs isolated RW probe."""
+    from app.core.memory_runtime_status import get_memory_runtime_status
+
+    return get_memory_runtime_status(verify_read_write=bool(verify))
+
+
+@app.get("/api/second-brain/status")
+def second_brain_status():
+    """Safe Second Brain runtime status (AFFiNE, user-owned, no secrets)."""
+    from app.core.second_brain import get_second_brain_status
+
+    st = get_second_brain_status()
+    return {
+        "provider": st["provider"],
+        "mode": st["mode"],
+        "ownership": st["ownership"],
+        "open_action_configured": st["open_action_configured"],
+        "api_sync_active": st["api_sync_active"],
+        "openchawn_document_storage_default": st["openchawn_document_storage_default"],
+        "consent_required_for_sync": st["consent_required_for_sync"],
+    }
+
+
 @app.get("/health/providers")
 def health_providers():
     """État des providers LLM (Railway / ops) — sans secrets."""

@@ -1,4 +1,4 @@
-"""COCO Second Brain chip — active placeholder (no AFFiNE API yet)."""
+"""COCO Second Brain chip — active control with AFFiNE open (no API sync yet)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def test_second_brain_chip_not_disabled():
     line = lines[0]
     assert "disabled" not in line
     assert 'aria-disabled="true"' not in line
-    assert 'data-coco-action="second-brain-bridge"' in line
+    assert 'data-coco-action="open-affine-second-brain"' in line
 
 
 def test_second_brain_active_cursor_styles():
@@ -31,13 +31,13 @@ def test_second_brain_active_cursor_styles():
     assert "cursor: pointer" in html
 
 
-def test_second_brain_placeholder_handler():
+def test_second_brain_affine_open_handler():
     html = _html()
-    assert "Placeholder action for the future AFFiNE Second Brain bridge" in html
-    assert "Second Brain bridge is ready for connection" in html
-    assert "AFFiNE API integration is not connected yet" in html
-    assert "ocHandleSecondBrainBridge" in html
-    assert "addMsg('assistant', COCO_SECOND_BRAIN_PLACEHOLDER_MSG)" in html
+    assert "ocOpenAffineSecondBrain" in html
+    assert "ocResolveAffineUrl" in html
+    assert "Opening AFFiNE Second Brain. Your workspace stays under your control." in html
+    assert "window.open(affineUrl, '_blank', 'noopener,noreferrer')" in html
+    assert "second-brain-bridge" not in html
 
 
 def test_coco_identity_unchanged():

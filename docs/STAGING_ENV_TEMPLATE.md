@@ -74,6 +74,13 @@ OLLAMA_BASE_URL=REPLACE_ME_OPTIONAL_LOCAL_ONLY
 # ── URLs (set after Railway assigns staging hostname) ──
 APP_BASE_URL=REPLACE_ME_STAGING_URL
 FRONTEND_URL=REPLACE_ME_STAGING_URL
+
+# ── COCO Second Brain → AFFiNE (frontend window.* — optional) ──
+# Not backend secrets. Inject via host page script if needed.
+# OPENCHAWN_AFFINE_LOCAL_URL=   # preferred local/desktop AFFiNE URL or deep link
+# OPENCHAWN_AFFINE_URL=        # cloud or self-host workspace fallback
+# Data principle: AFFiNE workspace is user-owned; OpenChawn does not store documents by default.
+# See docs/COCO_AFFINE_SECOND_BRAIN.md
 ```
 
 ---

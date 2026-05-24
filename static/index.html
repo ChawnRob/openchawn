@@ -2833,12 +2833,12 @@ html.ux-legacy .coco-companion-presence {
       <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
       <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
       <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
-      <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="second-brain-bridge" title="Second Brain bridge" aria-label="Second Brain bridge">Open Second Brain</button>
+      <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Open Second Brain</button>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
-      <button type="button" class="coco-future-btn coco-second-brain-btn" data-coco-action="second-brain-bridge" title="Second Brain bridge" aria-label="Second Brain bridge">Second Brain</button>
+      <button type="button" class="coco-future-btn coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Second Brain</button>
     </div>
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
@@ -4753,12 +4753,8 @@ function ocShowCocoSecondBrainToast() {
   ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 4500);
 }
 
-/* Placeholder action for the future AFFiNE Second Brain bridge (no API sync yet). */
-var COCO_SECOND_BRAIN_PLACEHOLDER_MSG =
-  'Second Brain bridge is ready for connection. AFFiNE API integration is not connected yet.';
-
-function ocHandleSecondBrainBridge(btn) {
-  void btn;
+/* COCO second brain — AFFiNE local-first open (no OpenChawn document storage) */
+function ocOpenAffineSecondBrain(btn) {
   /*
   Future AFFiNE bridge must support local-first user ownership:
   - desktop/local workspace preference
@@ -4767,20 +4763,30 @@ function ocHandleSecondBrainBridge(btn) {
   - no OpenChawn document storage by default
   - backend bridge only for retrieval/indexing if user enables it
   */
-  addMsg('assistant', COCO_SECOND_BRAIN_PLACEHOLDER_MSG);
+  var affineUrl = ocResolveAffineUrl(btn);
+  ocShowCocoSecondBrainToast();
+  var opened = null;
+  try {
+    opened = window.open(affineUrl, '_blank', 'noopener,noreferrer');
+  } catch (e) {}
+  if (!opened) {
+    try {
+      window.location.href = affineUrl;
+    } catch (e2) {}
+  }
 }
 
 document.addEventListener('click', function (e) {
-  var sb = e.target.closest('[data-coco-action="second-brain-bridge"], .coco-second-brain-btn');
+  var sb = e.target.closest('[data-coco-action="open-affine-second-brain"], .coco-second-brain-btn');
   if (!sb || sb.disabled || sb.getAttribute('aria-disabled') === 'true') return;
   e.preventDefault();
-  ocHandleSecondBrainBridge(sb);
+  ocOpenAffineSecondBrain(sb);
 });
 
 document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
   var chip = e.target.closest('.coco-prompt-chip');
   if (!chip || chip.disabled || !dom.input) return;
-  if (chip.classList.contains('coco-second-brain-btn') || chip.getAttribute('data-coco-action') === 'second-brain-bridge') {
+  if (chip.classList.contains('coco-second-brain-btn') || chip.getAttribute('data-coco-action') === 'open-affine-second-brain') {
     return;
   }
   var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();
