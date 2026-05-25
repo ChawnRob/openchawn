@@ -4733,12 +4733,78 @@ async function send() {
 }
 
 var COCO_AFFINE_FALLBACK_URL = 'https://app.affine.pro';
+/* Official AFFiNE stable desktop scheme (see AFFiNE open-in-app/utils getOpenUrlInDesktopAppLink). */
+var COCO_AFFINE_DESKTOP_SCHEME = 'affine';
 
 function ocResolveAffineUrl(btn) {
   var local = (typeof window.OPENCHAWN_AFFINE_LOCAL_URL === 'string' && window.OPENCHAWN_AFFINE_LOCAL_URL.trim()) || '';
   var configured = (typeof window.OPENCHAWN_AFFINE_URL === 'string' && window.OPENCHAWN_AFFINE_URL.trim()) || '';
   var data = btn && btn.getAttribute ? (btn.getAttribute('data-affine-url') || '').trim() : '';
-  return local || configured || data || COCO_AFFINE_FALLBACK_URL;
+  var resolved = local || configured || data || COCO_AFFINE_FALLBACK_URL;
+  if (/^affine(-[a-z]+)?:\/\//i.test(resolved)) {
+    return COCO_AFFINE_FALLBACK_URL;
+  }
+  return resolved;
+}
+
+function ocIsOfficialAffineWebHost(hostname) {
+  return (
+    hostname === 'app.affine.pro' ||
+    hostname === 'affine.pro' ||
+    hostname.endsWith('.affine.pro') ||
+    hostname.endsWith('.affine.fail')
+  );
+}
+
+function ocIsAllowedAffineWebUrl(url) {
+  try {
+    var u = new URL(url);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    if (ocIsOfficialAffineWebHost(u.hostname)) return true;
+    return Boolean(u.hostname);
+  } catch (e) {
+    return false;
+  }
+}
+
+/* Mirror AFFiNE getOpenUrlInDesktopAppLink (stable scheme only; no invented URLs). */
+function ocBuildAffineDesktopDeepLink(webUrl) {
+  if (!ocIsAllowedAffineWebUrl(webUrl)) return null;
+  try {
+    var urlObject = new URL(webUrl);
+    var params = new URLSearchParams(urlObject.search);
+    params.set('new-tab', '1');
+    if (!ocIsOfficialAffineWebHost(urlObject.hostname)) {
+      params.set('server', urlObject.origin);
+    }
+    var qs = params.toString();
+    var deep =
+      COCO_AFFINE_DESKTOP_SCHEME +
+      '://' +
+      urlObject.host +
+      urlObject.pathname +
+      (qs ? '?' + qs : '') +
+      (urlObject.hash || '');
+    return new URL(deep).toString();
+  } catch (e2) {
+    return null;
+  }
+}
+
+function ocTriggerExternalOpen(url, opts) {
+  var a = document.createElement('a');
+  a.href = url;
+  if (opts && opts.target) a.target = opts.target;
+  if (opts && opts.rel) a.rel = opts.rel;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function ocOpenExternalWebTab(url) {
+  ocTriggerExternalOpen(url, { target: '_blank', rel: 'noopener noreferrer' });
+  return true;
 }
 
 function ocShowCocoSecondBrainToast(message, linkUrl) {
@@ -4754,7 +4820,7 @@ function ocShowCocoSecondBrainToast(message, linkUrl) {
     shell.insertBefore(el, shell.firstChild);
   }
   el.textContent = '';
-  var msg = message || 'Second Brain opened in a new tab';
+  var msg = message || 'AFFiNE workspace link ready.';
   if (linkUrl) {
     el.appendChild(document.createTextNode(msg + ' '));
     var link = document.createElement('a');
@@ -4771,7 +4837,7 @@ function ocShowCocoSecondBrainToast(message, linkUrl) {
   ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 6000);
 }
 
-/* COCO second brain — AFFiNE opens in a new tab; COCO stays on this page */
+/* COCO second brain — external AFFiNE workspace; COCO tab never navigates away */
 function ocOpenAffineSecondBrain(btn) {
   /*
   Future AFFiNE bridge must support local-first user ownership:
@@ -4782,19 +4848,29 @@ function ocOpenAffineSecondBrain(btn) {
   - backend bridge only for retrieval/indexing if user enables it
   */
   var affineUrl = ocResolveAffineUrl(btn);
-  var opened = null;
-  try {
-    opened = window.open(affineUrl, '_blank', 'noopener,noreferrer');
-  } catch (e) {}
-  if (opened) {
+  var deepLink = ocBuildAffineDesktopDeepLink(affineUrl);
+
+  if (deepLink) {
     try {
-      opened.opener = null;
-    } catch (e2) {}
-    ocShowCocoSecondBrainToast('Second Brain opened in a new tab');
+      ocTriggerExternalOpen(deepLink);
+    } catch (e) {}
+    ocShowCocoSecondBrainToast(
+      'Opening AFFiNE desktop if installed. Otherwise open the web workspace:',
+      affineUrl
+    );
     return;
   }
+
+  try {
+    ocOpenExternalWebTab(affineUrl);
+    ocShowCocoSecondBrainToast(
+      'AFFiNE opened in a separate tab/window. Browser choice is controlled by your system.'
+    );
+    return;
+  } catch (e2) {}
+
   ocShowCocoSecondBrainToast(
-    'Popup blocked. Open AFFiNE in a new tab manually:',
+    'Could not open AFFiNE automatically. Open the web workspace:',
     affineUrl
   );
 }

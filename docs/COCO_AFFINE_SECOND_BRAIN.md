@@ -34,9 +34,18 @@ OPENCHAWN_AFFINE_LOCAL_URL=
 OPENCHAWN_AFFINE_URL=
 ```
 
+## External open strategy (COCO tab never navigates away)
+
+1. Resolve an **https/http** AFFiNE workspace URL (never assign `window.location` on COCO).
+2. If the URL is allowed, build an official **stable** desktop deep link (`affine://…?new-tab=1`, same shape as AFFiNE `getOpenUrlInDesktopAppLink`) and trigger it via a transient `<a>` click (OS opens the desktop app when installed).
+3. Toast always offers a **web fallback** link (`target="_blank"`, `rel="noopener noreferrer"`) to the resolved workspace URL.
+4. If deep link construction fails, open the web workspace in a separate tab/window via the same anchor pattern and toast: *AFFiNE opened in a separate tab/window. Browser choice is controlled by your system.*
+5. No browser-specific hacks (cannot force Chrome vs Safari from a web page).
+
 ## UX copy (do not change without product review)
 
-- Toast on open: *Opening AFFiNE Second Brain. Your workspace stays under your control.*
+- Desktop attempt: *Opening AFFiNE desktop if installed. Otherwise open the web workspace:*
+- Web-only open: *AFFiNE opened in a separate tab/window. Browser choice is controlled by your system.*
 - Do **not** use: "AFFiNE is connected", "OpenChawn stores your documents", "Memory sync is active"
 
 ## Backend runtime (COCO)
