@@ -128,7 +128,7 @@ def main() -> int:
         os.environ["DEFAULT_PROVIDER"] = "deepseek"
         _reset_runtime()
 
-        with patch("app.llm.gateway._chat_completions", return_value=("hello", 200, None)):
+        with patch("app.llm.adapters.deepseek.chat_completions", return_value=("hello", 200, None)):
             out = generate_response(system_prompt="s", user_message="user test", provider_hint="")
         assert out.get("success") is True, out
         assert out.get("provider") == "deepseek"
@@ -149,7 +149,7 @@ def main() -> int:
                 return ("okrouter", 200, None)
             return "", None, "skip"
 
-        with patch("app.llm.gateway._dispatch", side_effect=_fake_dispatch):
+        with patch("app.llm.generation_service.dispatch_adapter", side_effect=_fake_dispatch):
             out2 = generate_response(system_prompt="s", user_message="user", provider_hint="")
         assert out2.get("success") is True, out2
         assert out2.get("provider") == "openrouter"

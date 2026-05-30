@@ -66,18 +66,18 @@ def test_provider_fallback_when_primary_unavailable(monkeypatch):
         task_type="general",
     )
     pm.resolution_order.return_value = ["deepseek", "openrouter"]
-    monkeypatch.setattr("app.llm.gateway.get_provider_manager", lambda: pm)
-    monkeypatch.setattr("app.llm.gateway.resolve_deepseek_api_key", lambda: "fake-key")
+    monkeypatch.setattr("app.llm.generation_service.get_provider_manager", lambda: pm)
+    monkeypatch.setattr("app.llm.generation_service.resolve_deepseek_api_key", lambda: "fake-key")
     monkeypatch.setattr(
-        "app.llm.gateway.get_fallback_manager",
+        "app.llm.generation_service.get_fallback_manager",
         lambda: MagicMock(record=lambda *a, **k: None),
     )
     monkeypatch.setattr(
-        "app.llm.gateway.get_provider_health_hooks",
+        "app.llm.generation_service.get_provider_health_hooks",
         lambda: MagicMock(mark_success=lambda *a: None),
     )
     monkeypatch.setattr(
-        "app.llm.gateway.get_cost_tracking_hooks",
+        "app.llm.generation_service.get_cost_tracking_hooks",
         lambda: MagicMock(track=lambda *a, **k: None),
     )
 
@@ -86,7 +86,7 @@ def test_provider_fallback_when_primary_unavailable(monkeypatch):
             return "", 503, "primary unavailable"
         return "secondary ok", 200, None
 
-    monkeypatch.setattr("app.llm.gateway._dispatch", fake_dispatch)
+    monkeypatch.setattr("app.llm.generation_service.dispatch_adapter", fake_dispatch)
 
     result = generate_response(system_prompt="sys", user_message="hi")
     assert result["success"] is True
@@ -101,10 +101,10 @@ def test_no_provider_configured_returns_clean_failure_without_crash(monkeypatch)
     pm = MagicMock()
     pm.intelligent_decision.return_value = MagicMock(ordered_providers=[], task_type="general")
     pm.resolution_order.return_value = []
-    monkeypatch.setattr("app.llm.gateway.get_provider_manager", lambda: pm)
-    monkeypatch.setattr("app.llm.gateway.resolve_deepseek_api_key", lambda: None)
+    monkeypatch.setattr("app.llm.generation_service.get_provider_manager", lambda: pm)
+    monkeypatch.setattr("app.llm.generation_service.resolve_deepseek_api_key", lambda: None)
     monkeypatch.setattr(
-        "app.llm.gateway.get_settings",
+        "app.llm.generation_service.get_settings",
         lambda: MagicMock(default_provider="deepseek"),
     )
 
