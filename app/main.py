@@ -266,6 +266,7 @@ def login(req: LoginRequest):
 
 @app.get("/health")
 def health():
+    """Liveness probe — status ok and guest quota policy (no secrets)."""
     return {
         "mode": "handle",
         "status": "ok",

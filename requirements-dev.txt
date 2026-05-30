@@ -1,0 +1,3 @@
+# Local / CI test tooling — not installed on Railway by default.
+-r requirements.txt
+pytest>=8.0
