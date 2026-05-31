@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.llm.provider_constants import FIXED_ORDER
 from app.provider_runtime_config import (
     DEEPSEEK_API_KEY_ENV_ALIASES,
     OPENROUTER_KEY_ENV_ALIASES,
@@ -37,16 +38,6 @@ def _required_env_for_provider(name: str) -> str:
     if n == "openrouter":
         return "|".join(OPENROUTER_KEY_ENV_ALIASES)
     return ""
-
-
-# Ordre canonique après DEFAULT_PROVIDER (uniquement si clé configurée).
-FIXED_ORDER: tuple[str, ...] = (
-    "deepseek",
-    "kimi",
-    "openai",
-    "infomaniak",
-    "openrouter",
-)
 
 
 def _normalize_provider_name(name: str) -> str:
