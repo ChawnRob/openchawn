@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.llm.adapters.registry import dispatch_adapter
 from app.llm.generation_service import GenerationService, get_generation_service
-from app.provider_manager import FIXED_ORDER
+from app.llm.provider_constants import FIXED_ORDER
 
 # Re-export for tests patching gateway._dispatch
 from app.llm.adapters.deepseek import deepseek_model_for_task  # noqa: F401

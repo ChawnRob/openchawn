@@ -6,7 +6,7 @@ from app.llm.adapters.kimi import KimiAdapter
 from app.llm.adapters.openai import OpenAIAdapter
 from app.llm.adapters.openrouter import OpenRouterAdapter
 from app.llm.types import AdapterCompletion
-from app.provider_manager import FIXED_ORDER
+from app.llm.provider_constants import FIXED_ORDER
 from app.settings import Settings
 
 _ADAPTERS: dict[str, object] = {
