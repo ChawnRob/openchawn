@@ -1,6 +1,3 @@
-"""Clients LLM légers (hors couche providers orchestrateur)."""
+"""LLM package — no eager imports (avoids circular import with provider_manager)."""
 
-from app.llm.gateway import generate_response
-from app.llm.moonshot import moonshot_chat_completion
-
-__all__ = ["moonshot_chat_completion", "generate_response"]
+# Import from submodules directly, e.g. app.llm.gateway.generate_response
