@@ -77,10 +77,6 @@ class ChatRequest(BaseModel):
     project_name: str = Field("", validation_alias=AliasChoices("project_name", "project"))
     memory_context: str = ""
     user_goal: str = ""
-    response_language_mode: str = Field(
-        default="auto",
-        validation_alias=AliasChoices("response_language_mode", "language_mode"),
-    )
 
     @field_validator("message")
     @classmethod
@@ -141,10 +137,7 @@ def assemble_chat_generation_inputs(
       3) Retrieval mémoire fractale ;
       4) Garde-langue runtime (sanitize) avant envoi gateway.
     """
-    requested_mode = (req.response_language_mode or "").strip().lower()
-    if requested_mode not in ("auto", "fr", "en", "es", "ar", "zh"):
-        requested_mode = "auto"
-    lt = language_trace or derive_response_language_trace(req.message, requested_mode=requested_mode)
+    lt = language_trace or derive_response_language_trace(req.message)
     proj_hint = (req.project_name or "").strip()
     if user.get("is_guest"):
         user_key = f"guest-{(user.get('guest_session_id') or '')[:28]}"
