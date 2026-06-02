@@ -4003,6 +4003,14 @@ function showAuthForLogin() {
   dom.regError.textContent = '';
 }
 
+function showAuthForRegister() {
+  showAuthForLogin();
+  dom.loginBox.classList.add('hidden');
+  dom.registerBox.classList.remove('hidden');
+  dom.loginError.textContent = '';
+  dom.regError.textContent = '';
+}
+
 // ── Enter chat (compte) ──────────────────────────────
 function enterChat() {
   ocLastOwnerValidated = false;
@@ -4553,6 +4561,19 @@ function ocBuildErrorMsgActions() {
   return bar;
 }
 
+function ocBuildQuotaMsgActions() {
+  var bar = document.createElement('div');
+  bar.className = 'coco-msg-actions';
+  bar.setAttribute('aria-label', 'Quota actions');
+  var signup = document.createElement('button');
+  signup.type = 'button';
+  signup.className = 'coco-msg-action';
+  signup.setAttribute('data-coco-action', 'open-register');
+  signup.textContent = "S'inscrire pour continuer";
+  bar.appendChild(signup);
+  return bar;
+}
+
 function ocGetMsgBodyText(msgEl) {
   if (!msgEl) return '';
   var body = msgEl.querySelector('.msg-body');
@@ -4657,6 +4678,9 @@ function addMsg(role, text, meta) {
   }
   if (role === 'error') {
     div.appendChild(ocBuildErrorMsgActions());
+    if (meta && meta.quota429) {
+      div.appendChild(ocBuildQuotaMsgActions());
+    }
     ocSetCocoState('retry', 'Retry available');
   }
 
@@ -4722,7 +4746,9 @@ async function send() {
     ocSyncSysBarAfterChat(d);
 
   } catch (err) {
-    addMsg('error', 'TRANSMISSION FAILED — ' + err.message);
+    var msg = String(err && err.message ? err.message : err || '');
+    var isQuota429 = /limite gratuite/i.test(msg);
+    addMsg('error', 'TRANSMISSION FAILED — ' + msg, { quota429: isQuota429 });
     ocSetCocoState('retry', 'Retry available');
   } finally {
     dom.typing.classList.remove('visible');
@@ -4920,6 +4946,12 @@ document.getElementById('cocoPromptChips')?.addEventListener('click', function (
       if (ocRefillComposerPrompt(prompt)) {
         ocSetCocoState('ready', 'Ready');
       }
+      return;
+    }
+
+    if (action === 'open-register') {
+      e.preventDefault();
+      showAuthForRegister();
       return;
     }
 

@@ -215,7 +215,10 @@ def reload_settings() -> Settings:
 
 def _build_settings() -> Settings:
     env = _str("OPENCHAWN_ENV", default="development").lower()
+    if _str("ENVIRONMENT", default="").lower() == "staging":
+        env = "staging"
     is_prod = env == "production"
+    guest_limit_default = 50 if env == "staging" else 20
 
     secret = _str("SECRET_KEY", "OPENCHAWN_SECRET_KEY", default=_DEFAULT_DEV_SECRET)
 
@@ -248,7 +251,7 @@ def _build_settings() -> Settings:
         guest_daily_limit=_int_coalesce(
             "GUEST_DAILY_MESSAGE_LIMIT",
             "OPENCHAWN_GUEST_DAILY_LIMIT",
-            default=20,
+            default=guest_limit_default,
         ),
         openchawn_owner_token=_str("OPENCHAWN_OWNER_TOKEN", default=""),
         default_provider=_str("DEFAULT_PROVIDER", default="deepseek").strip().lower(),
