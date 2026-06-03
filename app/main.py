@@ -1440,5 +1440,14 @@ def guest_quota(request: Request):
     return status
 
 
+@app.get("/guest/quota/observability")
+@app.get("/api/guest/quota/observability")
+def guest_quota_observability(recent: int = Query(default=25, ge=1, le=100)):
+    """Staging diagnostics: guest quota counters, recent events, live store snapshot (no secrets)."""
+    from app.core.guest_quota_observability import get_guest_quota_observability_overview
+
+    return get_guest_quota_observability_overview(recent_limit=recent)
+
+
 # ── Static files ─────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="static"), name="static")

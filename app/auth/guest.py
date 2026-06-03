@@ -8,6 +8,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from app.core.guest_quota_observability import record_guest_quota_event
 from app.settings import get_settings
 
 logger = logging.getLogger("openchawn.guest")
@@ -65,9 +66,18 @@ def create_guest_session(ip: str) -> dict:
             if sid in _sessions:
                 session = _sessions[sid]
                 session.reset_if_new_day()
+                cap = _guest_cap()
+                remaining = max(0, cap - session.message_count)
                 logger.info(
                     f"guest session reused | session={sid[:12]}… | ip={ip} | "
-                    f"quota_remaining={max(0, _guest_cap() - session.message_count)}"
+                    f"quota_remaining={remaining}"
+                )
+                record_guest_quota_event(
+                    event="guest_session_reused",
+                    session_id=sid,
+                    ip=ip,
+                    remaining=remaining,
+                    limit=cap,
                 )
                 return _session_to_dict(session)
         # All stale, clear and create new
@@ -78,9 +88,17 @@ def create_guest_session(ip: str) -> dict:
     _sessions[session_id] = session
     _ip_sessions[ip].add(session_id)
 
+    cap = _guest_cap()
     logger.info(
         f"guest session created | session={session_id[:12]}… | ip={ip} | "
-        f"quota_remaining={_guest_cap()}"
+        f"quota_remaining={cap}"
+    )
+    record_guest_quota_event(
+        event="guest_session_created",
+        session_id=session_id,
+        ip=ip,
+        remaining=cap,
+        limit=cap,
     )
     return _session_to_dict(session)
 
@@ -93,18 +111,38 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
     session = _sessions.get(session_id)
 
     if not session:
-        logger.warning(f"guest session unknown | session={session_id[:12]}…")
         cap = _guest_cap()
-        return {"allowed": False, "remaining": 0, "limit": cap}
+        reason = "unknown_session"
+        logger.warning(
+            f"guest session unknown | session={session_id[:12]}… | block_reason={reason}"
+        )
+        record_guest_quota_event(
+            event="quota_check_blocked",
+            session_id=session_id,
+            ip=ip,
+            remaining=0,
+            limit=cap,
+            block_reason=reason,
+        )
+        return {"allowed": False, "remaining": 0, "limit": cap, "block_reason": reason}
 
     # Verify IP matches (prevent session hijacking)
     if session.ip != ip:
+        cap = _guest_cap()
+        reason = "ip_mismatch"
         logger.warning(
             f"guest session ip mismatch | session={session_id[:12]}… | "
-            f"expected={session.ip} got={ip}"
+            f"expected={session.ip} got={ip} | block_reason={reason}"
         )
-        cap = _guest_cap()
-        return {"allowed": False, "remaining": 0, "limit": cap}
+        record_guest_quota_event(
+            event="quota_check_blocked",
+            session_id=session_id,
+            ip=ip,
+            remaining=0,
+            limit=cap,
+            block_reason=reason,
+        )
+        return {"allowed": False, "remaining": 0, "limit": cap, "block_reason": reason}
 
     session.reset_if_new_day()
 
@@ -112,11 +150,25 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
     remaining = cap - session.message_count
 
     if remaining <= 0:
+        reason = "daily_limit_exceeded"
         logger.info(
             f"blocked by quota | session={session_id[:12]}… | ip={ip} | "
-            f"count={session.message_count}/{cap}"
+            f"count={session.message_count}/{cap} | block_reason={reason}"
         )
-        return {"allowed": False, "remaining": 0, "limit": cap}
+        record_guest_quota_event(
+            event="quota_check_blocked",
+            session_id=session_id,
+            ip=ip,
+            remaining=0,
+            limit=cap,
+            block_reason=reason,
+        )
+        return {
+            "allowed": False,
+            "remaining": 0,
+            "limit": cap,
+            "block_reason": reason,
+        }
 
     # Consume one message
     session.message_count += 1
@@ -125,6 +177,13 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
     logger.info(
         f"guest message ok | session={session_id[:12]}… | ip={ip} | "
         f"quota_remaining={remaining}/{cap}"
+    )
+    record_guest_quota_event(
+        event="quota_message_ok",
+        session_id=session_id,
+        ip=ip,
+        remaining=remaining,
+        limit=cap,
     )
     return {"allowed": True, "remaining": remaining, "limit": cap}
 

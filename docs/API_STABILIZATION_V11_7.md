@@ -12,12 +12,29 @@ Primary chat entry used by `static/index.html`.
 | Body | `{"message": "...", "profile": "default", "project_name": "", "provider": ""}` |
 | Success | `200` — JSON with `output`, `provider`, optional guest quota fields |
 | Provider down | `503` — `detail`: `Provider indisponible: …` (no crash) |
-| Guest quota | `429` when daily limit exceeded |
+| Guest quota | `429` when daily limit exceeded — header `X-Guest-Quota-Block-Reason` (`daily_limit_exceeded`, `unknown_session`, `ip_mismatch`) |
+| Middleware 429 | `Too many requests` — header `X-Rate-Limit-Reason` (`chat_throttle_2s`, `path_rule_60s`) — distinct from guest quota |
 | Debug | `?debug=true` adds safe diagnostic fields (no prompt text, no secrets) |
 
 ## POST /api/chat
 
 Alias of `POST /chat`. Same handler (`handle_chat_request`), same request/response contract. Use for curl, integrations, and contract tests.
+
+## GET /guest/quota/observability
+
+Staging diagnostics for guest quota (alias: `GET /api/guest/quota/observability`). No secrets.
+
+| Field | Meaning |
+|-------|---------|
+| `counters` | In-process event counts (`quota_message_ok`, `quota_check_blocked`, `block_reason:*`, …) |
+| `summary` | Aggregated allowed/blocked/session totals |
+| `live_store` | Active sessions today, sessions at limit, IP fingerprints (hashed) |
+| `recent_events` | Last N events with `session_prefix` + `ip_fingerprint` for log correlation |
+| `log_correlation_fields` | Suggested Railway/log filter keys |
+
+Query: `?recent=25` (1–100) caps `recent_events` length.
+
+**429 triage:** guest daily limit → French `detail` + `X-Guest-Quota-Block-Reason`. Chat throttle → `Too many requests` + `X-Rate-Limit-Reason`.
 
 ## GET /health
 
@@ -70,7 +87,8 @@ Never returns connection strings, passwords, or raw env secrets.
 5. **Providers** — `GET /health/providers` → `configured_providers` / `missing_keys` match staging env vars.
 6. **Memory** — `GET /api/memory/runtime-status` → `200`, backend matches `MEMORY_BACKEND` (json vs postgres).
 7. **Chat smoke** — `POST /guest/session` then `POST /chat` with a short message returns `200` or explicit `503` (not `500`).
-8. **UI cache** — Hard refresh or private window if static assets look old; API commit from `/__runtime` is the source of truth for backend.
+8. **Guest quota observability** — `GET /guest/quota/observability` → `status: ok`; after a forced 429, `block_reason:daily_limit_exceeded` increments.
+9. **UI cache** — Hard refresh or private window if static assets look old; API commit from `/__runtime` is the source of truth for backend.
 
 ## Dependencies note
 

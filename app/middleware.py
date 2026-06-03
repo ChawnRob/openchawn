@@ -83,7 +83,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     f"rate limit blocked | ip={client_ip} | path={path} | "
                     f"actor={actor_key[:48]} | delta={now - last:.3f}s"
                 )
-                return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+                from app.core.guest_quota_observability import record_chat_rate_limit_blocked
+
+                record_chat_rate_limit_blocked(
+                    ip=client_ip,
+                    path=path,
+                    kind="chat_throttle_2s",
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests"},
+                    headers={"X-Rate-Limit-Reason": "chat_throttle_2s"},
+                )
             _last_chat_request_at[actor_key] = now
 
         limit = _RATE_RULES.get(path)
@@ -94,9 +105,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     f"rate limit blocked | ip={client_ip} | path={path} | "
                     f"rule={limit}/60s"
                 )
+                from app.core.guest_quota_observability import record_chat_rate_limit_blocked
+
+                record_chat_rate_limit_blocked(
+                    ip=client_ip,
+                    path=path,
+                    kind="path_rule_60s",
+                )
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests"},
+                    headers={"X-Rate-Limit-Reason": "path_rule_60s"},
                 )
         return await call_next(request)
 

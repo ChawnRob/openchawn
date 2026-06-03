@@ -270,13 +270,17 @@ def handle_chat_request(
     if is_guest:
         quota = check_guest_quota(user["guest_session_id"], user["ip"])
         if not quota["allowed"]:
+            block_reason = str(quota.get("block_reason") or "daily_limit_exceeded")
             logger.warning(
-                f"guest quota blocked | ip={user['ip']} | "
-                f"session={user['guest_session_id'][:12]}…"
+                "guest quota blocked | ip=%s | session=%s… | block_reason=%s",
+                user["ip"],
+                user["guest_session_id"][:12],
+                block_reason,
             )
             raise HTTPException(
                 status_code=429,
                 detail="Vous avez atteint la limite gratuite. Créez un compte pour continuer.",
+                headers={"X-Guest-Quota-Block-Reason": block_reason},
             )
 
     trace = derive_response_language_trace(req.message)
