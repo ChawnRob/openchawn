@@ -1105,6 +1105,63 @@ html.ux-chat-clean .oc-settings-body {
   min-height: 44px;
 }
 
+/* COCO Orchestration Paths — visual-only cockpit (no runtime action, no tool call) */
+.oc-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oc-paths-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 420px) {
+  .oc-paths-grid { grid-template-columns: 1fr; }
+}
+.oc-path-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius, 12px);
+  background: var(--oc-surface);
+  min-height: 44px;
+}
+.oc-path-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--oc-text);
+}
+.oc-path-status {
+  font-family: var(--font-tech);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.oc-path-status[data-status="ready"] { color: #067a5b; background: rgba(6, 160, 118, 0.12); border-color: rgba(6, 160, 118, 0.35); }
+.oc-path-status[data-status="planned"] { color: #0a6c86; background: rgba(10, 140, 170, 0.12); border-color: rgba(10, 140, 170, 0.32); }
+.oc-path-status[data-status="locked"] { color: #8a5a06; background: rgba(180, 120, 10, 0.12); border-color: rgba(180, 120, 10, 0.32); }
+.oc-path-status[data-status="soon"] { color: #5a5f6b; background: rgba(110, 120, 135, 0.14); border-color: rgba(110, 120, 135, 0.3); }
+html.oc-theme-night .oc-path-status[data-status="ready"] { color: #5ff0c4; background: rgba(40, 200, 150, 0.16); border-color: rgba(40, 200, 150, 0.4); }
+html.oc-theme-night .oc-path-status[data-status="planned"] { color: #7fdcff; background: rgba(60, 200, 240, 0.16); border-color: rgba(60, 200, 240, 0.38); }
+html.oc-theme-night .oc-path-status[data-status="locked"] { color: #ffce8a; background: rgba(255, 184, 108, 0.16); border-color: rgba(255, 184, 108, 0.4); }
+html.oc-theme-night .oc-path-status[data-status="soon"] { color: #9fb2c2; background: rgba(140, 160, 180, 0.16); border-color: rgba(140, 160, 180, 0.34); }
+.oc-paths-note {
+  font-family: var(--font-tech);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--oc-text-muted);
+  margin: 0;
+}
+
 .ux-tool-wide {
   width: 100%;
   flex-basis: 100%;
@@ -2917,6 +2974,21 @@ html.ux-legacy .coco-companion-presence {
           <button type="button" class="ux-tool-btn oc-settings-dash-btn" id="btnMirrorDownload" disabled>Télécharger la réponse</button>
           <button type="button" class="ux-tool-btn oc-settings-dash-btn" id="btnMirrorCopy" disabled>Copier la réponse</button>
         </div>
+
+        <!-- COCO Orchestration Paths : cockpit visuel uniquement. Aucun chemin n'exécute d'action. -->
+        <p class="oc-settings-section-label">Orchestration Paths</p>
+        <div class="oc-paths" id="ocOrchestrationPaths" role="group" aria-label="COCO orchestration paths (preview, non interactif)">
+          <div class="oc-paths-grid">
+            <div class="oc-path-card"><span class="oc-path-name">Memory</span><span class="oc-path-status" data-status="ready" aria-label="status: ready">Ready</span></div>
+            <div class="oc-path-card"><span class="oc-path-name">Tools</span><span class="oc-path-status" data-status="planned" aria-label="status: planned">Planned</span></div>
+            <div class="oc-path-card"><span class="oc-path-name">Actions</span><span class="oc-path-status" data-status="locked" aria-label="status: locked">Locked</span></div>
+            <div class="oc-path-card"><span class="oc-path-name">Review / HITL</span><span class="oc-path-status" data-status="planned" aria-label="status: planned">Planned</span></div>
+            <div class="oc-path-card"><span class="oc-path-name">Data</span><span class="oc-path-status" data-status="soon" aria-label="status: coming soon">Coming soon</span></div>
+            <div class="oc-path-card"><span class="oc-path-name">AFFiNE</span><span class="oc-path-status" data-status="ready" aria-label="status: ready">Ready</span></div>
+          </div>
+          <p class="oc-paths-note">Aperçu de l'architecture agentique COCO. Cockpit visuel — aucun chemin n'exécute d'action ni n'appelle d'outil. Réf : docs/COCO_AGENTIC_ORCHESTRATION.md</p>
+        </div>
+
         <p class="oc-settings-section-label oc-settings-only-clean">Mode interface</p>
         <button type="button" class="ux-tool-btn ux-tool-wide oc-settings-only-clean" id="btnUxSwitchToLegacy">Afficher interface technique (legacy)</button>
         <div class="oc-drawer-disclaimer oc-settings-only-clean" role="note">
