@@ -31,6 +31,7 @@ from app.llm.gateway import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
 from app.profiles import PROFILES, get_profile
+from app.utils.sanitizer import sanitize_response
 
 logger = logging.getLogger("openchawn.chat")
 
@@ -342,6 +343,14 @@ def handle_chat_request(
         response_language_violation_detected = violation_on_first_generation or bool(
             assistant_reply_violates_english_user_expectation(response_text)
         )
+
+    # CoT safety: strip inline model reasoning (<think>/<reasoning>/…) before the text is
+    # ever shown to the user or persisted via write_exchange. The user message is never
+    # sanitized; retrieval, providers, and language mode are untouched. If a provider
+    # returns reasoning only, the post-sanitize text is empty and the success check below
+    # returns 503 instead of serving/storing hidden CoT.
+    if response_text:
+        response_text = sanitize_response(response_text)
 
     ff_removed_combined = ff_removed_assemble or ff_removed_gateway
     detected = str(bundle.get("detected_language") or "")
