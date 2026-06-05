@@ -4105,10 +4105,17 @@ async function ensureGuestSession(forceNew = false) {
 }
 
 async function apiFetch(path, opts = {}) {
-  const run = () => fetch(API + path, {
-    ...opts,
-    headers: { ...authHeaders(), ...(opts.headers || {}) },
-  });
+  const run = () => {
+    const headers = { ...authHeaders(), ...(opts.headers || {}) };
+    // Do not set Content-Type for FormData; the browser must add the multipart boundary.
+    const isFormData =
+      typeof FormData !== 'undefined' && opts && opts.body && opts.body instanceof FormData;
+    if (isFormData) {
+      delete headers['Content-Type'];
+      delete headers['content-type'];
+    }
+    return fetch(API + path, { ...opts, headers });
+  };
   let r = await run();
   if (r.status === 401) {
     if (token) {
