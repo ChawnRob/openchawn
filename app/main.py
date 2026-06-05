@@ -45,6 +45,7 @@ from app.auth.guest import create_guest_session, get_guest_quota_status
 from app.settings import get_settings
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
 from app.api.chat import router as chat_router
+from app.api.files_intake import router as files_intake_router
 
 
 logging.basicConfig(
@@ -81,6 +82,7 @@ app.add_exception_handler(Exception, global_error_handler)
 
 init_db()
 app.include_router(chat_router)
+app.include_router(files_intake_router)
 
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")

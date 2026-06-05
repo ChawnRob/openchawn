@@ -2107,6 +2107,60 @@ html.ux-legacy .coco-msg-actions {
 }
 
 .import-status { font-size: 11px; font-family: var(--font-tech); color: var(--text-muted); min-height: 16px; margin-top: 8px; }
+
+/* COCO File Intake V1 — selection UI only (no analysis pipeline yet) */
+.oc-file-intake {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: var(--glass);
+  border: 1px solid var(--border-cyan);
+  border-radius: var(--radius);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.oc-file-intake.hidden { display: none; }
+.oc-file-intake-meta {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+.oc-file-intake-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--oc-text, var(--deep-blue));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.oc-file-intake-size {
+  font-family: var(--font-tech);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.oc-file-intake-ready {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #067a5b;
+}
+html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
+.oc-file-intake-clear {
+  flex: none;
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 10px;
+}
 .import-status.err { color: var(--error-soft); }
 .import-status.warn { color: #b8782a; }
 
@@ -2928,9 +2982,23 @@ html.ux-legacy .coco-companion-presence {
       <textarea id="importPaste" placeholder="Collez ici ou utilisez « Fichier .txt / .md »..." spellcheck="false"></textarea>
       <div class="import-status" id="importStatus" aria-live="polite"></div>
     </div>
+    <div class="oc-file-intake hidden" id="ocFileIntakeBar" role="status" aria-live="polite" aria-label="File ready for analysis">
+      <div class="oc-file-intake-meta">
+        <span class="oc-file-intake-name" id="ocFileIntakeName"></span>
+        <span class="oc-file-intake-size" id="ocFileIntakeSize"></span>
+      </div>
+      <p class="oc-file-intake-ready">File ready for analysis</p>
+      <button type="button" class="ux-tool-btn oc-file-intake-clear" id="btnClearFileIntake">Clear</button>
+    </div>
     <div class="oc-mobile-composer-plus-wrap" id="ocMobileComposerPlusWrap"></div>
     <div class="input-wrapper">
       <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte" aria-expanded="false">+</button>
+      <input type="file" id="fileIntakeInput" class="hidden" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/csv,.png,.jpg,.jpeg,.webp,.pdf,.txt,.csv">
+      <button type="button" class="mic-btn" id="btnFileIntake" title="Attach file or image (max 10 MB)" aria-label="Attach file or image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+        </svg>
+      </button>
       <button type="button" class="mic-btn" id="btnSpeech" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
@@ -2950,6 +3018,7 @@ html.ux-legacy .coco-companion-presence {
       <button type="button" class="oc-mobile-composer-backdrop hidden" id="ocMobileComposerBackdrop" tabindex="-1" aria-hidden="true"></button>
       <div class="oc-mobile-composer-menu hidden" id="ocMobileComposerMenu" role="menu" aria-label="Plus d’options">
         <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuImport">Importer du texte</button>
+        <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuFileIntake">Attach file / image</button>
         <button type="button" class="oc-mobile-composer-menu-item" role="menuitem" id="ocMobileMenuSettings">Réglages</button>
       </div>
     </div>
@@ -3694,6 +3763,74 @@ function ocRenderSysAccessState() {
 
 // ── V11.6.1 UX: text import / export (client-only; normal POST /chat) ──
 const OC_IMPORT_MAX_BYTES = 100 * 1024;
+const OC_FILE_INTAKE_MAX_BYTES = 10 * 1024 * 1024;
+const OC_FILE_INTAKE_ACCEPT_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv'];
+let ocFileIntakePending = null;
+
+function ocFormatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function ocFileIntakeAllowed(f) {
+  if (!f || !f.name) return false;
+  const n = f.name.toLowerCase();
+  const mimeOk =
+    f.type === 'image/png' ||
+    f.type === 'image/jpeg' ||
+    f.type === 'image/webp' ||
+    f.type === 'application/pdf' ||
+    f.type === 'text/plain' ||
+    f.type === 'text/csv';
+  if (mimeOk) return true;
+  return OC_FILE_INTAKE_ACCEPT_EXT.some(function (ext) {
+    return n.endsWith(ext);
+  });
+}
+
+function ocShowFileIntakeBar(file) {
+  const bar = document.getElementById('ocFileIntakeBar');
+  const nameEl = document.getElementById('ocFileIntakeName');
+  const sizeEl = document.getElementById('ocFileIntakeSize');
+  if (!bar || !nameEl || !sizeEl) return;
+  nameEl.textContent = file.name;
+  sizeEl.textContent = ocFormatFileSize(file.size);
+  bar.classList.remove('hidden');
+}
+
+function ocClearFileIntake() {
+  ocFileIntakePending = null;
+  const bar = document.getElementById('ocFileIntakeBar');
+  const input = document.getElementById('fileIntakeInput');
+  if (bar) bar.classList.add('hidden');
+  if (input) input.value = '';
+}
+
+function ocHasFileIntakePending() {
+  return !!(ocFileIntakePending && ocFileIntakePending.file);
+}
+
+async function ocSubmitFileIntake() {
+  if (!ocHasFileIntakePending()) return null;
+  const file = ocFileIntakePending.file;
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  const r = await apiFetch('/api/files/intake', { method: 'POST', body: fd });
+  const d = await r.json().catch(function () {
+    return {};
+  });
+  if (!r.ok) {
+    const detail = d.detail || d;
+    const msg =
+      (typeof detail === 'object' && detail.message) ||
+      (typeof detail === 'string' ? detail : null) ||
+      'File intake failed (HTTP ' + r.status + ')';
+    throw new Error(msg);
+  }
+  ocClearFileIntake();
+  return d;
+}
 const OC_ASSUMED_MAX_MESSAGE_CHARS = 4000;
 const OC_IMPORT_MESSAGE_PREFIX = 'Voici un texte à analyser :\n\n';
 let lastAssistantPlain = '';
@@ -3816,6 +3953,48 @@ dom.toggleImportPanel.addEventListener('click', () => {
 });
 
 dom.btnPickImportFile.addEventListener('click', () => dom.importFile.click());
+
+(function ocFileIntakeUiSetup() {
+  const btnPick = document.getElementById('btnFileIntake');
+  const input = document.getElementById('fileIntakeInput');
+  const btnClear = document.getElementById('btnClearFileIntake');
+  const mobilePick = document.getElementById('ocMobileMenuFileIntake');
+  if (!btnPick || !input) return;
+
+  function openPicker() {
+    input.click();
+  }
+
+  btnPick.addEventListener('click', openPicker);
+  if (mobilePick) {
+    mobilePick.addEventListener('click', function () {
+      const menu = document.getElementById('ocMobileComposerMenu');
+      if (menu) menu.classList.add('hidden');
+      openPicker();
+    });
+  }
+  if (btnClear) btnClear.addEventListener('click', ocClearFileIntake);
+
+  input.addEventListener('change', function (ev) {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    if (!ocFileIntakeAllowed(f)) {
+      ocClearFileIntake();
+      addMsg(
+        'error',
+        'Unsupported file type. Allowed: PNG, JPEG, WebP, PDF, plain text, CSV.'
+      );
+      return;
+    }
+    if (f.size > OC_FILE_INTAKE_MAX_BYTES) {
+      ocClearFileIntake();
+      addMsg('error', 'File too large (max 10 MB).');
+      return;
+    }
+    ocFileIntakePending = { file: f };
+    ocShowFileIntakeBar(f);
+  });
+})();
 
 dom.importFile.addEventListener('change', async (ev) => {
   const input = ev.target;
@@ -4777,16 +4956,60 @@ async function send() {
     typeof window.ocVoicePrepareSend === 'function'
       ? window.ocVoicePrepareSend()
       : dom.input.value.trim();
-  if (!text || sending) return;
+  const hasFile = ocHasFileIntakePending();
+  if ((!text && !hasFile) || sending) return;
 
   sending = true;
   dom.send.disabled = true;
+
+  var pendingIntakeMsg = null;
+  if (hasFile) {
+    dom.typing.classList.add('visible');
+    ocSetCocoState('thinking', 'Uploading file');
+    scrollDown();
+    try {
+      const intake = await ocSubmitFileIntake();
+      pendingIntakeMsg =
+        (intake && intake.message) ||
+        'File intake is ready, analysis pipeline is not enabled yet.';
+      if (!text) {
+        addMsg(
+          'user',
+          '[File attached: ' + (intake && intake.filename ? intake.filename : 'file') + ']'
+        );
+        addMsg('assistant', pendingIntakeMsg);
+        ocSetCocoState('ready', 'Ready');
+        dom.typing.classList.remove('visible');
+        sending = false;
+        dom.send.disabled = false;
+        dom.input.focus();
+        scrollDown();
+        return;
+      }
+      ocSetCocoState('ready', 'Ready');
+    } catch (err) {
+      var fmsg = String(err && err.message ? err.message : err || '');
+      addMsg('error', 'FILE INTAKE FAILED — ' + fmsg);
+      ocSetCocoState('retry', 'Retry available');
+      dom.typing.classList.remove('visible');
+      sending = false;
+      dom.send.disabled = false;
+      dom.input.focus();
+      return;
+    } finally {
+      dom.typing.classList.remove('visible');
+    }
+  }
+
   if (typeof window.ocVoicePrepareSend !== 'function') {
     dom.input.value = '';
     dom.input.style.height = 'auto';
   }
 
   addMsg('user', text);
+  if (pendingIntakeMsg) {
+    addMsg('assistant', pendingIntakeMsg);
+  }
   dom.typing.classList.add('visible');
   ocSetCocoState('thinking', 'Thinking');
   triggerScan();
