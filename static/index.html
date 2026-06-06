@@ -4202,6 +4202,7 @@ async function ocSubmitFileIntake() {
       'File intake failed (HTTP ' + r.status + ')';
     throw new Error(msg);
   }
+  if (d && typeof d === 'object' && !d.filename) d.filename = file.name;
   ocClearFileIntake();
   return d;
 }
@@ -5360,14 +5361,14 @@ async function send() {
     scrollDown();
     try {
       const intake = await ocSubmitFileIntake();
-      pendingIntakeMsg =
+      const intakeName = (intake && intake.filename) ? intake.filename : 'file';
+      const intakeReceived = 'File received: ' + intakeName;
+      const intakeDetail =
         (intake && intake.message) ||
         'File intake is ready, analysis pipeline is not enabled yet.';
+      pendingIntakeMsg = intakeReceived + '\n' + intakeDetail;
       if (!text) {
-        addMsg(
-          'user',
-          '[File attached: ' + (intake && intake.filename ? intake.filename : 'file') + ']'
-        );
+        addMsg('user', '[File attached: ' + intakeName + ']');
         addMsg('assistant', pendingIntakeMsg);
         ocSetCocoState('ready', 'Ready');
         dom.typing.classList.remove('visible');

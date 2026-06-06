@@ -68,3 +68,35 @@ def test_attach_routes_mobile_action_sheet():
     assert "ocFileIntakeIsMobileComposer()" in setup
     assert "ocOpenFileIntakeActionSheet()" in setup
     assert "ocPickFileIntakeSource('file')" in setup
+
+
+def test_attach_button_not_desktop_only():
+    """The attach button is visible by default (desktop) and forced visible on mobile."""
+    html = _html()
+    base = html.split(".oc-file-attach-btn {")[1].split("}")[0]
+    assert "display: grid" in base
+    assert "display: none" not in base
+    assert "width: 44px" in base
+    assert 'aria-label="Joindre photo ou fichier"' in html
+    mobile_rule = html.split(
+        "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake"
+    )[1].split("}")[0]
+    assert "display: grid !important" in mobile_rule
+
+
+def test_file_input_accepts_required_types():
+    html = _html()
+    file_input = html.split('id="fileIntakeInputFile"')[1].split(">")[0]
+    for token in (".png", ".jpg", ".jpeg", ".webp", ".pdf", ".txt"):
+        assert token in file_input
+    for mime in ("image/png", "image/jpeg", "image/webp", "application/pdf", "text/plain"):
+        assert mime in file_input
+
+
+def test_file_received_feedback_and_intake_endpoint():
+    html = _html()
+    assert "File received: " in html
+    assert "/api/files/intake" in html
+    submit = html.split("async function ocSubmitFileIntake")[1].split("\n}")[0]
+    assert "new FormData()" in submit
+    assert "Content-Type" not in submit
