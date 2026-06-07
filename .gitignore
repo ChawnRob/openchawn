@@ -24,6 +24,16 @@ ENV/
 # ─── Runtime data (local dev / ephemeral containers)
 # Auth SQLite, fractal JSON, semantic indexes, QEI logs, MemPalace, etc.
 data/
+data/**/*.db
+data/memory/
+data/memory/*.json
+data/qei/
+data/mempalace/
+
+# Local SQLite databases (runtime auth / dev copies)
+*.db
+*.sqlite
+*.sqlite3
 
 # Fuse / filesystem artifacts (e.g. macOS FUSE hidden copies)
 **/.fuse_hidden*
