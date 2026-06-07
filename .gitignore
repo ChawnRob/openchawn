@@ -21,10 +21,28 @@ ENV/
 *.pem
 *.key
 
-# ─── MemPalace data persistée
-data/mempalace/memories.json
-data/mempalace/*.tmp
+# ─── Runtime data (local dev / ephemeral containers)
+# Auth SQLite, fractal JSON, semantic indexes, QEI logs, MemPalace, etc.
+data/
+data/**/*.db
+data/memory/
 data/memory/*.json
+data/qei/
+data/mempalace/
+
+# Local SQLite databases (runtime auth / dev copies)
+*.db
+*.sqlite
+*.sqlite3
+
+# Fuse / filesystem artifacts (e.g. macOS FUSE hidden copies)
+**/.fuse_hidden*
+.fuse_hidden*
+
+# Legacy memory runtime stores (keep memory/*.py source modules)
+memory/*.json
+memory/*.jsonl
+memory/fractal
 
 # ─── IDE / OS
 .idea/
