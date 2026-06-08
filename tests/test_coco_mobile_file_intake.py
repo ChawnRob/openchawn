@@ -70,6 +70,59 @@ def test_attach_routes_mobile_action_sheet():
     assert "ocPickFileIntakeSource('file')" in setup
 
 
+def test_file_intake_attach_button_has_tap_binding():
+    html = _html()
+    setup = html.split("(function ocFileIntakeUiSetup()")[1].split("})();")[0]
+    assert "ocBindFileIntakeTap(btnAttach" in setup
+    assert "addEventListener('pointerup'" in setup
+    assert "ocHandleAttachButtonClick" in setup
+
+
+def test_mobile_trombone_opens_action_sheet_not_direct_picker():
+    html = _html()
+    handler = html.split("function ocHandleAttachButtonClick")[1].split("function ocBindFileIntakeTap")[0]
+    assert "if (ocFileIntakeIsMobileComposer())" in handler
+    mobile_branch = handler.split("if (ocFileIntakeIsMobileComposer())")[1].split("ocPickFileIntakeSource('file')")[0]
+    assert "ocOpenFileIntakeActionSheet()" in mobile_branch
+
+
+def test_action_sheet_wires_expected_input_ids():
+    html = _html()
+    setup = html.split("(function ocFileIntakeUiSetup()")[1].split("})();")[0]
+    assert "ocFileIntakePickCamera" in setup
+    assert "ocPickFileIntakeSource('camera')" in setup
+    assert "ocFileIntakePickGallery" in setup
+    assert "ocPickFileIntakeSource('gallery')" in setup
+    assert "ocFileIntakePickFile" in setup
+    assert "ocPickFileIntakeSource('file')" in setup
+    picker = html.split("function ocPickFileIntakeSource")[1].split("function ocWireFileIntakeInput")[0]
+    assert "fileIntakeInputCamera" in picker
+    assert "fileIntakeInputGallery" in picker
+    assert "fileIntakeInputFile" in picker
+    click_pos = picker.find("input.click()")
+    close_pos = picker.find("ocCloseFileIntakeActionSheet()")
+    assert click_pos != -1 and close_pos != -1 and click_pos < close_pos
+
+
+def test_mobile_hud_does_not_use_display_contents():
+    html = _html()
+    assert "display:contents breaks position:fixed action sheets on iOS Safari" in html
+    idx = html.find("html.ux-chat-clean .oc-mobile-composer-hud {")
+    assert idx != -1
+    hud_rule = html[idx : idx + 320]
+    assert "display: block" in hud_rule
+    assert "display: contents" not in hud_rule
+    assert "pointer-events: none" in hud_rule
+
+
+def test_file_intake_sheet_portaled_to_body_on_open():
+    html = _html()
+    assert "function ocPortalFileIntakeSheetNodes()" in html
+    open_fn = html.split("function ocOpenFileIntakeActionSheet")[1].split("function ocCloseFileIntakeActionSheet")[0]
+    assert "ocPortalFileIntakeSheetNodes()" in open_fn
+    assert "document.body.appendChild" in html
+
+
 def test_attach_button_not_desktop_only():
     """The attach button is visible by default (desktop) and forced visible on mobile."""
     html = _html()

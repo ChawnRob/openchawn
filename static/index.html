@@ -1143,8 +1143,21 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 @media (max-width: 640px) {
   /* V11.6.3 mobile composer vertical alignment fix */
   /* V11.6.3 mobile empty-state hierarchy refinement */
+  /* display:contents breaks position:fixed action sheets on iOS Safari */
   html.ux-chat-clean .oc-mobile-composer-hud {
-    display: contents;
+    display: block;
+    position: static;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  html.ux-chat-clean .oc-file-intake-sheet-backdrop,
+  html.ux-chat-clean .oc-file-intake-sheet,
+  html.ux-chat-clean .oc-mobile-composer-backdrop,
+  html.ux-chat-clean .oc-mobile-composer-menu {
+    pointer-events: auto;
   }
 
   html.ux-chat-clean .input-area.oc-composer-centered {
@@ -1256,6 +1269,8 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     -webkit-tap-highlight-color: transparent;
     flex: 0 0 44px;
     order: -2;
+    position: relative;
+    z-index: 4;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech {
@@ -4022,7 +4037,18 @@ function ocReplaceFileIntakeDraft() {
   ocPickFileIntakeSource(src === 'camera' || src === 'gallery' ? src : 'file');
 }
 
+function ocPortalFileIntakeSheetNodes() {
+  if (window.__ocFileIntakeSheetPortaled) return;
+  const b = document.getElementById('ocFileIntakeSheetBackdrop');
+  const s = document.getElementById('ocFileIntakeActionSheet');
+  if (!b || !s) return;
+  document.body.appendChild(b);
+  document.body.appendChild(s);
+  window.__ocFileIntakeSheetPortaled = true;
+}
+
 function ocOpenFileIntakeActionSheet() {
+  ocPortalFileIntakeSheetNodes();
   const b = document.getElementById('ocFileIntakeSheetBackdrop');
   const s = document.getElementById('ocFileIntakeActionSheet');
   if (!b || !s) return;
@@ -4042,7 +4068,6 @@ function ocCloseFileIntakeActionSheet() {
 }
 
 function ocPickFileIntakeSource(source) {
-  ocCloseFileIntakeActionSheet();
   const id =
     source === 'camera'
       ? 'fileIntakeInputCamera'
@@ -4050,7 +4075,12 @@ function ocPickFileIntakeSource(source) {
         ? 'fileIntakeInputGallery'
         : 'fileIntakeInputFile';
   const input = document.getElementById(id);
-  if (input) input.click();
+  if (input) {
+    try {
+      input.click();
+    } catch (_) {}
+  }
+  ocCloseFileIntakeActionSheet();
 }
 
 function ocWireFileIntakeInput(input, source) {
@@ -4221,14 +4251,6 @@ async function copyAssistantPlain() {
   }
 }
 
-dom.toggleImportPanel.addEventListener('click', () => {
-  dom.importPanel.classList.toggle('hidden');
-  const hiddenNow = dom.importPanel.classList.contains('hidden');
-  dom.importPanel.setAttribute('aria-hidden', hiddenNow ? 'true' : 'false');
-});
-
-dom.btnPickImportFile.addEventListener('click', () => dom.importFile.click());
-
 (function ocFileIntakeUiSetup() {
   const btnAttach = document.getElementById('btnFileIntake');
   const btnClear = document.getElementById('btnClearFileIntake');
@@ -4253,23 +4275,31 @@ dom.btnPickImportFile.addEventListener('click', () => dom.importFile.click());
     ocPickFileIntakeSource('file');
   }
 
-  if (btnAttach) {
-    btnAttach.addEventListener('click', ocHandleAttachButtonClick);
+  function ocBindFileIntakeTap(el, handler) {
+    if (!el || typeof handler !== 'function') return;
+    el.addEventListener('pointerup', function (ev) {
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      if (ev.pointerType !== 'mouse') ev.preventDefault();
+      handler(ev);
+    });
   }
+
+  ocBindFileIntakeTap(btnAttach, ocHandleAttachButtonClick);
+
   if (mobilePick) {
-    mobilePick.addEventListener('click', function () {
+    ocBindFileIntakeTap(mobilePick, function () {
       ocCloseMobileComposerMenu();
       ocOpenFileIntakeActionSheet();
     });
   }
 
-  document.getElementById('ocFileIntakePickCamera')?.addEventListener('click', function () {
+  ocBindFileIntakeTap(document.getElementById('ocFileIntakePickCamera'), function () {
     ocPickFileIntakeSource('camera');
   });
-  document.getElementById('ocFileIntakePickGallery')?.addEventListener('click', function () {
+  ocBindFileIntakeTap(document.getElementById('ocFileIntakePickGallery'), function () {
     ocPickFileIntakeSource('gallery');
   });
-  document.getElementById('ocFileIntakePickFile')?.addEventListener('click', function () {
+  ocBindFileIntakeTap(document.getElementById('ocFileIntakePickFile'), function () {
     ocPickFileIntakeSource('file');
   });
   document.getElementById('ocFileIntakePickCancel')?.addEventListener('click', ocCloseFileIntakeActionSheet);
@@ -4280,6 +4310,14 @@ dom.btnPickImportFile.addEventListener('click', () => dom.importFile.click());
   if (btnCancelDraft) btnCancelDraft.addEventListener('click', ocClearFileIntakeDraft);
   if (btnClear) btnClear.addEventListener('click', ocClearFileIntake);
 })();
+
+dom.toggleImportPanel?.addEventListener('click', () => {
+  dom.importPanel.classList.toggle('hidden');
+  const hiddenNow = dom.importPanel.classList.contains('hidden');
+  dom.importPanel.setAttribute('aria-hidden', hiddenNow ? 'true' : 'false');
+});
+
+dom.btnPickImportFile?.addEventListener('click', () => dom.importFile.click());
 
 dom.importFile.addEventListener('change', async (ev) => {
   const input = ev.target;
