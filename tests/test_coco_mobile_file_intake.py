@@ -260,3 +260,12 @@ def test_file_received_feedback_and_intake_endpoint():
     submit = html.split("async function ocSubmitFileIntake")[1].split("\n}")[0]
     assert "new FormData()" in submit
     assert "Content-Type" not in submit
+
+
+def test_intake_ui_displays_server_message_for_analysis():
+    html = _html()
+    mobile_send = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
+    desktop_send = html.split("async function send()")[1].split("dom.input.value = ''")[0]
+    assert "intake.message" in mobile_send
+    assert "intake.message" in desktop_send
+    assert "analysis pipeline is not enabled yet" not in mobile_send

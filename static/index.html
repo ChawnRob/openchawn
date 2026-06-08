@@ -4403,14 +4403,12 @@ async function ocSendFileIntakeDraft(opts) {
     if (btn) btn.disabled = true;
   });
   ocSetFileIntakeMobileStatus('Envoi...', '');
-  ocSetCocoState('thinking', 'Uploading file');
+  ocSetCocoState('thinking', 'Analyse du fichier');
   try {
     ocFileIntakePending = { file: file };
     const intake = await ocSubmitFileIntake();
     const intakeName = (intake && intake.filename) ? intake.filename : file.name;
-    const detail =
-      (intake && intake.message) ||
-      'File intake is ready, analysis pipeline is not enabled yet.';
+    const detail = (intake && intake.message) || 'Réponse file intake indisponible.';
     const received = 'Photo reçue : ' + intakeName;
     ocCloseFileIntakeCropModal();
     ocCloseFileIntakeMobilePreview();
@@ -5619,15 +5617,13 @@ async function send() {
   var pendingIntakeMsg = null;
   if (hasFile) {
     dom.typing.classList.add('visible');
-    ocSetCocoState('thinking', 'Uploading file');
+    ocSetCocoState('thinking', 'Analyse du fichier');
     scrollDown();
     try {
       const intake = await ocSubmitFileIntake();
       const intakeName = (intake && intake.filename) ? intake.filename : 'file';
       const intakeReceived = 'File received: ' + intakeName;
-      const intakeDetail =
-        (intake && intake.message) ||
-        'File intake is ready, analysis pipeline is not enabled yet.';
+      const intakeDetail = (intake && intake.message) || 'Réponse file intake indisponible.';
       pendingIntakeMsg = intakeReceived + '\n' + intakeDetail;
       if (!text) {
         addMsg('user', '[File attached: ' + intakeName + ']');

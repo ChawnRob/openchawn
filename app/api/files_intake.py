@@ -1,8 +1,8 @@
 """
-COCO File Intake — minimal staging endpoint (V1).
+COCO File Intake — validate uploads and run in-memory analysis (V1).
 
-Accepts multipart upload, validates type/size/signature/filename, returns explicit status.
-No durable storage, no LLM, no analysis pipeline.
+Accepts multipart upload, validates type/size/signature/filename.
+Image types: optional OpenAI vision analysis (no durable storage).
 """
 from __future__ import annotations
 
@@ -12,6 +12,12 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.auth.deps import get_current_user_or_guest
+from app.files_intake.image_analysis import (
+    IMAGE_MIME_TYPES,
+    ImageAnalysisError,
+    VisionUnavailableError,
+    analyze_image_bytes,
+)
 
 logger = logging.getLogger("openchawn.files_intake")
 
@@ -45,8 +51,12 @@ _TEXT_FORBIDDEN_PREFIXES: tuple[bytes, ...] = (
     b"RIFF",
 )
 
-ANALYSIS_ENABLED = False
-READY_MESSAGE = "File intake is ready, analysis pipeline is not enabled yet."
+ANALYSIS_ENABLED = True
+READY_MESSAGE = "Fichier reçu."
+NON_IMAGE_MESSAGE = (
+    "Fichier reçu. L'analyse automatique V1 concerne uniquement les images "
+    "(PNG, JPEG, WebP)."
+)
 
 
 def _failure(
@@ -202,14 +212,40 @@ async def post_files_intake(
         bool(user.get("is_guest")),
     )
 
+    if resolved_type in IMAGE_MIME_TYPES:
+        try:
+            analysis = analyze_image_bytes(
+                payload=payload,
+                content_type=resolved_type,
+                filename=filename,
+            )
+        except VisionUnavailableError as exc:
+            raise _failure("vision_unavailable", str(exc), 503) from exc
+        except ImageAnalysisError as exc:
+            raise _failure("analysis_failed", str(exc), 502) from exc
+
+        return {
+            "ok": True,
+            "status": "analyzed",
+            "message": analysis.to_message(),
+            "filename": filename,
+            "size_bytes": len(payload),
+            "content_type": resolved_type,
+            "analysis_enabled": True,
+            "analysis": analysis.to_payload(),
+            "stored": False,
+            "intake_version": INTAKE_VERSION,
+            "failure_mode": None,
+        }
+
     return {
         "ok": True,
         "status": "ready",
-        "message": READY_MESSAGE,
+        "message": NON_IMAGE_MESSAGE,
         "filename": filename,
         "size_bytes": len(payload),
         "content_type": resolved_type,
-        "analysis_enabled": ANALYSIS_ENABLED,
+        "analysis_enabled": False,
         "stored": False,
         "intake_version": INTAKE_VERSION,
         "failure_mode": None,
