@@ -8,8 +8,18 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.auth import guest as guest_auth
+from app.files_intake.image_analysis import ImageAnalysisResult
 from app.main import app
 from app.memory.fractal_memory import MemoryWriteResult
+
+_MOCK_IMAGE_ANALYSIS = ImageAnalysisResult(
+    description="Image de test.",
+    detected_elements=["élément test"],
+    clarification_question=None,
+    provider="openai",
+    model="gpt-4o-mini",
+    raw_text="{}",
+)
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff\xe0"
@@ -98,13 +108,18 @@ def test_accept_valid_png_magic_bytes():
     client = TestClient(app)
     headers = _guest_headers(client)
     data = PNG_MAGIC + b"\x00" * 64
-    r = _post_intake(client, headers, "shot.png", data, "image/png")
+    with patch(
+        "app.api.files_intake.analyze_image_bytes",
+        return_value=_MOCK_IMAGE_ANALYSIS,
+    ):
+        r = _post_intake(client, headers, "shot.png", data, "image/png")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["ok"] is True
     assert body["stored"] is False
     assert body["filename"] == "shot.png"
     assert body["content_type"] == "image/png"
+    assert body["analysis_enabled"] is True
 
 
 # 7. accept valid jpg magic bytes
@@ -113,11 +128,16 @@ def test_accept_valid_jpg_magic_bytes():
     client = TestClient(app)
     headers = _guest_headers(client)
     data = JPEG_MAGIC + b"\x00" * 64
-    r = _post_intake(client, headers, "photo.jpg", data, "image/jpeg")
+    with patch(
+        "app.api.files_intake.analyze_image_bytes",
+        return_value=_MOCK_IMAGE_ANALYSIS,
+    ):
+        r = _post_intake(client, headers, "photo.jpg", data, "image/jpeg")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["content_type"] == "image/jpeg"
     assert body["stored"] is False
+    assert body["analysis_enabled"] is True
 
 
 # 8. accept valid txt under size limit
@@ -138,16 +158,20 @@ def test_intake_does_not_persist_file_to_disk():
     headers = _guest_headers(client)
     data = PNG_MAGIC + b"\x00" * 16
 
-    with patch("builtins.open", side_effect=AssertionError("disk write attempted")):
-        with patch(
-            "pathlib.Path.write_bytes",
-            side_effect=AssertionError("disk write attempted"),
-        ):
+    with patch(
+        "app.api.files_intake.analyze_image_bytes",
+        return_value=_MOCK_IMAGE_ANALYSIS,
+    ):
+        with patch("builtins.open", side_effect=AssertionError("disk write attempted")):
             with patch(
-                "pathlib.Path.write_text",
+                "pathlib.Path.write_bytes",
                 side_effect=AssertionError("disk write attempted"),
             ):
-                r = _post_intake(client, headers, "safe.png", data, "image/png")
+                with patch(
+                    "pathlib.Path.write_text",
+                    side_effect=AssertionError("disk write attempted"),
+                ):
+                    r = _post_intake(client, headers, "safe.png", data, "image/png")
 
     assert r.status_code == 200
     assert r.json()["stored"] is False
