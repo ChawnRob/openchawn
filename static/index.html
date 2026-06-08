@@ -2194,6 +2194,153 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   flex: 1 1 auto;
   min-height: 40px;
 }
+.oc-file-intake-mobile-preview,
+.oc-file-intake-crop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  background: rgba(6, 37, 54, 0.97);
+  touch-action: manipulation;
+  overflow: hidden;
+  pointer-events: auto;
+}
+.oc-file-intake-mobile-preview.hidden,
+.oc-file-intake-crop-modal.hidden {
+  display: none !important;
+}
+.oc-fi-mobile-header {
+  flex-shrink: 0;
+  padding:
+    max(12px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    10px
+    max(16px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid rgba(56, 221, 245, 0.25);
+  background: rgba(6, 37, 54, 0.98);
+}
+.oc-fi-mobile-title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  color: #f4feff;
+  text-align: center;
+}
+.oc-fi-mobile-body {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.oc-file-intake-mobile-thumb,
+.oc-file-intake-crop-stage {
+  flex: 1 1 auto;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.oc-file-intake-mobile-thumb img,
+.oc-file-intake-crop-stage img,
+.oc-file-intake-crop-stage canvas {
+  display: block;
+  max-width: 100%;
+  max-height: min(52vh, 420px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.oc-file-intake-mobile-meta {
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.oc-file-intake-mobile-status {
+  margin: 0;
+  min-height: 1.2em;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ef7ff;
+}
+.oc-file-intake-mobile-status.is-error {
+  color: #ffb4a8;
+}
+.oc-file-intake-mobile-status.is-success {
+  color: #8ff0c8;
+}
+.oc-fi-mobile-footer,
+.oc-file-intake-crop-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding:
+    12px
+    max(16px, env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(180deg, rgba(6, 37, 54, 0.72) 0%, rgba(6, 37, 54, 0.98) 28%);
+  border-top: 1px solid rgba(56, 221, 245, 0.22);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28);
+}
+.oc-fi-mobile-footer .ux-tool-btn,
+.oc-file-intake-crop-actions .ux-tool-btn {
+  width: 100%;
+  min-height: 48px;
+  font-size: 15px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+.oc-file-intake-crop-modal-inner {
+  display: contents;
+}
+.oc-file-intake-crop-hint {
+  margin: 0;
+  padding: 0 16px;
+  text-align: center;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.72);
+}
+.oc-file-intake-crop-overlay {
+  position: absolute;
+  border: 2px solid rgba(56, 221, 245, 0.95);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.oc-file-intake-crop-stage {
+  position: relative;
+  margin: 12px 16px 0;
+}
+html.is-mobile-file-intake-open,
+body.is-mobile-file-intake-open {
+  overflow: hidden !important;
+  height: 100%;
+  touch-action: none;
+}
+body.is-mobile-file-intake-open .oc-file-intake-mobile-preview:not(.hidden),
+body.is-mobile-file-intake-open .oc-file-intake-crop-modal:not(.hidden) {
+  touch-action: manipulation;
+}
 .oc-file-intake-inline-error {
   width: 100%;
   margin: 0 0 6px;
@@ -3088,7 +3235,6 @@ html.ux-legacy .coco-companion-presence {
     </div>
     <div class="oc-file-intake-inline-error hidden" id="ocFileIntakeInlineError" role="alert" aria-live="assertive"></div>
     <div class="oc-file-intake-preview hidden" id="ocFileIntakePreview" role="region" aria-label="Aperçu du fichier">
-      <button type="button" class="ux-tool-btn oc-file-intake-crop-btn hidden" id="btnFileIntakeCropSoon" disabled title="Recadrage à venir">Recadrer bientôt</button>
       <div class="oc-file-intake-preview-thumb-wrap">
         <div class="oc-file-intake-preview-thumb hidden" id="ocFileIntakePreviewThumb"></div>
       </div>
@@ -3096,11 +3242,50 @@ html.ux-legacy .coco-companion-presence {
         <span class="oc-file-intake-name" id="ocFileIntakePreviewName"></span>
         <span class="oc-file-intake-size" id="ocFileIntakePreviewSize"></span>
       </div>
+      <p class="oc-file-intake-crop-note" id="ocFileIntakeCropNote">Recadrage avancé bientôt</p>
       <div class="oc-file-intake-preview-actions">
-        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeValidate">Valider</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeSend">Envoyer</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeValidate">Valider</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeReplace">Remplacer</button>
-        <button type="button" class="ux-tool-btn" id="btnFileIntakeCancelDraft">Annuler</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeCancelDraft">Supprimer</button>
       </div>
+    </div>
+    <div class="oc-file-intake-mobile-preview hidden" id="ocFileIntakeMobilePreview" role="dialog" aria-modal="true" aria-label="Aperçu photo mobile">
+      <header class="oc-fi-mobile-header">
+        <h2 class="oc-fi-mobile-title">Photo sélectionnée</h2>
+      </header>
+      <div class="oc-fi-mobile-body" id="ocFileIntakeMobileBody">
+        <div class="oc-file-intake-mobile-thumb" id="ocFileIntakeMobileThumb"></div>
+        <div class="oc-file-intake-mobile-meta">
+          <span id="ocFileIntakeMobileName"></span>
+          <span id="ocFileIntakeMobileSize"></span>
+        </div>
+        <p class="oc-file-intake-mobile-status" id="ocFileIntakeMobileStatus" role="status" aria-live="polite"></p>
+      </div>
+      <footer class="oc-fi-mobile-footer" id="ocFileIntakeMobileFooter">
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeSendMobile">Envoyer</button>
+        <button type="button" class="ux-tool-btn tool-accent hidden" id="btnFileIntakeSendNoCrop">Envoyer sans recadrer</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeCropSend">Recadrer et envoyer</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeRetake">Reprendre</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeDeleteMobile">Supprimer</button>
+      </footer>
+    </div>
+    <div class="oc-file-intake-crop-modal hidden" id="ocFileIntakeCropModal" role="dialog" aria-modal="true" aria-label="Recadrer la photo">
+      <header class="oc-fi-mobile-header">
+        <h2 class="oc-fi-mobile-title">Recadrer la photo</h2>
+      </header>
+      <div class="oc-fi-mobile-body">
+        <div class="oc-file-intake-crop-stage" id="ocFileIntakeCropStage">
+          <img id="ocFileIntakeCropImg" alt="">
+          <div class="oc-file-intake-crop-overlay hidden" id="ocFileIntakeCropOverlay"></div>
+        </div>
+        <p class="oc-file-intake-crop-hint">Recadrage V1 — zone centrale. Recadrage libre bientôt.</p>
+      </div>
+      <footer class="oc-file-intake-crop-actions" id="ocFileIntakeCropFooter">
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Valider et envoyer</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropSendDirect">Envoyer sans recadrer</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeCropCancel">Annuler</button>
+      </footer>
     </div>
     <div class="oc-file-intake hidden" id="ocFileIntakeBar" role="status" aria-live="polite" aria-label="File ready for analysis">
       <div class="oc-file-intake-meta">
@@ -3930,13 +4115,31 @@ function ocFileIntakeIsMobileComposer() {
   return typeof ocChatCleanMobileComposer === 'function' && ocChatCleanMobileComposer();
 }
 
+function ocFileIntakeIsMobileUi() {
+  if (!document.documentElement.classList.contains('ux-chat-clean')) return false;
+  if (typeof window.matchMedia !== 'function') return false;
+  if (window.matchMedia('(max-width: 640px)').matches) return true;
+  if (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 1024px)').matches) {
+    return true;
+  }
+  return false;
+}
+
+function ocShouldUseMobileFileIntakePreview(source) {
+  if (source === 'camera' || source === 'gallery') return true;
+  return ocFileIntakeIsMobileUi();
+}
+
 function ocShowFileIntakeError(msg) {
   const errEl = document.getElementById('ocFileIntakeInlineError');
   if (errEl) {
     errEl.textContent = msg;
     errEl.classList.remove('hidden');
   }
-  if (!ocFileIntakeIsMobileComposer()) {
+  const mobileOpen = document.getElementById('ocFileIntakeMobilePreview');
+  if (mobileOpen && !mobileOpen.classList.contains('hidden')) {
+    ocSetFileIntakeMobileStatus(msg, 'error');
+  } else if (!ocFileIntakeIsMobileUi()) {
     addMsg('error', msg);
   }
 }
@@ -3965,19 +4168,123 @@ function ocValidateSelectedIntakeFile(f) {
   return true;
 }
 
-function ocShowFileIntakePreview(file) {
+let ocFileIntakeSending = false;
+
+function ocPortalFileIntakeMobileNodes() {
+  const preview = document.getElementById('ocFileIntakeMobilePreview');
+  const crop = document.getElementById('ocFileIntakeCropModal');
+  if (preview) document.body.appendChild(preview);
+  if (crop) document.body.appendChild(crop);
+}
+
+function ocSetMobileFileIntakeOpen(open) {
+  document.body.classList.toggle('is-mobile-file-intake-open', !!open);
+  document.documentElement.classList.toggle('is-mobile-file-intake-open', !!open);
+}
+
+function ocHideFileIntakeSendNoCropFallback() {
+  document.getElementById('btnFileIntakeSendNoCrop')?.classList.add('hidden');
+}
+
+function ocSetFileIntakeMobileStatus(msg, kind) {
+  const el = document.getElementById('ocFileIntakeMobileStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.remove('is-error', 'is-success');
+  if (kind === 'error') el.classList.add('is-error');
+  if (kind === 'success') el.classList.add('is-success');
+}
+
+function ocSetFileIntakeMobileActionsDisabled(disabled) {
+  [
+    'btnFileIntakeCropSend',
+    'btnFileIntakeSendMobile',
+    'btnFileIntakeSendNoCrop',
+    'btnFileIntakeRetake',
+    'btnFileIntakeDeleteMobile',
+    'btnFileIntakeCropConfirm',
+    'btnFileIntakeCropSendDirect',
+    'btnFileIntakeCropCancel',
+  ].forEach(function (id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = !!disabled;
+  });
+}
+
+function ocCloseFileIntakeMobilePreview() {
+  const panel = document.getElementById('ocFileIntakeMobilePreview');
+  panel?.classList.add('hidden');
+  panel?.setAttribute('aria-hidden', 'true');
+  ocSetFileIntakeMobileStatus('', '');
+  ocSetFileIntakeMobileActionsDisabled(false);
+  ocHideFileIntakeSendNoCropFallback();
+  if (!document.getElementById('ocFileIntakeCropModal') || document.getElementById('ocFileIntakeCropModal').classList.contains('hidden')) {
+    ocSetMobileFileIntakeOpen(false);
+  }
+}
+
+function ocCloseFileIntakeCropModal() {
+  const modal = document.getElementById('ocFileIntakeCropModal');
+  modal?.classList.add('hidden');
+  modal?.setAttribute('aria-hidden', 'true');
+  const preview = document.getElementById('ocFileIntakeMobilePreview');
+  if (!preview || preview.classList.contains('hidden')) {
+    ocSetMobileFileIntakeOpen(false);
+  }
+}
+
+function ocOpenFileIntakeMobilePreview(file) {
+  ocPortalFileIntakeMobileNodes();
+  const panel = document.getElementById('ocFileIntakeMobilePreview');
+  const thumb = document.getElementById('ocFileIntakeMobileThumb');
+  const nameEl = document.getElementById('ocFileIntakeMobileName');
+  const sizeEl = document.getElementById('ocFileIntakeMobileSize');
+  if (!panel || !thumb || !nameEl || !sizeEl) return;
+  nameEl.textContent = file.name;
+  sizeEl.textContent = ' · ' + ocFormatFileSize(file.size);
+  thumb.innerHTML = '';
+  const isImage = ocIsImageIntakeFile(file);
+  if (isImage && ocFileIntakeDraft && ocFileIntakeDraft.previewUrl) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = ocFileIntakeDraft.previewUrl;
+    thumb.appendChild(img);
+  } else {
+    const label = document.createElement('p');
+    label.textContent = file.name;
+    thumb.appendChild(label);
+  }
+  const cropBtn = document.getElementById('btnFileIntakeCropSend');
+  if (cropBtn) cropBtn.classList.toggle('hidden', !isImage);
+  ocHideFileIntakeSendNoCropFallback();
+  ocSetFileIntakeMobileStatus('', '');
+  ocSetFileIntakeMobileActionsDisabled(false);
+  document.getElementById('ocFileIntakePreview')?.classList.add('hidden');
+  document.getElementById('ocFileIntakeBar')?.classList.add('hidden');
+  ocClearFileIntakeError();
+  panel.classList.remove('hidden');
+  panel.setAttribute('aria-hidden', 'false');
+  ocSetMobileFileIntakeOpen(true);
+  requestAnimationFrame(function () {
+    document.getElementById('btnFileIntakeSendMobile')?.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function ocShowFileIntakePreview(file, source) {
+  if (ocShouldUseMobileFileIntakePreview(source)) {
+    ocOpenFileIntakeMobilePreview(file);
+    return;
+  }
   const panel = document.getElementById('ocFileIntakePreview');
   const nameEl = document.getElementById('ocFileIntakePreviewName');
   const sizeEl = document.getElementById('ocFileIntakePreviewSize');
   const thumbEl = document.getElementById('ocFileIntakePreviewThumb');
-  const cropBtn = document.getElementById('btnFileIntakeCropSoon');
+  const cropNote = document.getElementById('ocFileIntakeCropNote');
   if (!panel || !nameEl || !sizeEl) return;
   nameEl.textContent = file.name;
   sizeEl.textContent = ocFormatFileSize(file.size);
   const isImage = ocIsImageIntakeFile(file);
-  if (cropBtn) {
-    cropBtn.classList.toggle('hidden', !isImage);
-  }
+  if (cropNote) cropNote.classList.toggle('hidden', !isImage);
   if (thumbEl) {
     thumbEl.innerHTML = '';
     if (isImage && ocFileIntakeDraft && ocFileIntakeDraft.previewUrl) {
@@ -3991,8 +4298,142 @@ function ocShowFileIntakePreview(file) {
     }
   }
   ocClearFileIntakeError();
+  ocCloseFileIntakeMobilePreview();
   document.getElementById('ocFileIntakeBar')?.classList.add('hidden');
   panel.classList.remove('hidden');
+}
+
+function ocLoadImageFromFile(file) {
+  return new Promise(function (resolve, reject) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      reject(new Error('Impossible de charger l’image.'));
+    };
+    img.src = url;
+  });
+}
+
+function ocCropImageCenterSquare(file) {
+  return ocLoadImageFromFile(file).then(function (img) {
+    const size = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
+    const sx = ((img.naturalWidth || img.width) - size) / 2;
+    const sy = ((img.naturalHeight || img.height) - size) / 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Recadrage indisponible sur ce navigateur.');
+    ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+    return new Promise(function (resolve, reject) {
+      const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          reject(new Error('Recadrage impossible.'));
+          return;
+        }
+        const base = (file.name || 'photo').replace(/\.[^.]+$/, '');
+        resolve(new File([blob], base + (outType === 'image/png' ? '.png' : '.jpg'), { type: outType }));
+      }, outType, 0.92);
+    });
+  });
+}
+
+function ocUpdateFileIntakeDraftFile(file) {
+  ocRevokeFileIntakePreviewUrl();
+  const previewUrl = ocIsImageIntakeFile(file) ? URL.createObjectURL(file) : null;
+  ocFileIntakeDraft = { file: file, previewUrl: previewUrl };
+}
+
+function ocOpenFileIntakeCropModal() {
+  if (!ocFileIntakeDraft || !ocFileIntakeDraft.file || !ocIsImageIntakeFile(ocFileIntakeDraft.file)) {
+    ocSendFileIntakeDraft();
+    return;
+  }
+  ocPortalFileIntakeMobileNodes();
+  const modal = document.getElementById('ocFileIntakeCropModal');
+  const img = document.getElementById('ocFileIntakeCropImg');
+  const overlay = document.getElementById('ocFileIntakeCropOverlay');
+  if (!modal || !img) {
+    ocSendFileIntakeDraft();
+    return;
+  }
+  img.src = ocFileIntakeDraft.previewUrl || '';
+  if (overlay) overlay.classList.add('hidden');
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  ocSetMobileFileIntakeOpen(true);
+}
+
+async function ocSendFileIntakeDraft(opts) {
+  const options = opts || {};
+  if (ocFileIntakeSending) return;
+  if (!ocFileIntakeDraft || !ocFileIntakeDraft.file) return;
+  let file = ocFileIntakeDraft.file;
+  const sendBtns = [
+    document.getElementById('btnFileIntakeSend'),
+    document.getElementById('btnFileIntakeSendMobile'),
+    document.getElementById('btnFileIntakeSendNoCrop'),
+    document.getElementById('btnFileIntakeCropSendDirect'),
+  ];
+  if (options.cropCenter && ocIsImageIntakeFile(file)) {
+    try {
+      file = await ocCropImageCenterSquare(file);
+      ocUpdateFileIntakeDraftFile(file);
+    } catch (err) {
+      const msg = String(err && err.message ? err.message : err || 'Recadrage impossible.');
+      ocShowFileIntakeError(msg);
+      ocSetFileIntakeMobileStatus(msg + ' — utilisez Envoyer sans recadrer.', 'error');
+      document.getElementById('btnFileIntakeSendNoCrop')?.classList.remove('hidden');
+      ocSetFileIntakeMobileActionsDisabled(false);
+      sendBtns.forEach(function (btn) {
+        if (btn) btn.disabled = false;
+      });
+      return;
+    }
+  }
+  ocFileIntakeSending = true;
+  ocSetFileIntakeMobileActionsDisabled(true);
+  sendBtns.forEach(function (btn) {
+    if (btn) btn.disabled = true;
+  });
+  ocSetFileIntakeMobileStatus('Envoi...', '');
+  ocSetCocoState('thinking', 'Uploading file');
+  try {
+    ocFileIntakePending = { file: file };
+    const intake = await ocSubmitFileIntake();
+    const intakeName = (intake && intake.filename) ? intake.filename : file.name;
+    const detail =
+      (intake && intake.message) ||
+      'File intake is ready, analysis pipeline is not enabled yet.';
+    const received = 'Photo reçue : ' + intakeName;
+    ocCloseFileIntakeCropModal();
+    ocCloseFileIntakeMobilePreview();
+    ocClearFileIntakeDraft();
+    ocSetMobileFileIntakeOpen(false);
+    document.getElementById('ocFileIntakePreview')?.classList.add('hidden');
+    addMsg('user', '[Fichier joint : ' + intakeName + ']');
+    addMsg('assistant', received + '\n' + detail);
+    ocSetCocoState('ready', 'Ready');
+    scrollDown();
+  } catch (err) {
+    ocFileIntakePending = null;
+    const msg = String(err && err.message ? err.message : err || 'Échec de l’envoi.');
+    ocShowFileIntakeError(msg);
+    ocSetFileIntakeMobileStatus(msg, 'error');
+    ocSetCocoState('retry', 'Retry available');
+    ocSetFileIntakeMobileActionsDisabled(false);
+    sendBtns.forEach(function (btn) {
+      if (btn) btn.disabled = false;
+    });
+  } finally {
+    ocFileIntakeSending = false;
+  }
 }
 
 function ocAcceptFileIntakeDraft(file, source) {
@@ -4004,16 +4445,22 @@ function ocAcceptFileIntakeDraft(file, source) {
   ocFileIntakeDraftReplaceSource = source || 'file';
   const previewUrl = ocIsImageIntakeFile(file) ? URL.createObjectURL(file) : null;
   ocFileIntakeDraft = { file: file, previewUrl: previewUrl };
-  ocShowFileIntakePreview(file);
+  ocShowFileIntakePreview(file, source);
 }
 
 function ocClearFileIntakeDraft() {
   ocRevokeFileIntakePreviewUrl();
   ocFileIntakeDraft = null;
+  ocCloseFileIntakeCropModal();
+  ocCloseFileIntakeMobilePreview();
+  ocSetMobileFileIntakeOpen(false);
+  ocHideFileIntakeSendNoCropFallback();
   const panel = document.getElementById('ocFileIntakePreview');
   if (panel) panel.classList.add('hidden');
   ocClearAllFileIntakeInputs();
   ocClearFileIntakeError();
+  ocSetFileIntakeMobileStatus('', '');
+  ocSetFileIntakeMobileActionsDisabled(false);
 }
 
 function ocValidateFileIntakeDraft() {
@@ -4277,10 +4724,21 @@ async function copyAssistantPlain() {
 
   function ocBindFileIntakeTap(el, handler) {
     if (!el || typeof handler !== 'function') return;
+    var lastAt = 0;
+    function run(ev) {
+      var now = Date.now();
+      if (now - lastAt < 420) return;
+      lastAt = now;
+      if (ev) {
+        if (ev.cancelable) ev.preventDefault();
+        ev.stopPropagation();
+      }
+      handler(ev);
+    }
+    el.addEventListener('click', run);
     el.addEventListener('pointerup', function (ev) {
       if (ev.pointerType === 'mouse' && ev.button !== 0) return;
-      if (ev.pointerType !== 'mouse') ev.preventDefault();
-      handler(ev);
+      run(ev);
     });
   }
 
@@ -4304,6 +4762,44 @@ async function copyAssistantPlain() {
   });
   document.getElementById('ocFileIntakePickCancel')?.addEventListener('click', ocCloseFileIntakeActionSheet);
   document.getElementById('ocFileIntakeSheetBackdrop')?.addEventListener('click', ocCloseFileIntakeActionSheet);
+
+  const btnSend = document.getElementById('btnFileIntakeSend');
+  const btnSendMobile = document.getElementById('btnFileIntakeSendMobile');
+  const btnCropSend = document.getElementById('btnFileIntakeCropSend');
+  const btnRetake = document.getElementById('btnFileIntakeRetake');
+  const btnDeleteMobile = document.getElementById('btnFileIntakeDeleteMobile');
+  const btnCropConfirm = document.getElementById('btnFileIntakeCropConfirm');
+  const btnCropCancel = document.getElementById('btnFileIntakeCropCancel');
+  const btnSendNoCrop = document.getElementById('btnFileIntakeSendNoCrop');
+  const btnCropSendDirect = document.getElementById('btnFileIntakeCropSendDirect');
+
+  ocBindFileIntakeTap(btnSend, function () {
+    ocSendFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(btnSendMobile, function () {
+    ocSendFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(btnSendNoCrop, function () {
+    ocSendFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(btnCropSendDirect, function () {
+    ocSendFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(btnCropSend, function () {
+    ocOpenFileIntakeCropModal();
+  });
+  ocBindFileIntakeTap(btnRetake, function () {
+    ocReplaceFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(btnDeleteMobile, function () {
+    ocClearFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(btnCropConfirm, function () {
+    ocSendFileIntakeDraft({ cropCenter: true });
+  });
+  ocBindFileIntakeTap(btnCropCancel, function () {
+    ocCloseFileIntakeCropModal();
+  });
 
   if (btnValidate) btnValidate.addEventListener('click', ocValidateFileIntakeDraft);
   if (btnReplace) btnReplace.addEventListener('click', ocReplaceFileIntakeDraft);

@@ -43,7 +43,7 @@ def test_separate_intake_inputs():
 def test_preview_validate_before_ready():
     html = _html()
     assert 'id="ocFileIntakePreview"' in html
-    assert "Recadrer bientôt" in html
+    assert "Recadrage avancé bientôt" in html
     assert "ocValidateFileIntakeDraft" in html
     assert "ocAcceptFileIntakeDraft" in html
     assert "btnFileIntakeValidate" in html
@@ -51,6 +51,113 @@ def test_preview_validate_before_ready():
     block = html.split("function ocValidateFileIntakeDraft")[1].split("function ocReplaceFileIntakeDraft")[0]
     assert "ocFileIntakePending" in block
     assert "ocShowFileIntakeBar" in block
+
+
+def test_mobile_preview_has_send_and_crop_ctas():
+    html = _html()
+    assert 'id="ocFileIntakeMobilePreview"' in html
+    assert 'id="btnFileIntakeCropSend"' in html
+    assert "Recadrer et envoyer" in html
+    assert 'id="btnFileIntakeSendMobile"' in html
+    assert "Envoyer" in html
+    assert 'id="btnFileIntakeRetake"' in html
+    assert "Reprendre" in html
+    assert 'id="btnFileIntakeDeleteMobile"' in html
+    assert "Supprimer" in html
+    assert "Recadrer bientôt" not in html
+    assert "Photo sélectionnée" in html
+    assert 'id="ocFileIntakeMobileFooter"' in html
+
+
+def test_send_button_calls_upload_function():
+    html = _html()
+    setup = html.split("(function ocFileIntakeUiSetup()")[1].split("})();")[0]
+    assert "ocSendFileIntakeDraft" in setup
+    assert "ocBindFileIntakeTap(btnSend" in setup or "ocBindFileIntakeTap(btnSend," in setup
+    assert "ocBindFileIntakeTap(btnSendMobile" in setup
+    assert "ocBindFileIntakeTap(btnSendNoCrop" in setup
+    send_fn = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
+    assert "ocSubmitFileIntake()" in send_fn
+    assert "Envoi..." in send_fn
+    assert "Photo reçue" in send_fn
+
+
+def test_mobile_crop_modal_actions_exist():
+    html = _html()
+    assert 'id="ocFileIntakeCropModal"' in html
+    assert 'id="btnFileIntakeCropConfirm"' in html
+    assert 'id="btnFileIntakeCropCancel"' in html
+    assert "Valider et envoyer" in html
+    assert "Annuler" in html.split('id="btnFileIntakeCropCancel"')[1][:80]
+
+
+def test_mobile_preview_uses_safe_area_padding():
+    html = _html()
+    block = html.split(".oc-fi-mobile-footer,")[1].split("html.is-mobile-file-intake-open")[0]
+    assert "safe-area-inset-bottom" in block
+    assert "calc(24px + env(safe-area-inset-bottom" in block
+
+
+def test_mobile_footer_is_sticky_fixed_actions():
+    html = _html()
+    footer = html.split(".oc-fi-mobile-footer,")[1].split(".oc-file-intake-crop-actions .ux-tool-btn")[0]
+    assert "position: sticky" in footer
+    assert "bottom: 0" in footer
+
+
+def test_mobile_send_without_crop_fallback_exists():
+    html = _html()
+    assert 'id="btnFileIntakeSendNoCrop"' in html
+    assert "Envoyer sans recadrer" in html
+    assert 'id="btnFileIntakeCropSendDirect"' in html
+    send_fn = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
+    assert "btnFileIntakeSendNoCrop" in send_fn
+
+
+def test_mobile_actions_portaled_to_document_body():
+    html = _html()
+    portal = html.split("function ocPortalFileIntakeMobileNodes")[1].split("function ocSetMobileFileIntakeOpen")[0]
+    assert "document.body.appendChild(preview)" in portal
+    assert "document.body.appendChild(crop)" in portal
+
+
+def test_mobile_actions_use_pointerup_and_click():
+    html = _html()
+    setup = html.split("function ocBindFileIntakeTap")[1].split("ocBindFileIntakeTap(btnAttach")[0]
+    assert "addEventListener('click'" in setup
+    assert "addEventListener('pointerup'" in setup
+
+
+def test_mobile_preview_never_image_only_without_cta():
+    html = _html()
+    assert "Recadrer bientôt" not in html
+    mobile = html.split('id="ocFileIntakeMobilePreview"')[1].split('id="ocFileIntakeCropModal"')[0]
+    assert 'id="btnFileIntakeSendMobile"' in mobile
+    assert "oc-fi-mobile-footer" in mobile
+    assert "Photo sélectionnée" in mobile
+
+
+def test_camera_capture_opens_mobile_preview():
+    html = _html()
+    assert "function ocShouldUseMobileFileIntakePreview" in html
+    assert "source === 'camera'" in html
+    accept = html.split("function ocAcceptFileIntakeDraft")[1].split("function ocClearFileIntakeDraft")[0]
+    assert "ocShowFileIntakePreview(file, source)" in accept
+
+
+def test_body_scroll_locked_while_mobile_intake_open():
+    html = _html()
+    assert "is-mobile-file-intake-open" in html
+    assert "function ocSetMobileFileIntakeOpen" in html
+
+
+def test_desktop_still_uses_direct_file_picker():
+    html = _html()
+    handler = html.split("function ocHandleAttachButtonClick")[1].split("function ocBindFileIntakeTap")[0]
+    assert "ocPickFileIntakeSource('file')" in handler
+    mobile_branch = handler.split("if (ocFileIntakeIsMobileComposer())")[1].split("return;")[0]
+    assert "ocOpenFileIntakeActionSheet()" in mobile_branch
+    assert "ocPickFileIntakeSource('file')" not in mobile_branch
 
 
 def test_mobile_friendly_errors_and_formdata():
