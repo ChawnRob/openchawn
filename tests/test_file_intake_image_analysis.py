@@ -64,8 +64,8 @@ def test_analyze_image_bytes_parses_json_response():
         },
     )()
 
-    with patch("app.files_intake.image_analysis.get_settings") as gs, patch(
-        "app.files_intake.image_analysis.requests.post", return_value=fake_resp
+    with patch("app.files_intake.vision_providers.get_settings") as gs, patch(
+        "app.files_intake.vision_providers.requests.post", return_value=fake_resp
     ):
         gs.return_value.openai_api_key = "sk-test"
         gs.return_value.openai_base_url = "https://api.openai.com/v1"
@@ -133,6 +133,27 @@ def test_intake_image_analysis_failure_returns_502():
 
     assert r.status_code == 502
     assert r.json()["detail"]["failure_mode"] == "analysis_failed"
+
+
+def test_vision_provider_interface_defaults_to_openai():
+    from app.files_intake.vision_providers import (
+        OpenAIVisionProvider,
+        get_vision_provider,
+        resolve_vision_provider_id,
+    )
+
+    assert resolve_vision_provider_id() == "openai"
+    provider = get_vision_provider()
+    assert isinstance(provider, OpenAIVisionProvider)
+
+
+def test_local_slm_provider_not_implemented_yet():
+    from app.files_intake.vision_providers import get_vision_provider
+
+    with patch.dict("os.environ", {"FILE_INTAKE_VISION_PROVIDER": "slm"}, clear=False):
+        provider = get_vision_provider()
+        assert provider.provider_id == "slm"
+        assert provider.is_configured() is False
 
 
 def test_intake_txt_skips_vision_analysis():

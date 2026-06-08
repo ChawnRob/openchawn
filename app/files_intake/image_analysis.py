@@ -1,7 +1,8 @@
 """
 Image analysis V1 for COCO file intake.
 
-Uses OpenAI-compatible chat/completions with a vision message. No disk persistence.
+Routes analysis through a pluggable vision provider (OpenAI by default).
+No disk persistence.
 """
 from __future__ import annotations
 
@@ -12,8 +13,6 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Any
-
-import requests
 
 from app.settings import get_settings
 
@@ -68,8 +67,9 @@ class ImageAnalysisResult:
 
 
 def vision_provider_configured() -> bool:
-    s = get_settings()
-    return bool((s.openai_api_key or "").strip())
+    from app.files_intake.vision_providers import get_vision_provider
+
+    return get_vision_provider().is_configured()
 
 
 def _vision_model() -> str:
@@ -134,92 +134,19 @@ def _normalize_result(data: dict[str, Any], *, provider: str, model: str, raw_te
 
 def analyze_image_bytes(*, payload: bytes, content_type: str, filename: str) -> ImageAnalysisResult:
     """
-    Run vision analysis on in-memory image bytes.
+    Run vision analysis on in-memory image bytes via the configured provider.
 
-    Raises VisionUnavailableError if OpenAI key is missing.
+    Raises VisionUnavailableError if provider is not configured.
     Raises ImageAnalysisError on provider/parse failures.
     """
     if content_type not in IMAGE_MIME_TYPES:
         raise ImageAnalysisError(f"Type non supporté pour l'analyse image : {content_type}")
 
-    s = get_settings()
-    api_key = (s.openai_api_key or "").strip()
-    if not api_key:
+    from app.files_intake.vision_providers import get_vision_provider
+
+    provider = get_vision_provider()
+    if not provider.is_configured():
         raise VisionUnavailableError(
-            "Analyse image indisponible : OPENAI_API_KEY non configurée sur le serveur."
+            "Analyse image indisponible : provider vision non configuré sur le serveur."
         )
-
-    model = _vision_model()
-    base_url = (s.openai_base_url or "https://api.openai.com/v1").rstrip("/")
-    url = f"{base_url}/chat/completions"
-    safe_name = (filename or "image").strip()[:120]
-
-    body = {
-        "model": model,
-        "temperature": 0.2,
-        "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            f"Analyse cette image (fichier : {safe_name}). "
-                            "Retourne uniquement le JSON demandé."
-                        ),
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": _data_url(content_type, payload)},
-                    },
-                ],
-            },
-        ],
-    }
-
-    try:
-        resp = requests.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-            timeout=float(os.getenv("FILE_INTAKE_VISION_TIMEOUT", "90")),
-        )
-    except requests.RequestException as exc:
-        logger.warning("vision request failed | error=%s", exc.__class__.__name__)
-        raise ImageAnalysisError(f"Appel vision échoué : {exc.__class__.__name__}") from exc
-
-    if resp.status_code in {401, 403}:
-        raise VisionUnavailableError(
-            "Analyse image indisponible : clé OpenAI refusée ou non autorisée."
-        )
-    if not resp.ok:
-        preview = (resp.text or "")[:240]
-        logger.warning("vision bad status | status=%s body=%s", resp.status_code, preview)
-        raise ImageAnalysisError(
-            f"Analyse image échouée (HTTP {resp.status_code})."
-        )
-
-    try:
-        data = resp.json()
-    except ValueError as exc:
-        raise ImageAnalysisError("Réponse vision invalide (JSON).") from exc
-
-    choices = data.get("choices") or []
-    content = ""
-    if choices and isinstance(choices[0], dict):
-        msg = choices[0].get("message") or {}
-        content = str(msg.get("content") or "").strip()
-
-    parsed = _extract_json_object(content)
-    result = _normalize_result(parsed, provider="openai", model=model, raw_text=content)
-    logger.info(
-        "image_analysis_v1 ok | filename=%s | model=%s | elements=%s",
-        safe_name[:64],
-        model,
-        len(result.detected_elements),
-    )
-    return result
+    return provider.analyze_image(payload=payload, content_type=content_type, filename=filename)
