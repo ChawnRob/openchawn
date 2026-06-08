@@ -15,9 +15,19 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff\xe0"
 
 
+def _reset_rate_limit_state() -> None:
+    """Clear in-process middleware counters (shared TestClient IP hits /guest/session limit)."""
+    from app import middleware as mw
+
+    mw._buckets.clear()
+    mw._last_chat_request_at.clear()
+    mw._request_counts.clear()
+
+
 def _reset_guest() -> None:
     guest_auth._sessions.clear()
     guest_auth._ip_sessions.clear()
+    _reset_rate_limit_state()
 
 
 def _guest_headers(client: TestClient) -> dict[str, str]:
