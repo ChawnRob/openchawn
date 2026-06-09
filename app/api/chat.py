@@ -304,7 +304,9 @@ def handle_chat_request(
         provider_hint=provider_hint,
     )
     response_text = llm_result.get("output", "")
-    provider_used = llm_result.get("provider", "fallback")
+    provider_used = llm_result.get("provider_used") or llm_result.get("provider", "fallback")
+    model_used = str(llm_result.get("model_used") or "")
+    fallback_used = bool(llm_result.get("fallback_used", False))
     success = bool(llm_result.get("success", bool(response_text)))
     provider_error = llm_result.get("error", None)
     provider_status = llm_result.get("status_code", None)
@@ -327,7 +329,9 @@ def handle_chat_request(
             provider_hint=provider_hint,
         )
         response_text = llm_result.get("output", "") or ""
-        provider_used = llm_result.get("provider", provider_used)
+        provider_used = llm_result.get("provider_used") or llm_result.get("provider", provider_used)
+        model_used = str(llm_result.get("model_used") or model_used)
+        fallback_used = bool(llm_result.get("fallback_used", fallback_used))
         success = bool(llm_result.get("success", bool(response_text)))
         provider_error = llm_result.get("error", None)
         provider_status = llm_result.get("status_code", None)
@@ -409,6 +413,8 @@ def handle_chat_request(
             "route_signature": route_signature,
             "handler_name": CHAT_HANDLER_NAME,
             "provider_used": str(provider_used or ""),
+            "model_used": model_used,
+            "fallback_used": fallback_used,
             "profile_used": bundle["profile_used"],
             "detected_language": bundle["detected_language"],
             "final_language": bundle["final_language_hint"],

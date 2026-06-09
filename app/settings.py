@@ -172,6 +172,15 @@ class Settings:
     kimi_timeout: float
     kimi_max_tokens: int
 
+    groq_api_key: str
+    groq_model: str
+    groq_base_url: str
+    default_text_provider: str
+    text_provider_order: str
+    openai_enabled: bool
+    anthropic_enabled: bool
+    allow_premium_models: bool
+
     image_analysis_provider_order: str
     image_analysis_default_provider: str
     image_analysis_fallback_provider: str
@@ -314,6 +323,17 @@ def _build_settings() -> Settings:
         kimi_temperature=float(_str("KIMI_TEMPERATURE", default="0.6")),
         kimi_timeout=float(_str("KIMI_TIMEOUT", default="120")),
         kimi_max_tokens=_int("KIMI_MAX_TOKENS", 2048),
+        groq_api_key=_str("GROQ_API_KEY", default=""),
+        groq_model=_str("GROQ_MODEL", default="llama-3.1-8b-instant"),
+        groq_base_url=_str("GROQ_BASE_URL", default="https://api.groq.com/openai/v1").rstrip("/"),
+        default_text_provider=_str("DEFAULT_TEXT_PROVIDER", default="groq").strip().lower(),
+        text_provider_order=_str(
+            "TEXT_PROVIDER_ORDER",
+            default="local,groq,kimi,deepseek,mistral,openai,infomaniak,openrouter",
+        ),
+        openai_enabled=_bool("OPENAI_ENABLED", default=False),
+        anthropic_enabled=_bool("ANTHROPIC_ENABLED", default=False),
+        allow_premium_models=_bool("ALLOW_PREMIUM_MODELS", default=False),
         image_analysis_provider_order=_str(
             "IMAGE_ANALYSIS_PROVIDER_ORDER",
             default="local,kimi,openai",

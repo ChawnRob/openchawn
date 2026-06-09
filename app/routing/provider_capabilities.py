@@ -2,6 +2,32 @@ from __future__ import annotations
 
 # Base officielle demandée + champs enrichis pour scoring futur.
 provider_capabilities: dict[str, dict[str, object]] = {
+    "groq": {
+        "provider": "groq",
+        "model": "llama-3.1-8b-instant",
+        "tier": "economic",
+        "strength": ["speed", "low_cost", "fast_text"],
+        "estimated_cost_per_1k_tokens_usd": 0.04,
+        "priority": 115,
+        "max_context_tokens": 128000,
+        "reasoning_score": 68,
+        "availability": "primary",
+        "enterprise_sovereign_ready": False,
+        "task_profiles": ["simple", "volume", "fast"],
+    },
+    "mistral": {
+        "provider": "mistral",
+        "model": "mistral-small-latest",
+        "tier": "economic",
+        "strength": ["speed", "low_cost", "european"],
+        "estimated_cost_per_1k_tokens_usd": 0.10,
+        "priority": 92,
+        "max_context_tokens": 128000,
+        "reasoning_score": 74,
+        "availability": "secondary",
+        "enterprise_sovereign_ready": False,
+        "task_profiles": ["simple", "volume"],
+    },
     "deepseek_flash": {
         "provider": "deepseek",
         "model": "deepseek-v4-flash",
