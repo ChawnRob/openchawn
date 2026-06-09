@@ -27,6 +27,12 @@ from app.core.runtime_language_guard import (
     prompt_contains_forced_french,
     sanitize_provider_prompts,
 )
+from app.files_intake.session_image_context import (
+    format_image_context_for_prompt,
+    get_last_image_context,
+    message_references_recent_image,
+    session_key_from_user,
+)
 from app.llm import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
@@ -170,8 +176,22 @@ def assemble_chat_generation_inputs(
         memory_used = True
 
     base_request = req.message
-    if memory_context:
+    image_context_block = ""
+    image_context_injected = False
+    if message_references_recent_image(req.message):
+        img_ctx = get_last_image_context(session_key_from_user(user))
+        if img_ctx:
+            image_context_block = format_image_context_for_prompt(img_ctx)
+            image_context_injected = True
+
+    if memory_context and image_context_block:
+        final_prompt = (
+            f"{memory_context}\n\n{image_context_block}\n\n── USER REQUEST ──\n{base_request}"
+        )
+    elif memory_context:
         final_prompt = f"{memory_context}\n\n── USER REQUEST ──\n{base_request}"
+    elif image_context_block:
+        final_prompt = f"{image_context_block}\n\n── USER REQUEST ──\n{base_request}"
     else:
         final_prompt = base_request
 
@@ -234,6 +254,7 @@ def assemble_chat_generation_inputs(
         "profile_contains_forced_french": profile_ff,
         "system_core_contains_forced_french": bool(prompt_contains_forced_french(base_system)),
         "provider_prompt_contains_forced_french": provider_prompt_contains_forced_french,
+        "image_context_injected": image_context_injected,
     }
 
 

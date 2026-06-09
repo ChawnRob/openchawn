@@ -18,6 +18,11 @@ from app.files_intake.image_analysis import (
     VisionUnavailableError,
     analyze_image_bytes,
 )
+from app.files_intake.session_image_context import (
+    build_last_image_context,
+    session_key_from_user,
+    set_last_image_context,
+)
 
 logger = logging.getLogger("openchawn.files_intake")
 
@@ -178,7 +183,6 @@ async def post_files_intake(
 
     Auth: same as POST /chat (guest session or Bearer).
     """
-    _ = user  # auth gate only — no per-user storage in V1
 
     if not file or not (file.filename or "").strip():
         raise _failure("upload_failed", "No file provided.", 400)
@@ -224,6 +228,15 @@ async def post_files_intake(
         except ImageAnalysisError as exc:
             raise _failure("analysis_failed", str(exc), 502) from exc
 
+        analysis_payload = analysis.to_payload()
+        image_ctx = build_last_image_context(
+            filename=filename,
+            mime_type=resolved_type,
+            description=analysis.description,
+            detected_elements=analysis.detected_elements,
+        )
+        set_last_image_context(session_key_from_user(user), image_ctx)
+
         return {
             "ok": True,
             "status": "analyzed",
@@ -232,7 +245,9 @@ async def post_files_intake(
             "size_bytes": len(payload),
             "content_type": resolved_type,
             "analysis_enabled": True,
-            "analysis": analysis.to_payload(),
+            "analysis": analysis_payload,
+            "media_id": image_ctx.media_id,
+            "last_image_context": image_ctx.to_dict(),
             "stored": False,
             "intake_version": INTAKE_VERSION,
             "failure_mode": None,
