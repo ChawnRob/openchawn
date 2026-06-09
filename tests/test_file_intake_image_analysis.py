@@ -39,37 +39,20 @@ def _mock_analysis(**overrides) -> ImageAnalysisResult:
 
 def test_analyze_image_bytes_parses_json_response():
     payload = PNG_MAGIC + b"\x00" * 32
-    fake_resp = type(
-        "R",
-        (),
-        {
-            "status_code": 200,
-            "ok": True,
-            "text": "",
-            "json": lambda self: {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "description": "Photo d'un chat sur un canapé.",
-                                    "detected_elements": ["chat", "canapé"],
-                                    "clarification_question": None,
-                                }
-                            )
-                        }
-                    }
-                ]
-            },
-        },
-    )()
+    mock_result = ImageAnalysisResult(
+        description="Photo d'un chat sur un canapé.",
+        detected_elements=["chat", "canapé"],
+        clarification_question=None,
+        provider="kimi",
+        model="moonshot-v1-8k-vision-preview",
+        raw_text="{}",
+        fallback_used=False,
+    )
 
-    with patch("app.files_intake.vision_providers.get_settings") as gs, patch(
-        "app.files_intake.vision_providers.requests.post", return_value=fake_resp
+    with patch("app.files_intake.image_analysis.vision_provider_configured", return_value=True), patch(
+        "app.files_intake.vision_providers.analyze_image_with_provider_routing",
+        return_value=mock_result,
     ):
-        gs.return_value.openai_api_key = "sk-test"
-        gs.return_value.openai_base_url = "https://api.openai.com/v1"
-        gs.return_value.openai_model = "gpt-4o-mini"
         result = analyze_image_bytes(
             payload=payload, content_type="image/png", filename="cat.png"
         )
@@ -135,16 +118,18 @@ def test_intake_image_analysis_failure_returns_502():
     assert r.json()["detail"]["failure_mode"] == "analysis_failed"
 
 
-def test_vision_provider_interface_defaults_to_openai():
+def test_vision_provider_interface_defaults_to_kimi():
     from app.files_intake.vision_providers import (
-        OpenAIVisionProvider,
+        KimiImageAnalysisProvider,
         get_vision_provider,
+        image_analysis_default_provider,
         resolve_vision_provider_id,
     )
 
-    assert resolve_vision_provider_id() == "openai"
+    assert image_analysis_default_provider() == "kimi"
+    assert resolve_vision_provider_id() == "kimi"
     provider = get_vision_provider()
-    assert isinstance(provider, OpenAIVisionProvider)
+    assert isinstance(provider, KimiImageAnalysisProvider)
 
 
 def test_local_slm_provider_not_implemented_yet():
