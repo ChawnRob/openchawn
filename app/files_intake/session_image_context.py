@@ -1,21 +1,43 @@
 """
-In-memory last image context per chat session (guest or authenticated).
+Last image context per chat session (guest or authenticated).
 
 Structured vision summary only — no durable file bytes.
+Persisted via Postgres/SQLite when available (Railway multi-replica safe).
 """
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from app.auth.guest import get_guest_last_image_context, set_guest_last_image_context
+from app.files_intake.image_context_persistence import (
+    clear_image_context_memory_cache,
+    clear_image_context_persistence,
+    load_image_context,
+    persist_image_context,
+)
+
+# Re-export for tests simulating multi-worker RAM isolation.
+__all__ = ["clear_image_context_memory_cache"]
+
+logger = logging.getLogger("openchawn.files_intake.image_context")
+
 _IMAGE_REF_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
         r"\b(image|photo|capture|screenshot|selfie)\b",
         r"\b(derni[eè]re|last|recent)\s+(image|photo|capture|fichier)\b",
+        r"\b(pr[eé]c[eé]dente?|previous)\s+(image|photo|capture)\b",
+        r"\b(image|photo)\s+(pr[eé]c[eé]dente?|envoy[eé]e?\s+pr[eé]c[eé]demment)\b",
+        r"\b(image|photo)\s+que\s+je\s+viens\s+d['']envoyer\b",
+        r"\b(celle|that)\s+(que\s+)?(j['']?ai\s+)?envoy[eé]e?\b",
+        r"\b(celle|that)\s+envoy[eé]e?\s+avant\b",
+        r"\bl['']?(image|photo)\s+pr[eé]c[eé]dente\b",
+        r"\bla\s+(image|photo)\s+pr[eé]c[eé]dente\b",
         r"\bfichier\s+joint\b",
         r"\battached\s+file\b",
         r"\b(file|photo)\s+(i\s+)?(just\s+)?(sent|uploaded|shared)\b",
@@ -27,8 +49,6 @@ _IMAGE_REF_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"\b(en\s+savoir\s+plus|more\s+about).{0,40}\b(image|photo|picture)\b",
     )
 )
-
-_store: dict[str, dict[str, Any]] = {}
 
 
 @dataclass(frozen=True)
@@ -58,6 +78,22 @@ def session_key_from_user(user: dict) -> str:
     if user.get("is_owner"):
         return f"owner:{user.get('ip', 'unknown')}"
     return f"anon:{user.get('ip', 'unknown')}"
+
+
+def context_key_for_log(context_key: str) -> str:
+    key = (context_key or "").strip()
+    if key.startswith("guest:"):
+        sid = key[6:]
+        if len(sid) > 12:
+            return f"guest:{sid[:12]}…"
+    return key
+
+
+def _guest_session_id_from_key(context_key: str) -> str | None:
+    if context_key.startswith("guest:"):
+        sid = context_key[6:].strip()
+        return sid or None
+    return None
 
 
 def _extract_text_hint(elements: list[str]) -> str | None:
@@ -90,21 +126,32 @@ def build_last_image_context(
     )
 
 
-def set_last_image_context(session_key: str, ctx: LastImageContext) -> None:
+def set_last_image_context(session_key: str, ctx: LastImageContext) -> str:
+    """Persist context; returns storage backend label."""
     if not session_key:
-        return
-    _store[session_key] = ctx.to_dict()
+        return "ram"
+    payload = ctx.to_dict()
+    backend = persist_image_context(session_key, payload)
+    guest_sid = _guest_session_id_from_key(session_key)
+    if guest_sid:
+        set_guest_last_image_context(guest_sid, payload)
+    return backend
 
 
 def get_last_image_context(session_key: str) -> LastImageContext | None:
-    raw = _store.get(session_key)
+    raw = load_image_context(session_key)
+    if not raw:
+        guest_sid = _guest_session_id_from_key(session_key)
+        if guest_sid:
+            raw = get_guest_last_image_context(guest_sid)
     if not raw:
         return None
     return LastImageContext(**raw)
 
 
 def clear_image_context_store() -> None:
-    _store.clear()
+    clear_image_context_memory_cache()
+    clear_image_context_persistence()
 
 
 def message_references_recent_image(message: str) -> bool:

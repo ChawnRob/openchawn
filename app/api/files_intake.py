@@ -20,6 +20,7 @@ from app.files_intake.image_analysis import (
 )
 from app.files_intake.session_image_context import (
     build_last_image_context,
+    context_key_for_log,
     session_key_from_user,
     set_last_image_context,
 )
@@ -235,7 +236,15 @@ async def post_files_intake(
             description=analysis.description,
             detected_elements=analysis.detected_elements,
         )
-        set_last_image_context(session_key_from_user(user), image_ctx)
+        context_key = session_key_from_user(user)
+        storage_backend = set_last_image_context(context_key, image_ctx)
+        logger.info(
+            "file_intake image_context stored | context_key=%s | media_id=%s | "
+            "has_last_image_context=true | storage=%s",
+            context_key_for_log(context_key),
+            image_ctx.media_id,
+            storage_backend,
+        )
 
         return {
             "ok": True,

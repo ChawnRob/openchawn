@@ -28,6 +28,7 @@ from app.core.runtime_language_guard import (
     sanitize_provider_prompts,
 )
 from app.files_intake.session_image_context import (
+    context_key_for_log,
     format_image_context_for_prompt,
     get_last_image_context,
     message_references_recent_image,
@@ -178,11 +179,22 @@ def assemble_chat_generation_inputs(
     base_request = req.message
     image_context_block = ""
     image_context_injected = False
-    if message_references_recent_image(req.message):
-        img_ctx = get_last_image_context(session_key_from_user(user))
+    context_key = session_key_from_user(user)
+    user_message_references_image = message_references_recent_image(req.message)
+    img_ctx = None
+    if user_message_references_image:
+        img_ctx = get_last_image_context(context_key)
         if img_ctx:
             image_context_block = format_image_context_for_prompt(img_ctx)
             image_context_injected = True
+    logger.info(
+        "chat image_context lookup | context_key=%s | user_message_references_image=%s | "
+        "has_last_image_context=%s | injected=%s",
+        context_key_for_log(context_key),
+        user_message_references_image,
+        img_ctx is not None,
+        image_context_injected,
+    )
 
     if memory_context and image_context_block:
         final_prompt = (

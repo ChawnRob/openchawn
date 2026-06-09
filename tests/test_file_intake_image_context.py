@@ -10,8 +10,11 @@ from fastapi.testclient import TestClient
 from app.api.chat import ChatRequest, assemble_chat_generation_inputs
 from app.files_intake.image_analysis import ImageAnalysisResult
 from app.files_intake.session_image_context import (
+    build_last_image_context,
+    clear_image_context_memory_cache,
     clear_image_context_store,
     message_references_recent_image,
+    session_key_from_user,
 )
 from app.main import app
 from tests.test_files_intake import (
@@ -45,7 +48,70 @@ def test_message_references_recent_image_patterns():
     assert message_references_recent_image("Peux-tu m'en dire plus sur la dernière image ?")
     assert message_references_recent_image("Analyse la photo que je viens d'envoyer")
     assert message_references_recent_image("Tell me more about the last image")
+    assert message_references_recent_image("peux-tu analyser l'image envoyée précédemment ?")
+    assert message_references_recent_image("la photo précédente")
+    assert message_references_recent_image("celle que j'ai envoyée")
     assert not message_references_recent_image("Bonjour, comment ça va ?")
+
+
+def test_upload_then_analyse_image_envoyee_precedemment_injects_context():
+    clear_image_context_store()
+    _reset_guest()
+    client = TestClient(app)
+    headers = _guest_headers(client)
+    data = PNG_MAGIC + b"\x00" * 32
+
+    with patch(
+        "app.api.files_intake.analyze_image_bytes",
+        return_value=_MOCK_ANALYSIS_A,
+    ):
+        intake = _post_intake(client, headers, "form.png", data, "image/png")
+    assert intake.status_code == 200
+    body = intake.json()
+
+    guest_user = {
+        "is_guest": True,
+        "guest_session_id": headers["X-Guest-Session"],
+        "ip": "testclient",
+    }
+    req = ChatRequest(message="peux-tu analyser l'image envoyée précédemment ?")
+    bundle = assemble_chat_generation_inputs(
+        req, user=guest_user, persist_memory_side_effects=False
+    )
+
+    assert bundle["image_context_injected"] is True
+    assert "LAST IMAGE CONTEXT" in bundle["user_message"]
+    assert _MOCK_ANALYSIS_A.description in bundle["user_message"]
+    assert body["media_id"] in bundle["user_message"]
+
+
+def test_image_context_survives_memory_cache_clear():
+    """Simulates a different Railway worker: RAM empty, durable store still has context."""
+    clear_image_context_store()
+    ctx = build_last_image_context(
+        filename="x.png",
+        mime_type="image/png",
+        description="Test persistance.",
+        detected_elements=["bouton"],
+    )
+    key = "guest:worker_sim_session"
+    from app.files_intake.session_image_context import set_last_image_context
+
+    set_last_image_context(key, ctx)
+    clear_image_context_memory_cache()
+
+    from app.files_intake.session_image_context import get_last_image_context
+
+    loaded = get_last_image_context(key)
+    assert loaded is not None
+    assert loaded.media_id == ctx.media_id
+    assert loaded.description == "Test persistance."
+
+
+def test_intake_and_chat_use_same_context_key():
+    clear_image_context_store()
+    guest_user = {"is_guest": True, "guest_session_id": "guest_same_key_1", "ip": "10.0.0.1"}
+    assert session_key_from_user(guest_user) == "guest:guest_same_key_1"
 
 
 def test_upload_then_followup_chat_injects_image_context():
