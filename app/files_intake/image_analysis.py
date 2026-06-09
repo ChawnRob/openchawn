@@ -1,7 +1,8 @@
 """
 Image analysis V1 for COCO file intake.
 
-Routes analysis through a pluggable vision provider (OpenAI by default).
+Routes analysis through progressive vision providers (kimi default, openai fallback).
+Image generation is never used for analysis.
 No disk persistence.
 """
 from __future__ import annotations
@@ -9,12 +10,9 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass
 from typing import Any
-
-from app.settings import get_settings
 
 logger = logging.getLogger("openchawn.files_intake.vision")
 
@@ -46,6 +44,7 @@ class ImageAnalysisResult:
     provider: str
     model: str
     raw_text: str
+    fallback_used: bool = False
 
     def to_message(self) -> str:
         lines = [f"Description : {self.description}"]
@@ -62,22 +61,17 @@ class ImageAnalysisResult:
             "clarification_question": self.clarification_question,
             "provider": self.provider,
             "model": self.model,
+            "provider_used": self.provider,
+            "model_used": self.model,
+            "fallback_used": self.fallback_used,
             "analysis_version": ANALYSIS_VERSION,
         }
 
 
 def vision_provider_configured() -> bool:
-    from app.files_intake.vision_providers import get_vision_provider
+    from app.files_intake.vision_providers import any_image_analysis_provider_configured
 
-    return get_vision_provider().is_configured()
-
-
-def _vision_model() -> str:
-    explicit = (os.getenv("FILE_INTAKE_VISION_MODEL") or "").strip()
-    if explicit:
-        return explicit
-    s = get_settings()
-    return (s.openai_model or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    return any_image_analysis_provider_configured()
 
 
 def _data_url(content_type: str, payload: bytes) -> str:
@@ -129,24 +123,35 @@ def _normalize_result(data: dict[str, Any], *, provider: str, model: str, raw_te
         provider=provider,
         model=model,
         raw_text=raw_text,
+        fallback_used=False,
     )
 
 
-def analyze_image_bytes(*, payload: bytes, content_type: str, filename: str) -> ImageAnalysisResult:
+def analyze_image_bytes(
+    *,
+    payload: bytes,
+    content_type: str,
+    filename: str,
+    accuracy_level: str = "standard",
+) -> ImageAnalysisResult:
     """
-    Run vision analysis on in-memory image bytes via the configured provider.
+    Run vision analysis on in-memory image bytes via progressive provider routing.
 
-    Raises VisionUnavailableError if provider is not configured.
-    Raises ImageAnalysisError on provider/parse failures.
+    Raises VisionUnavailableError if no provider is configured.
+    Raises ImageAnalysisError on provider/parse failures after all retries.
     """
     if content_type not in IMAGE_MIME_TYPES:
         raise ImageAnalysisError(f"Type non supporté pour l'analyse image : {content_type}")
 
-    from app.files_intake.vision_providers import get_vision_provider
+    from app.files_intake.vision_providers import analyze_image_with_provider_routing
 
-    provider = get_vision_provider()
-    if not provider.is_configured():
+    if not vision_provider_configured():
         raise VisionUnavailableError(
-            "Analyse image indisponible : provider vision non configuré sur le serveur."
+            "Analyse image indisponible : aucun provider d'analyse image configuré sur le serveur."
         )
-    return provider.analyze_image(payload=payload, content_type=content_type, filename=filename)
+    return analyze_image_with_provider_routing(
+        payload=payload,
+        content_type=content_type,
+        filename=filename,
+        accuracy_level=accuracy_level,
+    )

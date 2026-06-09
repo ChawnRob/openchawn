@@ -172,6 +172,13 @@ class Settings:
     kimi_timeout: float
     kimi_max_tokens: int
 
+    image_analysis_provider_order: str
+    image_analysis_default_provider: str
+    image_analysis_fallback_provider: str
+    image_generation_provider: str
+    image_analysis_kimi_model: str
+    image_analysis_openai_model: str
+
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -307,6 +314,32 @@ def _build_settings() -> Settings:
         kimi_temperature=float(_str("KIMI_TEMPERATURE", default="0.6")),
         kimi_timeout=float(_str("KIMI_TIMEOUT", default="120")),
         kimi_max_tokens=_int("KIMI_MAX_TOKENS", 2048),
+        image_analysis_provider_order=_str(
+            "IMAGE_ANALYSIS_PROVIDER_ORDER",
+            default="local,kimi,openai",
+        ),
+        image_analysis_default_provider=_str(
+            "IMAGE_ANALYSIS_DEFAULT_PROVIDER",
+            default="kimi",
+        ),
+        image_analysis_fallback_provider=_str(
+            "IMAGE_ANALYSIS_FALLBACK_PROVIDER",
+            default="openai",
+        ),
+        image_generation_provider=_str(
+            "IMAGE_GENERATION_PROVIDER",
+            default="openai",
+        ),
+        image_analysis_kimi_model=_str(
+            "IMAGE_ANALYSIS_KIMI_MODEL",
+            "KIMI_VISION_MODEL",
+            default="moonshot-v1-8k-vision-preview",
+        ),
+        image_analysis_openai_model=_str(
+            "IMAGE_ANALYSIS_OPENAI_MODEL",
+            "FILE_INTAKE_VISION_MODEL",
+            default="",
+        ),
     )
 
 

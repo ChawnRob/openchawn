@@ -224,6 +224,7 @@ async def post_files_intake(
         except ImageAnalysisError as exc:
             raise _failure("analysis_failed", str(exc), 502) from exc
 
+        analysis_payload = analysis.to_payload()
         return {
             "ok": True,
             "status": "analyzed",
@@ -232,7 +233,10 @@ async def post_files_intake(
             "size_bytes": len(payload),
             "content_type": resolved_type,
             "analysis_enabled": True,
-            "analysis": analysis.to_payload(),
+            "analysis": analysis_payload,
+            "provider_used": analysis.provider,
+            "model_used": analysis.model,
+            "fallback_used": analysis.fallback_used,
             "stored": False,
             "intake_version": INTAKE_VERSION,
             "failure_mode": None,
