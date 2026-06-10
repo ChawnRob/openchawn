@@ -12,6 +12,7 @@ from app.files_intake.image_analysis import (
     ImageAnalysisError,
     ImageAnalysisResult,
     VisionUnavailableError,
+    _normalize_result,
     analyze_image_bytes,
 )
 from app.main import app
@@ -139,6 +140,28 @@ def test_local_slm_provider_not_implemented_yet():
         provider = get_vision_provider()
         assert provider.provider_id == "slm"
         assert provider.is_configured() is False
+
+
+def test_normalize_result_enriches_packaging_and_safety_fields():
+    result = _normalize_result(
+        {
+            "description": "Boîte en carton avec pictogrammes.",
+            "detected_elements": ["carton", "logo"],
+            "visible_text": ["Glass cupping", "Chinese cupping set"],
+            "probable_subject": "Kit de ventouses en verre (cupping thérapeutique)",
+            "likely_use": "Thérapie par ventouses à usage domestique ou professionnel",
+            "safety_notes": "Ne pas utiliser sans formation ; risque de brûlure si mal employé.",
+            "uncertainties": "Usage médical exact non confirmé sur la photo.",
+            "clarification_question": None,
+        },
+        provider="kimi",
+        model="moonshot-v1-8k-vision-preview",
+        raw_text="{}",
+    )
+    assert "ventouses" in result.description.lower()
+    assert any("Glass cupping" in e for e in result.detected_elements)
+    assert any("prudence" in e for e in result.detected_elements)
+    assert any("incertitudes" in e for e in result.detected_elements)
 
 
 def test_intake_txt_skips_vision_analysis():

@@ -128,6 +128,25 @@ def test_auto_open_crop_after_mobile_image_selection():
     assert "ocPositionCropCenterOverlay" in crop_open
 
 
+def test_interactive_crop_supports_touch_and_pinch():
+    html = _html()
+    assert "function ocInitInteractiveCrop" in html
+    assert "function ocCropImageFromInteractiveState" in html
+    assert "touchmove" in html.split("function ocBindCropTouchHandlers")[1].split("function ocInitInteractiveCrop")[0]
+    assert "cropInteractive: true" in html
+    assert "Glissez l’image au doigt ou pincez pour zoomer" in html
+
+
+def test_image_pipeline_status_visible_during_send():
+    html = _html()
+    assert "function ocSetImagePipelineStatus" in html
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "Image reçue…" in send_fn
+    assert "Analyse visuelle en cours…" in send_fn
+    assert "COCO prépare la réponse…" in send_fn
+    assert "ocFriendlyVisionErrorMessage" in send_fn
+
+
 def test_describe_previous_image_still_uses_last_image_context():
     from app.files_intake.session_image_context import message_references_recent_image
 
@@ -137,7 +156,8 @@ def test_describe_previous_image_still_uses_last_image_context():
 def test_crop_does_not_upload_until_message_send():
     html = _html()
     confirm_handler = html.split("ocBindFileIntakeTap(btnCropConfirm")[1].split("ocBindFileIntakeTap(btnCropCancel")[0]
-    assert "ocSendFileIntakeDraft({ cropCenter: true })" in confirm_handler
+    assert "cropCenter: true" in confirm_handler
+    assert "cropInteractive: true" in confirm_handler
     draft_fn = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
     assert "ocAttachImageToComposer" in draft_fn
     upload_fn = html.split("async function ocUploadPendingImageAttachment")[1].split("async function ocSubmitFileIntake")[0]

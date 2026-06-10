@@ -21,11 +21,20 @@ IMAGE_MIME_TYPES = frozenset({"image/png", "image/jpeg", "image/webp"})
 
 _SYSTEM_PROMPT = """You analyze a single user-uploaded image for OpenChawn COCO file intake V1.
 Respond with ONE JSON object only (no markdown), keys:
-- description (string): concise plain-language description of the image
-- detected_elements (array of strings): notable objects, text, UI, people, documents, labels
-- clarification_question (string or null): one short follow-up question if something important is unclear; otherwise null
+- description (string): rich plain-language summary (subject, context, packaging if any)
+- detected_elements (array of strings): objects, UI, brands, categories, short text snippets
+- visible_text (array of strings): legible text transcribed from labels, boxes, screens (empty if none)
+- probable_subject (string): what the scene/product most likely is (use packaging text when present)
+- likely_use (string or null): probable intended use in everyday terms
+- safety_notes (string or null): cautious notes for health/wellness/medical-looking items — no diagnosis or strong medical promises
+- uncertainties (string or null): what remains ambiguous
+- clarification_question (string or null): one short follow-up if important; otherwise null
 
-Be factual. Do not invent unreadable text. Prefer French for description and questions when the UI is French."""
+Rules:
+- Read and exploit visible text on packaging, boxes, and labels before guessing from generic shapes.
+- If text says cupping, ventouses, glass cups for therapy, etc., do NOT describe as disposable plastic drink cups.
+- Be factual. Do not invent unreadable text.
+- Prefer French for description and questions when the UI is French."""
 
 
 class VisionUnavailableError(RuntimeError):
@@ -116,9 +125,38 @@ def _normalize_result(data: dict[str, Any], *, provider: str, model: str, raw_te
     clar_raw = data.get("clarification_question")
     clarification = str(clar_raw).strip() if clar_raw not in (None, "") else None
 
+    visible_text: list[str] = []
+    vt_raw = data.get("visible_text") or []
+    if isinstance(vt_raw, list):
+        for item in vt_raw:
+            s = str(item or "").strip()
+            if s:
+                visible_text.append(s)
+
+    probable_subject = str(data.get("probable_subject") or "").strip()
+    likely_use = str(data.get("likely_use") or "").strip() or None
+    safety_notes = str(data.get("safety_notes") or "").strip() or None
+    uncertainties = str(data.get("uncertainties") or "").strip() or None
+
+    enriched_elements = list(detected)
+    if visible_text:
+        enriched_elements.append("texte visible : " + "; ".join(visible_text[:6]))
+    if probable_subject and probable_subject not in description:
+        enriched_elements.append("sujet probable : " + probable_subject)
+    if likely_use:
+        enriched_elements.append("usage probable : " + likely_use)
+    if safety_notes:
+        enriched_elements.append("prudence : " + safety_notes)
+    if uncertainties:
+        enriched_elements.append("incertitudes : " + uncertainties)
+
+    rich_description = description
+    if probable_subject and probable_subject.lower() not in rich_description.lower():
+        rich_description = f"{probable_subject}. {rich_description}"
+
     return ImageAnalysisResult(
-        description=description,
-        detected_elements=detected,
+        description=rich_description,
+        detected_elements=enriched_elements,
         clarification_question=clarification,
         provider=provider,
         model=model,

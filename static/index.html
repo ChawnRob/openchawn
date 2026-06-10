@@ -2446,13 +2446,49 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
 }
 .oc-file-intake-crop-overlay {
   position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   border: 2px solid rgba(56, 221, 245, 0.95);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
   pointer-events: none;
+  z-index: 2;
 }
 .oc-file-intake-crop-stage {
   position: relative;
   margin: 12px 16px 0;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.oc-file-intake-crop-stage.is-crop-dragging {
+  cursor: grabbing;
+}
+.oc-file-intake-crop-stage .oc-crop-interactive-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  transform-origin: center center;
+  will-change: transform;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.msg.oc-image-pipeline-status {
+  opacity: 0.94;
+  border-style: dashed;
+  font-style: normal;
+  font-size: 14px;
+}
+.msg.oc-image-pipeline-status .msg-body {
+  color: var(--deep-blue);
+}
+.msg.oc-image-pipeline-status.is-error .msg-body {
+  color: var(--error-soft);
 }
 html.is-mobile-file-intake-open,
 body.is-mobile-file-intake-open {
@@ -3452,7 +3488,7 @@ html.ux-legacy .coco-companion-presence {
           <img id="ocFileIntakeCropImg" alt="">
           <div class="oc-file-intake-crop-overlay hidden" id="ocFileIntakeCropOverlay"></div>
         </div>
-        <p class="oc-file-intake-crop-hint">Ajustez la zone centrale, puis validez pour joindre au message.</p>
+        <p class="oc-file-intake-crop-hint">Glissez l’image au doigt ou pincez pour zoomer, puis validez.</p>
       </div>
       <footer class="oc-file-intake-crop-actions" id="ocFileIntakeCropFooter">
         <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Valider</button>
@@ -4335,6 +4371,167 @@ function ocShouldAutoOpenMobileImageCrop(file, source) {
   return source === 'camera' || source === 'gallery' || source === 'file';
 }
 
+let ocCropInteractiveState = null;
+let ocCropTouchBound = false;
+
+function ocResetCropInteractiveState() {
+  ocCropInteractiveState = null;
+  const img = document.getElementById('ocFileIntakeCropImg');
+  if (img) {
+    img.classList.remove('oc-crop-interactive-img');
+    img.style.width = '';
+    img.style.height = '';
+    img.style.transform = '';
+  }
+}
+
+function ocClampCropPan() {
+  const st = ocCropInteractiveState;
+  if (!st) return;
+  const dw = st.nw * st.baseScale * st.zoom;
+  const dh = st.nh * st.baseScale * st.zoom;
+  const halfCrop = st.cropSide / 2;
+  const maxPanX = Math.max(0, dw / 2 - halfCrop);
+  const maxPanY = Math.max(0, dh / 2 - halfCrop);
+  st.panX = Math.max(-maxPanX, Math.min(maxPanX, st.panX));
+  st.panY = Math.max(-maxPanY, Math.min(maxPanY, st.panY));
+}
+
+function ocApplyCropTransform(img) {
+  const st = ocCropInteractiveState;
+  if (!st || !img) return;
+  const dw = st.nw * st.baseScale * st.zoom;
+  const dh = st.nh * st.baseScale * st.zoom;
+  img.style.width = dw + 'px';
+  img.style.height = dh + 'px';
+  img.style.transform =
+    'translate(calc(-50% + ' + st.panX + 'px), calc(-50% + ' + st.panY + 'px))';
+}
+
+function ocBindCropTouchHandlers(stage, img) {
+  if (!stage || !img || ocCropTouchBound) return;
+  ocCropTouchBound = true;
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+
+  function onPan(dx, dy) {
+    if (!ocCropInteractiveState) return;
+    ocCropInteractiveState.panX += dx;
+    ocCropInteractiveState.panY += dy;
+    ocClampCropPan();
+    ocApplyCropTransform(img);
+  }
+
+  stage.addEventListener(
+    'touchstart',
+    function (ev) {
+      if (!ocCropInteractiveState) return;
+      if (ev.touches.length === 1) {
+        dragging = true;
+        lastX = ev.touches[0].clientX;
+        lastY = ev.touches[0].clientY;
+        stage.classList.add('is-crop-dragging');
+      } else if (ev.touches.length === 2) {
+        dragging = false;
+        const dx = ev.touches[0].clientX - ev.touches[1].clientX;
+        const dy = ev.touches[0].clientY - ev.touches[1].clientY;
+        pinchStartDist = Math.hypot(dx, dy);
+        pinchStartZoom = ocCropInteractiveState.zoom;
+      }
+    },
+    { passive: true }
+  );
+
+  stage.addEventListener(
+    'touchmove',
+    function (ev) {
+      if (!ocCropInteractiveState) return;
+      if (ev.touches.length === 1 && dragging) {
+        ev.preventDefault();
+        const dx = ev.touches[0].clientX - lastX;
+        const dy = ev.touches[0].clientY - lastY;
+        lastX = ev.touches[0].clientX;
+        lastY = ev.touches[0].clientY;
+        onPan(dx, dy);
+      } else if (ev.touches.length === 2 && pinchStartDist > 0) {
+        ev.preventDefault();
+        const dx = ev.touches[0].clientX - ev.touches[1].clientX;
+        const dy = ev.touches[0].clientY - ev.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const ratio = dist / pinchStartDist;
+        ocCropInteractiveState.zoom = Math.min(3, Math.max(1, pinchStartZoom * ratio));
+        ocClampCropPan();
+        ocApplyCropTransform(img);
+      }
+    },
+    { passive: false }
+  );
+
+  stage.addEventListener(
+    'touchend',
+    function () {
+      dragging = false;
+      pinchStartDist = 0;
+      stage.classList.remove('is-crop-dragging');
+    },
+    { passive: true }
+  );
+
+  stage.addEventListener('mousedown', function (ev) {
+    if (!ocCropInteractiveState || ev.button !== 0) return;
+    dragging = true;
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    stage.classList.add('is-crop-dragging');
+    ev.preventDefault();
+  });
+
+  window.addEventListener('mousemove', function (ev) {
+    if (!dragging || !ocCropInteractiveState) return;
+    onPan(ev.clientX - lastX, ev.clientY - lastY);
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+  });
+
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('is-crop-dragging');
+  });
+}
+
+function ocInitInteractiveCrop(img, stage, overlay) {
+  const nw = img.naturalWidth || img.width;
+  const nh = img.naturalHeight || img.height;
+  if (!nw || !nh) return;
+  const sr = stage.getBoundingClientRect();
+  const stageW = Math.max(1, sr.width);
+  const stageH = Math.max(1, sr.height);
+  const baseScale = Math.min(stageW / nw, stageH / nh);
+  const cropSide = Math.min(stageW, stageH) * 0.78;
+
+  ocCropInteractiveState = {
+    nw: nw,
+    nh: nh,
+    stageW: stageW,
+    stageH: stageH,
+    baseScale: baseScale,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    cropSide: cropSide,
+  };
+
+  img.classList.add('oc-crop-interactive-img');
+  overlay.classList.remove('hidden');
+  overlay.style.width = cropSide + 'px';
+  overlay.style.height = cropSide + 'px';
+  ocApplyCropTransform(img);
+  ocBindCropTouchHandlers(stage, img);
+}
+
 function ocPositionCropCenterOverlay() {
   const img = document.getElementById('ocFileIntakeCropImg');
   const overlay = document.getElementById('ocFileIntakeCropOverlay');
@@ -4342,6 +4539,11 @@ function ocPositionCropCenterOverlay() {
   if (!img || !overlay || !stage) return;
 
   function layout() {
+    ocResetCropInteractiveState();
+    if (ocFileIntakeIsMobileUi()) {
+      ocInitInteractiveCrop(img, stage, overlay);
+      return;
+    }
     const nw = img.naturalWidth || img.width;
     const nh = img.naturalHeight || img.height;
     if (!nw || !nh) return;
@@ -4350,11 +4552,7 @@ function ocPositionCropCenterOverlay() {
     const scale = Math.min(ir.width / nw, ir.height / nh);
     const dw = nw * scale;
     const dh = nh * scale;
-    const dx = ir.left - sr.left + (ir.width - dw) / 2;
-    const dy = ir.top - sr.top + (ir.height - dh) / 2;
     const side = Math.min(dw, dh);
-    overlay.style.left = (dx + (dw - side) / 2) + 'px';
-    overlay.style.top = (dy + (dh - side) / 2) + 'px';
     overlay.style.width = side + 'px';
     overlay.style.height = side + 'px';
     overlay.classList.remove('hidden');
@@ -4462,6 +4660,7 @@ function ocCloseFileIntakeCropModal() {
   const modal = document.getElementById('ocFileIntakeCropModal');
   modal?.classList.add('hidden');
   modal?.setAttribute('aria-hidden', 'true');
+  ocResetCropInteractiveState();
   const preview = document.getElementById('ocFileIntakeMobilePreview');
   if (!preview || preview.classList.contains('hidden')) {
     ocSetMobileFileIntakeOpen(false);
@@ -4558,17 +4757,17 @@ function ocLoadImageFromFile(file) {
   });
 }
 
-function ocCropImageCenterSquare(file) {
+function ocCropImageToFile(file, sx, sy, size) {
   return ocLoadImageFromFile(file).then(function (img) {
-    const size = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
-    const sx = ((img.naturalWidth || img.width) - size) / 2;
-    const sy = ((img.naturalHeight || img.height) - size) / 2;
+    const nw = img.naturalWidth || img.width;
+    const nh = img.naturalHeight || img.height;
+    const side = Math.max(1, Math.min(size, nw - sx, nh - sy));
     const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = side;
+    canvas.height = side;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Recadrage indisponible sur ce navigateur.');
-    ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, side, side);
     return new Promise(function (resolve, reject) {
       const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
       canvas.toBlob(function (blob) {
@@ -4577,10 +4776,39 @@ function ocCropImageCenterSquare(file) {
           return;
         }
         const base = (file.name || 'photo').replace(/\.[^.]+$/, '');
-        resolve(new File([blob], base + (outType === 'image/png' ? '.png' : '.jpg'), { type: outType }));
+        resolve(
+          new File([blob], base + (outType === 'image/png' ? '.png' : '.jpg'), { type: outType })
+        );
       }, outType, 0.92);
     });
   });
+}
+
+function ocCropImageCenterSquare(file) {
+  return ocLoadImageFromFile(file).then(function (img) {
+    const nw = img.naturalWidth || img.width;
+    const nh = img.naturalHeight || img.height;
+    const size = Math.min(nw, nh);
+    const sx = (nw - size) / 2;
+    const sy = (nh - size) / 2;
+    return ocCropImageToFile(file, sx, sy, size);
+  });
+}
+
+function ocCropImageFromInteractiveState(file) {
+  const st = ocCropInteractiveState;
+  if (!st) return ocCropImageCenterSquare(file);
+  const dw = st.nw * st.baseScale * st.zoom;
+  const dh = st.nh * st.baseScale * st.zoom;
+  const imgLeft = st.stageW / 2 - dw / 2 + st.panX;
+  const imgTop = st.stageH / 2 - dh / 2 + st.panY;
+  const cropLeft = st.stageW / 2 - st.cropSide / 2;
+  const cropTop = st.stageH / 2 - st.cropSide / 2;
+  const scaleNatural = st.nw / dw;
+  const sx = Math.max(0, Math.min(st.nw - 1, (cropLeft - imgLeft) * scaleNatural));
+  const sy = Math.max(0, Math.min(st.nh - 1, (cropTop - imgTop) * scaleNatural));
+  const size = Math.max(1, Math.min(st.cropSide * scaleNatural, st.nw - sx, st.nh - sy));
+  return ocCropImageToFile(file, sx, sy, size);
 }
 
 function ocUpdateFileIntakeDraftFile(file) {
@@ -4663,8 +4891,13 @@ async function ocAttachImageToComposer(opts) {
 
   if (options.cropCenter && ocIsImageIntakeFile(file)) {
     try {
-      file = await ocCropImageCenterSquare(file);
-      cropData = { mode: 'center_square' };
+      if (options.cropInteractive && ocCropInteractiveState) {
+        file = await ocCropImageFromInteractiveState(file);
+        cropData = { mode: 'interactive_square' };
+      } else {
+        file = await ocCropImageCenterSquare(file);
+        cropData = { mode: 'center_square' };
+      }
     } catch (err) {
       console.warn('[COCO] crop failed, using original image', { crop_failed_fallback_original: true }, err);
       ocSetFileIntakeMobileStatus('Recadrage indisponible — image originale conservée.', '');
@@ -5061,7 +5294,7 @@ async function copyAssistantPlain() {
     ocClearFileIntakeDraft();
   });
   ocBindFileIntakeTap(btnCropConfirm, function () {
-    ocSendFileIntakeDraft({ cropCenter: true });
+    ocSendFileIntakeDraft({ cropCenter: true, cropInteractive: true });
   });
   ocBindFileIntakeTap(btnCropCancel, function () {
     ocCloseFileIntakeCropModal();
@@ -5875,6 +6108,49 @@ function addMsg(role, text, meta) {
   scrollDown();
 }
 
+let ocImagePipelineStatusEl = null;
+
+function ocSetImagePipelineStatus(text, kind) {
+  if (!text) {
+    if (ocImagePipelineStatusEl) {
+      ocImagePipelineStatusEl.remove();
+      ocImagePipelineStatusEl = null;
+    }
+    return;
+  }
+  if (!ocImagePipelineStatusEl) {
+    const div = document.createElement('div');
+    div.className = 'msg assistant oc-image-pipeline-status';
+    div.id = 'ocImagePipelineStatus';
+    div.setAttribute('role', 'status');
+    div.setAttribute('aria-live', 'polite');
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    div.appendChild(body);
+    dom.messages.insertBefore(div, dom.typing);
+    ocImagePipelineStatusEl = div;
+  }
+  ocImagePipelineStatusEl.classList.toggle('is-error', kind === 'error');
+  const body = ocImagePipelineStatusEl.querySelector('.msg-body');
+  if (body) body.textContent = text;
+  scrollDown();
+}
+
+function ocFriendlyVisionErrorMessage(err) {
+  const raw = String((err && err.message) || err || '');
+  const low = raw.toLowerCase();
+  if (low.indexOf('timeout') !== -1 || low.indexOf('timed out') !== -1) {
+    return 'Analyse visuelle interrompue (délai dépassé). Réessayez avec une image plus légère.';
+  }
+  if (low.indexOf('vision') !== -1 || low.indexOf('indisponible') !== -1 || low.indexOf('503') !== -1) {
+    return 'Analyse visuelle indisponible pour le moment. Réessayez dans un instant.';
+  }
+  if (low.indexOf('502') !== -1 || low.indexOf('analysis') !== -1) {
+    return 'Échec de l’analyse visuelle. Vérifiez la connexion et réessayez.';
+  }
+  return raw || 'Échec du traitement de l’image.';
+}
+
 // ── Send ─────────────────────────────────────────────
 async function send() {
   const text = dom.input.value.trim();
@@ -5893,8 +6169,10 @@ async function send() {
     attachmentName = pendingImageAttachment.filename || 'image';
     dom.typing.classList.add('visible');
     ocSetCocoState('thinking', 'Analyse de l’image');
+    ocSetImagePipelineStatus('Image reçue…');
     scrollDown();
     try {
+      ocSetImagePipelineStatus('Analyse visuelle en cours…');
       const intake = await ocUploadPendingImageAttachment();
       mediaId = (intake && intake.media_id) || pendingImageAttachment.media_id || null;
       if (!chatMessage) {
@@ -5903,9 +6181,11 @@ async function send() {
       userDisplay = text
         ? text + '\n[Image : ' + attachmentName + ']'
         : '[Image : ' + attachmentName + '] — ' + chatMessage;
+      ocSetImagePipelineStatus('COCO prépare la réponse…');
       ocSetCocoState('thinking', 'Thinking');
     } catch (err) {
-      var fmsg = String(err && err.message ? err.message : err || '');
+      var fmsg = ocFriendlyVisionErrorMessage(err);
+      ocSetImagePipelineStatus(fmsg, 'error');
       addMsg('error', 'FILE INTAKE FAILED — ' + fmsg);
       ocSetCocoState('retry', 'Retry available');
       dom.typing.classList.remove('visible');
@@ -5946,6 +6226,7 @@ async function send() {
     lastAssistantPlain = clean;
     refreshExportButtons();
     ocSetCocoState('ready', 'Ready');
+    ocSetImagePipelineStatus(null);
 
     // provider gardé en console pour debug, pas affiché
     if (d.provider) console.log('[OpenChawn] provider:', d.provider);
@@ -5953,11 +6234,15 @@ async function send() {
     ocSyncSysBarAfterChat(d);
 
   } catch (err) {
+    if (hasAttachment) {
+      ocSetImagePipelineStatus(ocFriendlyVisionErrorMessage(err), 'error');
+    }
     addMsg('error', 'TRANSMISSION FAILED — ' + err.message);
     ocSetCocoState('retry', 'Retry available');
   } finally {
     if (hasAttachment) {
       ocClearPendingImageAttachment();
+      ocSetImagePipelineStatus(null);
     }
     dom.typing.classList.remove('visible');
     sending = false;
