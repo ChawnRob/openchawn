@@ -18,6 +18,12 @@ from app.files_intake.image_analysis import (
     VisionUnavailableError,
     analyze_image_bytes,
 )
+from app.files_intake.session_image_context import (
+    build_last_image_context,
+    context_key_for_log,
+    session_key_from_user,
+    set_last_image_context,
+)
 
 logger = logging.getLogger("openchawn.files_intake")
 
@@ -225,6 +231,22 @@ async def post_files_intake(
             raise _failure("analysis_failed", str(exc), 502) from exc
 
         analysis_payload = analysis.to_payload()
+        image_ctx = build_last_image_context(
+            filename=filename,
+            mime_type=resolved_type,
+            description=analysis.description,
+            detected_elements=analysis.detected_elements,
+        )
+        context_key = session_key_from_user(user)
+        storage_backend = set_last_image_context(context_key, image_ctx)
+        logger.info(
+            "file_intake image_context stored | file_intake_session_key=%s | media_id_created=%s | "
+            "has_last_image_context=true | storage=%s",
+            context_key_for_log(context_key),
+            image_ctx.media_id,
+            storage_backend,
+        )
+
         return {
             "ok": True,
             "status": "analyzed",
@@ -237,6 +259,8 @@ async def post_files_intake(
             "provider_used": analysis.provider,
             "model_used": analysis.model,
             "fallback_used": analysis.fallback_used,
+            "media_id": image_ctx.media_id,
+            "last_image_context": image_ctx.to_dict(),
             "stored": False,
             "intake_version": INTAKE_VERSION,
             "failure_mode": None,

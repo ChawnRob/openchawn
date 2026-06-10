@@ -2148,6 +2148,51 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   gap: 10px;
 }
 .oc-file-intake-preview.hidden { display: none; }
+.oc-composer-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+}
+.oc-composer-attachment.hidden {
+  display: none !important;
+}
+.oc-composer-attachment-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.06);
+}
+.oc-composer-attachment-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.oc-composer-attachment-name {
+  flex: 1;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-composer-attachment-clear {
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: inherit;
+  opacity: 0.75;
+}
 .oc-file-intake-crop-note {
   margin: 0;
   font-family: var(--font-tech);
@@ -3244,7 +3289,7 @@ html.ux-legacy .coco-companion-presence {
       </div>
       <p class="oc-file-intake-crop-note" id="ocFileIntakeCropNote">Recadrage avancé bientôt</p>
       <div class="oc-file-intake-preview-actions">
-        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeSend">Envoyer</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeSend">Joindre au message</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeValidate">Valider</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeReplace">Remplacer</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeCancelDraft">Supprimer</button>
@@ -3263,9 +3308,9 @@ html.ux-legacy .coco-companion-presence {
         <p class="oc-file-intake-mobile-status" id="ocFileIntakeMobileStatus" role="status" aria-live="polite"></p>
       </div>
       <footer class="oc-fi-mobile-footer" id="ocFileIntakeMobileFooter">
-        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeSendMobile">Envoyer</button>
-        <button type="button" class="ux-tool-btn tool-accent hidden" id="btnFileIntakeSendNoCrop">Envoyer sans recadrer</button>
-        <button type="button" class="ux-tool-btn" id="btnFileIntakeCropSend">Recadrer et envoyer</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeSendMobile">Joindre au message</button>
+        <button type="button" class="ux-tool-btn tool-accent hidden" id="btnFileIntakeSendNoCrop">Joindre sans recadrer</button>
+        <button type="button" class="ux-tool-btn" id="btnFileIntakeCropSend">Recadrer</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeRetake">Reprendre</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeDeleteMobile">Supprimer</button>
       </footer>
@@ -3282,8 +3327,8 @@ html.ux-legacy .coco-companion-presence {
         <p class="oc-file-intake-crop-hint">Recadrage V1 — zone centrale. Recadrage libre bientôt.</p>
       </div>
       <footer class="oc-file-intake-crop-actions" id="ocFileIntakeCropFooter">
-        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Valider et envoyer</button>
-        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropSendDirect">Envoyer sans recadrer</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Recadrer et joindre</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropSendDirect">Joindre sans recadrer</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeCropCancel">Annuler</button>
       </footer>
     </div>
@@ -3296,6 +3341,11 @@ html.ux-legacy .coco-companion-presence {
       <button type="button" class="ux-tool-btn oc-file-intake-clear" id="btnClearFileIntake">Clear</button>
     </div>
     <div class="oc-mobile-composer-plus-wrap" id="ocMobileComposerPlusWrap"></div>
+    <div class="oc-composer-attachment hidden" id="ocComposerAttachment" role="status" aria-live="polite" aria-label="Pièce jointe image">
+      <div class="oc-composer-attachment-thumb" id="ocComposerAttachmentThumb"></div>
+      <span class="oc-composer-attachment-name" id="ocComposerAttachmentName"></span>
+      <button type="button" class="oc-composer-attachment-clear" id="btnClearComposerAttachment" aria-label="Retirer la pièce jointe" title="Retirer">×</button>
+    </div>
     <div class="input-wrapper">
       <button type="button" class="oc-clean-toolbar-btn oc-clean-input-quick" id="btnImportPlus" aria-label="Importer du texte" title="Importer du texte" aria-expanded="false">+</button>
       <input type="file" id="fileIntakeInputCamera" class="hidden" accept="image/*" capture="environment">
@@ -4064,7 +4114,7 @@ function ocRenderSysAccessState() {
 const OC_IMPORT_MAX_BYTES = 100 * 1024;
 const OC_FILE_INTAKE_MAX_BYTES = 10 * 1024 * 1024;
 const OC_FILE_INTAKE_ACCEPT_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv'];
-let ocFileIntakePending = null;
+let pendingImageAttachment = null;
 let ocFileIntakeDraft = null;
 let ocFileIntakeDraftReplaceSource = 'file';
 
@@ -4370,68 +4420,95 @@ function ocOpenFileIntakeCropModal() {
   ocSetMobileFileIntakeOpen(true);
 }
 
-async function ocSendFileIntakeDraft(opts) {
+function ocRevokePendingImagePreviewUrl() {
+  if (pendingImageAttachment && pendingImageAttachment.preview_url) {
+    try {
+      URL.revokeObjectURL(pendingImageAttachment.preview_url);
+    } catch (_) {}
+  }
+}
+
+function ocClearPendingImageAttachment() {
+  ocRevokePendingImagePreviewUrl();
+  pendingImageAttachment = null;
+  const chip = document.getElementById('ocComposerAttachment');
+  const thumb = document.getElementById('ocComposerAttachmentThumb');
+  const nameEl = document.getElementById('ocComposerAttachmentName');
+  if (thumb) thumb.innerHTML = '';
+  if (nameEl) nameEl.textContent = '';
+  chip?.classList.add('hidden');
+}
+
+function ocShowComposerAttachmentChip() {
+  const chip = document.getElementById('ocComposerAttachment');
+  const thumb = document.getElementById('ocComposerAttachmentThumb');
+  const nameEl = document.getElementById('ocComposerAttachmentName');
+  if (!chip || !pendingImageAttachment || !pendingImageAttachment.file) return;
+  const att = pendingImageAttachment;
+  if (nameEl) {
+    nameEl.textContent = att.filename + ' — ajoutez votre question puis envoyez';
+  }
+  if (thumb) {
+    thumb.innerHTML = '';
+    if (att.preview_url && ocIsImageIntakeFile(att.file)) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = att.preview_url;
+      thumb.appendChild(img);
+    }
+  }
+  chip.classList.remove('hidden');
+}
+
+function ocHasPendingImageAttachment() {
+  return !!(pendingImageAttachment && pendingImageAttachment.file);
+}
+
+async function ocAttachImageToComposer(opts) {
   const options = opts || {};
-  if (ocFileIntakeSending) return;
   if (!ocFileIntakeDraft || !ocFileIntakeDraft.file) return;
   let file = ocFileIntakeDraft.file;
-  const sendBtns = [
-    document.getElementById('btnFileIntakeSend'),
-    document.getElementById('btnFileIntakeSendMobile'),
-    document.getElementById('btnFileIntakeSendNoCrop'),
-    document.getElementById('btnFileIntakeCropSendDirect'),
-  ];
+  let cropData = null;
+
   if (options.cropCenter && ocIsImageIntakeFile(file)) {
     try {
       file = await ocCropImageCenterSquare(file);
-      ocUpdateFileIntakeDraftFile(file);
+      cropData = { mode: 'center_square' };
     } catch (err) {
-      const msg = String(err && err.message ? err.message : err || 'Recadrage impossible.');
-      ocShowFileIntakeError(msg);
-      ocSetFileIntakeMobileStatus(msg + ' — utilisez Envoyer sans recadrer.', 'error');
-      document.getElementById('btnFileIntakeSendNoCrop')?.classList.remove('hidden');
-      ocSetFileIntakeMobileActionsDisabled(false);
-      sendBtns.forEach(function (btn) {
-        if (btn) btn.disabled = false;
-      });
-      return;
+      console.warn('[COCO] crop failed, using original image', err);
+      ocSetFileIntakeMobileStatus('Recadrage indisponible — image originale conservée.', '');
     }
   }
-  ocFileIntakeSending = true;
-  ocSetFileIntakeMobileActionsDisabled(true);
-  sendBtns.forEach(function (btn) {
-    if (btn) btn.disabled = true;
-  });
-  ocSetFileIntakeMobileStatus('Envoi...', '');
-  ocSetCocoState('thinking', 'Analyse du fichier');
-  try {
-    ocFileIntakePending = { file: file };
-    const intake = await ocSubmitFileIntake();
-    const intakeName = (intake && intake.filename) ? intake.filename : file.name;
-    const detail = (intake && intake.message) || 'Réponse file intake indisponible.';
-    const received = 'Photo reçue : ' + intakeName;
-    ocCloseFileIntakeCropModal();
-    ocCloseFileIntakeMobilePreview();
-    ocClearFileIntakeDraft();
-    ocSetMobileFileIntakeOpen(false);
-    document.getElementById('ocFileIntakePreview')?.classList.add('hidden');
-    addMsg('user', '[Fichier joint : ' + intakeName + ']');
-    addMsg('assistant', received + '\n' + detail);
-    ocSetCocoState('ready', 'Ready');
-    scrollDown();
-  } catch (err) {
-    ocFileIntakePending = null;
-    const msg = String(err && err.message ? err.message : err || 'Échec de l’envoi.');
-    ocShowFileIntakeError(msg);
-    ocSetFileIntakeMobileStatus(msg, 'error');
-    ocSetCocoState('retry', 'Retry available');
-    ocSetFileIntakeMobileActionsDisabled(false);
-    sendBtns.forEach(function (btn) {
-      if (btn) btn.disabled = false;
-    });
-  } finally {
-    ocFileIntakeSending = false;
+
+  ocRevokePendingImagePreviewUrl();
+  const previewUrl = ocIsImageIntakeFile(file) ? URL.createObjectURL(file) : null;
+  pendingImageAttachment = {
+    file: file,
+    preview_url: previewUrl,
+    filename: file.name,
+    mime_type: file.type || 'application/octet-stream',
+    optional_crop_data: cropData,
+    media_id: null,
+  };
+
+  ocCloseFileIntakeCropModal();
+  ocCloseFileIntakeMobilePreview();
+  ocClearFileIntakeDraft();
+  ocSetMobileFileIntakeOpen(false);
+  document.getElementById('ocFileIntakePreview')?.classList.add('hidden');
+  ocShowComposerAttachmentChip();
+  ocSetCocoState('ready', 'Ready');
+  if (dom.input) {
+    dom.input.focus();
+    if (!dom.input.value.trim()) {
+      dom.input.placeholder = 'Posez votre question sur l’image…';
+    }
   }
+  scrollDown();
+}
+
+async function ocSendFileIntakeDraft(opts) {
+  await ocAttachImageToComposer(opts || {});
 }
 
 function ocAcceptFileIntakeDraft(file, source) {
@@ -4462,14 +4539,7 @@ function ocClearFileIntakeDraft() {
 }
 
 function ocValidateFileIntakeDraft() {
-  if (!ocFileIntakeDraft || !ocFileIntakeDraft.file) return;
-  const f = ocFileIntakeDraft.file;
-  ocFileIntakePending = { file: f };
-  ocRevokeFileIntakePreviewUrl();
-  ocFileIntakeDraft = null;
-  document.getElementById('ocFileIntakePreview')?.classList.add('hidden');
-  ocClearAllFileIntakeInputs();
-  ocShowFileIntakeBar(f);
+  ocAttachImageToComposer();
 }
 
 function ocReplaceFileIntakeDraft() {
@@ -4549,7 +4619,7 @@ function ocShowFileIntakeBar(file) {
 }
 
 function ocClearFileIntake() {
-  ocFileIntakePending = null;
+  ocClearPendingImageAttachment();
   ocClearFileIntakeDraft();
   const bar = document.getElementById('ocFileIntakeBar');
   if (bar) bar.classList.add('hidden');
@@ -4557,14 +4627,15 @@ function ocClearFileIntake() {
 }
 
 function ocHasFileIntakePending() {
-  return !!(ocFileIntakePending && ocFileIntakePending.file);
+  return ocHasPendingImageAttachment();
 }
 
-async function ocSubmitFileIntake() {
-  if (!ocHasFileIntakePending()) return null;
-  const file = ocFileIntakePending.file;
+async function ocUploadPendingImageAttachment() {
+  if (!ocHasPendingImageAttachment()) return null;
+  const att = pendingImageAttachment;
+  const file = att.file;
   const fd = new FormData();
-  fd.append('file', file, file.name);
+  fd.append('file', file, att.filename || file.name);
   const r = await apiFetch('/api/files/intake', { method: 'POST', body: fd });
   const d = await r.json().catch(function () {
     return {};
@@ -4578,8 +4649,14 @@ async function ocSubmitFileIntake() {
     throw new Error(msg);
   }
   if (d && typeof d === 'object' && !d.filename) d.filename = file.name;
-  ocClearFileIntake();
+  if (d && d.media_id) {
+    pendingImageAttachment.media_id = d.media_id;
+  }
   return d;
+}
+
+async function ocSubmitFileIntake() {
+  return ocUploadPendingImageAttachment();
 }
 const OC_ASSUMED_MAX_MESSAGE_CHARS = 4000;
 const OC_IMPORT_MESSAGE_PREFIX = 'Voici un texte à analyser :\n\n';
@@ -4803,6 +4880,7 @@ async function copyAssistantPlain() {
   if (btnReplace) btnReplace.addEventListener('click', ocReplaceFileIntakeDraft);
   if (btnCancelDraft) btnCancelDraft.addEventListener('click', ocClearFileIntakeDraft);
   if (btnClear) btnClear.addEventListener('click', ocClearFileIntake);
+  document.getElementById('btnClearComposerAttachment')?.addEventListener('click', ocClearFileIntake);
 })();
 
 dom.toggleImportPanel?.addEventListener('click', () => {
@@ -5608,35 +5686,32 @@ function addMsg(role, text, meta) {
 // ── Send ─────────────────────────────────────────────
 async function send() {
   const text = dom.input.value.trim();
-  const hasFile = ocHasFileIntakePending();
-  if ((!text && !hasFile) || sending) return;
+  const hasAttachment = ocHasPendingImageAttachment();
+  if ((!text && !hasAttachment) || sending) return;
 
   sending = true;
   dom.send.disabled = true;
 
-  var pendingIntakeMsg = null;
-  if (hasFile) {
+  let chatMessage = text;
+  let mediaId = null;
+  let attachmentName = '';
+  let userDisplay = text;
+
+  if (hasAttachment) {
+    attachmentName = pendingImageAttachment.filename || 'image';
     dom.typing.classList.add('visible');
-    ocSetCocoState('thinking', 'Analyse du fichier');
+    ocSetCocoState('thinking', 'Analyse de l’image');
     scrollDown();
     try {
-      const intake = await ocSubmitFileIntake();
-      const intakeName = (intake && intake.filename) ? intake.filename : 'file';
-      const intakeReceived = 'File received: ' + intakeName;
-      const intakeDetail = (intake && intake.message) || 'Réponse file intake indisponible.';
-      pendingIntakeMsg = intakeReceived + '\n' + intakeDetail;
-      if (!text) {
-        addMsg('user', '[File attached: ' + intakeName + ']');
-        addMsg('assistant', pendingIntakeMsg);
-        ocSetCocoState('ready', 'Ready');
-        dom.typing.classList.remove('visible');
-        sending = false;
-        dom.send.disabled = false;
-        dom.input.focus();
-        scrollDown();
-        return;
+      const intake = await ocUploadPendingImageAttachment();
+      mediaId = (intake && intake.media_id) || pendingImageAttachment.media_id || null;
+      if (!chatMessage) {
+        chatMessage = 'Peux-tu décrire cette image ?';
       }
-      ocSetCocoState('ready', 'Ready');
+      userDisplay = text
+        ? text + '\n[Image : ' + attachmentName + ']'
+        : '[Image : ' + attachmentName + '] — ' + chatMessage;
+      ocSetCocoState('thinking', 'Thinking');
     } catch (err) {
       var fmsg = String(err && err.message ? err.message : err || '');
       addMsg('error', 'FILE INTAKE FAILED — ' + fmsg);
@@ -5646,28 +5721,25 @@ async function send() {
       dom.send.disabled = false;
       dom.input.focus();
       return;
-    } finally {
-      dom.typing.classList.remove('visible');
     }
   }
 
   dom.input.value = '';
   dom.input.style.height = 'auto';
+  dom.input.placeholder = 'Transmettez votre requête… (Entrée pour envoyer)';
 
-  addMsg('user', text);
-  if (pendingIntakeMsg) {
-    addMsg('assistant', pendingIntakeMsg);
-  }
+  addMsg('user', userDisplay || chatMessage);
   dom.typing.classList.add('visible');
   ocSetCocoState('thinking', 'Thinking');
   triggerScan();
   scrollDown();
 
   try {
-    // Backend: POST /chat et POST /api/chat partagent le même handler (OpenChawn app/api/chat.py).
+    const chatBody = { message: chatMessage };
+    if (mediaId) chatBody.media_id = mediaId;
     const r = await apiFetch('/chat', {
       method: 'POST',
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify(chatBody),
     });
 
     if (!r.ok) {
@@ -5692,6 +5764,9 @@ async function send() {
     addMsg('error', 'TRANSMISSION FAILED — ' + err.message);
     ocSetCocoState('retry', 'Retry available');
   } finally {
+    if (hasAttachment) {
+      ocClearPendingImageAttachment();
+    }
     dom.typing.classList.remove('visible');
     sending = false;
     dom.send.disabled = false;

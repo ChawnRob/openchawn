@@ -27,6 +27,13 @@ from app.core.runtime_language_guard import (
     prompt_contains_forced_french,
     sanitize_provider_prompts,
 )
+from app.files_intake.session_image_context import (
+    context_key_for_log,
+    format_image_context_for_prompt,
+    get_last_image_context,
+    message_references_recent_image,
+    session_key_from_user,
+)
 from app.llm import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
@@ -77,6 +84,7 @@ class ChatRequest(BaseModel):
     project_name: str = Field("", validation_alias=AliasChoices("project_name", "project"))
     memory_context: str = ""
     user_goal: str = ""
+    media_id: str = ""
 
     @field_validator("message")
     @classmethod
@@ -170,8 +178,42 @@ def assemble_chat_generation_inputs(
         memory_used = True
 
     base_request = req.message
-    if memory_context:
+    image_context_block = ""
+    image_context_injected = False
+    context_key = session_key_from_user(user)
+    user_message_references_image = message_references_recent_image(req.message)
+    media_id = (req.media_id or "").strip()
+    img_ctx = get_last_image_context(context_key)
+    last_image_context_found = img_ctx is not None
+
+    should_inject = False
+    if img_ctx and media_id and img_ctx.media_id == media_id:
+        should_inject = True
+    elif img_ctx and user_message_references_image:
+        should_inject = True
+
+    if should_inject and img_ctx:
+        image_context_block = format_image_context_for_prompt(img_ctx)
+        image_context_injected = True
+
+    logger.info(
+        "chat image_context lookup | chat_session_key=%s | user_message_references_image=%s | "
+        "last_image_context_found=%s | media_id=%s | injected=%s",
+        context_key_for_log(context_key),
+        user_message_references_image,
+        last_image_context_found,
+        media_id or "(none)",
+        image_context_injected,
+    )
+
+    if memory_context and image_context_block:
+        final_prompt = (
+            f"{memory_context}\n\n{image_context_block}\n\n── USER REQUEST ──\n{base_request}"
+        )
+    elif memory_context:
         final_prompt = f"{memory_context}\n\n── USER REQUEST ──\n{base_request}"
+    elif image_context_block:
+        final_prompt = f"{image_context_block}\n\n── USER REQUEST ──\n{base_request}"
     else:
         final_prompt = base_request
 
@@ -234,6 +276,7 @@ def assemble_chat_generation_inputs(
         "profile_contains_forced_french": profile_ff,
         "system_core_contains_forced_french": bool(prompt_contains_forced_french(base_system)),
         "provider_prompt_contains_forced_french": provider_prompt_contains_forced_french,
+        "image_context_injected": image_context_injected,
     }
 
 

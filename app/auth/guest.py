@@ -21,7 +21,14 @@ def _guest_cap() -> int:
 # ── In-memory store ──────────────────────────────────────
 
 class _GuestSession:
-    __slots__ = ("session_id", "ip", "message_count", "date_key", "created_at")
+    __slots__ = (
+        "session_id",
+        "ip",
+        "message_count",
+        "date_key",
+        "created_at",
+        "last_image_context",
+    )
 
     def __init__(self, session_id: str, ip: str):
         self.session_id = session_id
@@ -29,6 +36,7 @@ class _GuestSession:
         self.message_count = 0
         self.date_key = _today()
         self.created_at = time.time()
+        self.last_image_context: dict | None = None
 
     def reset_if_new_day(self):
         today = _today()
@@ -127,6 +135,20 @@ def check_guest_quota(session_id: str, ip: str) -> dict:
         f"quota_remaining={remaining}/{cap}"
     )
     return {"allowed": True, "remaining": remaining, "limit": cap}
+
+
+def set_guest_last_image_context(session_id: str, payload: dict) -> None:
+    """Attach structured vision summary to the in-process guest session."""
+    session = _sessions.get((session_id or "").strip())
+    if session:
+        session.last_image_context = dict(payload)
+
+
+def get_guest_last_image_context(session_id: str) -> dict | None:
+    session = _sessions.get((session_id or "").strip())
+    if session and session.last_image_context:
+        return dict(session.last_image_context)
+    return None
 
 
 def get_guest_quota_status(session_id: str) -> dict | None:

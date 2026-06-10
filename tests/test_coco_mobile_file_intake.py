@@ -49,17 +49,16 @@ def test_preview_validate_before_ready():
     assert "btnFileIntakeValidate" in html
     assert "Valider" in html
     block = html.split("function ocValidateFileIntakeDraft")[1].split("function ocReplaceFileIntakeDraft")[0]
-    assert "ocFileIntakePending" in block
-    assert "ocShowFileIntakeBar" in block
+    assert "ocAttachImageToComposer" in block
 
 
 def test_mobile_preview_has_send_and_crop_ctas():
     html = _html()
     assert 'id="ocFileIntakeMobilePreview"' in html
     assert 'id="btnFileIntakeCropSend"' in html
-    assert "Recadrer et envoyer" in html
+    assert "Recadrer" in html
     assert 'id="btnFileIntakeSendMobile"' in html
-    assert "Envoyer" in html
+    assert "Joindre au message" in html
     assert 'id="btnFileIntakeRetake"' in html
     assert "Reprendre" in html
     assert 'id="btnFileIntakeDeleteMobile"' in html
@@ -69,17 +68,17 @@ def test_mobile_preview_has_send_and_crop_ctas():
     assert 'id="ocFileIntakeMobileFooter"' in html
 
 
-def test_send_button_calls_upload_function():
+def test_send_button_attaches_to_composer_not_isolated_upload():
     html = _html()
     setup = html.split("(function ocFileIntakeUiSetup()")[1].split("})();")[0]
     assert "ocSendFileIntakeDraft" in setup
     assert "ocBindFileIntakeTap(btnSend" in setup or "ocBindFileIntakeTap(btnSend," in setup
     assert "ocBindFileIntakeTap(btnSendMobile" in setup
-    assert "ocBindFileIntakeTap(btnSendNoCrop" in setup
-    send_fn = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
-    assert "ocSubmitFileIntake()" in send_fn
-    assert "Envoi..." in send_fn
-    assert "Photo reçue" in send_fn
+    attach_fn = html.split("async function ocAttachImageToComposer")[1].split("async function ocSendFileIntakeDraft")[0]
+    assert "pendingImageAttachment" in attach_fn
+    assert "Photo reçue" not in attach_fn
+    draft_fn = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
+    assert "ocAttachImageToComposer" in draft_fn
 
 
 def test_mobile_crop_modal_actions_exist():
@@ -87,7 +86,7 @@ def test_mobile_crop_modal_actions_exist():
     assert 'id="ocFileIntakeCropModal"' in html
     assert 'id="btnFileIntakeCropConfirm"' in html
     assert 'id="btnFileIntakeCropCancel"' in html
-    assert "Valider et envoyer" in html
+    assert "Recadrer et joindre" in html
     assert "Annuler" in html.split('id="btnFileIntakeCropCancel"')[1][:80]
 
 
@@ -108,10 +107,10 @@ def test_mobile_footer_is_sticky_fixed_actions():
 def test_mobile_send_without_crop_fallback_exists():
     html = _html()
     assert 'id="btnFileIntakeSendNoCrop"' in html
-    assert "Envoyer sans recadrer" in html
+    assert "Joindre sans recadrer" in html
     assert 'id="btnFileIntakeCropSendDirect"' in html
-    send_fn = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
-    assert "btnFileIntakeSendNoCrop" in send_fn
+    attach_fn = html.split("async function ocAttachImageToComposer")[1].split("async function ocSendFileIntakeDraft")[0]
+    assert "crop failed, using original image" in attach_fn
 
 
 def test_mobile_actions_portaled_to_document_body():
@@ -255,17 +254,18 @@ def test_file_input_accepts_required_types():
 
 def test_file_received_feedback_and_intake_endpoint():
     html = _html()
-    assert "File received: " in html
     assert "/api/files/intake" in html
-    submit = html.split("async function ocSubmitFileIntake")[1].split("\n}")[0]
-    assert "new FormData()" in submit
-    assert "Content-Type" not in submit
+    upload = html.split("async function ocUploadPendingImageAttachment")[1].split("async function ocSubmitFileIntake")[0]
+    assert "new FormData()" in upload
+    assert "media_id" in upload
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocUploadPendingImageAttachment" in send_fn
+    assert "chatBody.media_id" in send_fn
 
 
 def test_intake_ui_displays_server_message_for_analysis():
     html = _html()
-    mobile_send = html.split("async function ocSendFileIntakeDraft")[1].split("function ocAcceptFileIntakeDraft")[0]
-    desktop_send = html.split("async function send()")[1].split("dom.input.value = ''")[0]
-    assert "intake.message" in mobile_send
-    assert "intake.message" in desktop_send
-    assert "analysis pipeline is not enabled yet" not in mobile_send
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocUploadPendingImageAttachment" in send_fn
+    assert "d.output" in send_fn or "d.response" in send_fn
+    assert "analysis pipeline is not enabled yet" not in html
