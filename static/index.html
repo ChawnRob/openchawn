@@ -1236,26 +1236,11 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .oc-mobile-composer-plus-wrap {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    width: 100%;
-    min-height: 44px;
-    padding-left: 2px;
-    position: relative;
-    z-index: 3;
-    pointer-events: none;
-  }
-
-  html.ux-chat-clean .oc-mobile-composer-plus-wrap #btnImportPlus {
-    display: grid !important;
-    pointer-events: auto;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
+    display: none !important;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
-    display: grid !important;
+    display: none !important;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus {
@@ -1267,14 +1252,23 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     pointer-events: auto;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    flex: 0 0 44px;
-    order: -2;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    order: -1;
     position: relative;
     z-index: 4;
   }
 
-  html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech {
-    order: -1;
+  html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-plus-glyph {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-attach-icon {
+    display: none;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
@@ -1288,12 +1282,40 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
     font-size: 16px; /* évite zoom iOS au focus */
     line-height: 1.35;
     min-height: 53px !important;
     padding-top: 12px;
     padding-bottom: 12px;
     margin: 0;
+  }
+
+  html.ux-chat-clean .coco-future-second-brain-dup,
+  html.ux-chat-clean .coco-future-voice-placeholder {
+    display: none !important;
+  }
+
+  html.ux-chat-clean .coco-mobile-mic-mount {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn {
+    display: grid !important;
+    width: auto;
+    min-width: 44px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+  }
+
+  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn svg {
+    width: 18px;
+    height: 18px;
   }
 
   html.ux-chat-clean .msg {
@@ -2295,6 +2317,7 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   overflow: hidden;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.35);
+  position: relative;
 }
 .oc-file-intake-mobile-thumb img,
 .oc-file-intake-crop-stage img,
@@ -2415,7 +2438,14 @@ body.is-mobile-file-intake-open .oc-file-intake-crop-modal:not(.hidden) {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-.oc-file-attach-btn svg {
+.oc-composer-plus-glyph {
+  display: none;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  line-height: 1;
+}
+.oc-file-attach-btn svg,
+.oc-file-attach-btn .oc-composer-attach-icon {
   width: 22px;
   height: 22px;
 }
@@ -3249,9 +3279,10 @@ html.ux-legacy .coco-companion-presence {
       <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Open Second Brain</button>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
-      <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
+      <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true"></span>
+      <button type="button" class="coco-future-btn coco-future-voice-placeholder" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
-      <button type="button" class="coco-future-btn coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Second Brain</button>
+      <button type="button" class="coco-future-btn coco-second-brain-btn coco-future-second-brain-dup" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Second Brain</button>
     </div>
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
@@ -3324,10 +3355,10 @@ html.ux-legacy .coco-companion-presence {
           <img id="ocFileIntakeCropImg" alt="">
           <div class="oc-file-intake-crop-overlay hidden" id="ocFileIntakeCropOverlay"></div>
         </div>
-        <p class="oc-file-intake-crop-hint">Recadrage V1 — zone centrale. Recadrage libre bientôt.</p>
+        <p class="oc-file-intake-crop-hint">Ajustez la zone centrale, puis validez pour joindre au message.</p>
       </div>
       <footer class="oc-file-intake-crop-actions" id="ocFileIntakeCropFooter">
-        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Recadrer et joindre</button>
+        <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Valider</button>
         <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropSendDirect">Joindre sans recadrer</button>
         <button type="button" class="ux-tool-btn" id="btnFileIntakeCropCancel">Annuler</button>
       </footer>
@@ -3351,8 +3382,9 @@ html.ux-legacy .coco-companion-presence {
       <input type="file" id="fileIntakeInputCamera" class="hidden" accept="image/*" capture="environment">
       <input type="file" id="fileIntakeInputGallery" class="hidden" accept="image/png,image/jpeg,image/webp,image/*">
       <input type="file" id="fileIntakeInputFile" class="hidden" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/csv,.png,.jpg,.jpeg,.webp,.pdf,.txt,.csv">
-      <button type="button" class="oc-file-attach-btn" id="btnFileIntake" title="Joindre photo ou fichier (max 10 Mo)" aria-label="Joindre photo ou fichier" aria-haspopup="menu">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
+      <button type="button" class="oc-file-attach-btn oc-composer-attach-btn" id="btnFileIntake" title="Ajouter photo ou fichier (max 10 Mo)" aria-label="Ajouter photo ou fichier" aria-haspopup="menu">
+        <span class="oc-composer-plus-glyph" aria-hidden="true">+</span>
+        <svg class="oc-composer-attach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
@@ -3381,7 +3413,7 @@ html.ux-legacy .coco-companion-presence {
       <button type="button" class="oc-file-intake-sheet-backdrop hidden" id="ocFileIntakeSheetBackdrop" tabindex="-1" aria-hidden="true"></button>
       <div class="oc-file-intake-sheet hidden" id="ocFileIntakeActionSheet" role="menu" aria-label="Joindre un fichier">
         <button type="button" class="oc-file-intake-sheet-item" role="menuitem" id="ocFileIntakePickCamera">Prendre une photo</button>
-        <button type="button" class="oc-file-intake-sheet-item" role="menuitem" id="ocFileIntakePickGallery">Choisir une photo</button>
+        <button type="button" class="oc-file-intake-sheet-item" role="menuitem" id="ocFileIntakePickGallery">Photothèque</button>
         <button type="button" class="oc-file-intake-sheet-item" role="menuitem" id="ocFileIntakePickFile">Choisir un fichier</button>
         <button type="button" class="oc-file-intake-sheet-item oc-file-intake-sheet-item--cancel" role="menuitem" id="ocFileIntakePickCancel">Annuler</button>
       </div>
@@ -3811,27 +3843,47 @@ function ocChatCleanMobileComposer() {
     && window.matchMedia('(max-width: 640px)').matches;
 }
 
-function ocUpdatePlusButtonForMobileClean() {
-  const btn = document.getElementById('btnImportPlus');
+function ocUpdateMobileComposerChrome() {
+  const btnImport = document.getElementById('btnImportPlus');
   const wrap = document.getElementById('ocMobileComposerPlusWrap');
   const inputWrapper = dom.inputArea?.querySelector('.input-wrapper');
   const mic = document.getElementById('btnSpeech');
-  if (!btn || OC_UX_LEGACY) return;
+  const micMount = document.getElementById('cocoMobileMicMount');
+  const attachBtn = document.getElementById('btnFileIntake');
+  if (OC_UX_LEGACY) return;
+
   if (ocChatCleanMobileComposer()) {
-    if (wrap && btn.parentElement !== wrap) wrap.appendChild(btn);
-    wrap?.removeAttribute('aria-hidden');
-    btn.setAttribute('aria-label', 'Plus d’options');
-    btn.title = 'Plus d’options';
-    btn.setAttribute('aria-haspopup', 'menu');
+    if (wrap) wrap.setAttribute('aria-hidden', 'true');
+    if (micMount && mic && mic.parentElement !== micMount) micMount.appendChild(mic);
+    micMount?.removeAttribute('aria-hidden');
+    if (attachBtn) {
+      attachBtn.setAttribute('aria-label', 'Ajouter photo ou fichier');
+      attachBtn.title = 'Ajouter photo ou fichier';
+      attachBtn.setAttribute('aria-haspopup', 'menu');
+    }
+    if (btnImport) {
+      btnImport.removeAttribute('aria-haspopup');
+      btnImport.setAttribute('aria-expanded', 'false');
+    }
   } else {
     if (wrap) wrap.setAttribute('aria-hidden', 'true');
-    if (inputWrapper && btn.parentElement !== inputWrapper) {
-      inputWrapper.insertBefore(btn, mic || inputWrapper.firstChild);
+    if (micMount) micMount.setAttribute('aria-hidden', 'true');
+    if (inputWrapper && mic && mic.parentElement !== inputWrapper) {
+      inputWrapper.insertBefore(mic, dom.input || null);
     }
-    btn.setAttribute('aria-label', 'Importer du texte');
-    btn.title = 'Importer du texte';
-    btn.removeAttribute('aria-haspopup');
-    btn.setAttribute('aria-expanded', 'false');
+    if (inputWrapper && btnImport && btnImport.parentElement !== inputWrapper) {
+      inputWrapper.insertBefore(btnImport, mic || dom.input || inputWrapper.firstChild);
+    }
+    if (btnImport) {
+      btnImport.setAttribute('aria-label', 'Importer du texte');
+      btnImport.title = 'Importer du texte';
+      btnImport.removeAttribute('aria-haspopup');
+      btnImport.setAttribute('aria-expanded', 'false');
+    }
+    if (attachBtn) {
+      attachBtn.setAttribute('aria-label', 'Joindre photo ou fichier');
+      attachBtn.title = 'Joindre photo ou fichier (max 10 Mo)';
+    }
   }
 }
 
@@ -3907,10 +3959,10 @@ function ocCloseSettingsDrawer() {
 ocUxPlaceTechnicalBundle();
 ocUxCleanMountHeaderControls();
 ocUxSetInputPlaceholder();
-ocUpdatePlusButtonForMobileClean();
+ocUpdateMobileComposerChrome();
 window.addEventListener('resize', () => {
   ocUxSetInputPlaceholder();
-  ocUpdatePlusButtonForMobileClean();
+  ocUpdateMobileComposerChrome();
   if (!ocChatCleanMobileComposer()) ocCloseMobileComposerMenu();
 }, { passive: true });
 
@@ -4180,6 +4232,42 @@ function ocShouldUseMobileFileIntakePreview(source) {
   return ocFileIntakeIsMobileUi();
 }
 
+function ocShouldAutoOpenMobileImageCrop(file, source) {
+  if (!file || !ocIsImageIntakeFile(file)) return false;
+  if (!ocFileIntakeIsMobileUi()) return false;
+  return source === 'camera' || source === 'gallery' || source === 'file';
+}
+
+function ocPositionCropCenterOverlay() {
+  const img = document.getElementById('ocFileIntakeCropImg');
+  const overlay = document.getElementById('ocFileIntakeCropOverlay');
+  const stage = document.getElementById('ocFileIntakeCropStage');
+  if (!img || !overlay || !stage) return;
+
+  function layout() {
+    const nw = img.naturalWidth || img.width;
+    const nh = img.naturalHeight || img.height;
+    if (!nw || !nh) return;
+    const ir = img.getBoundingClientRect();
+    const sr = stage.getBoundingClientRect();
+    const scale = Math.min(ir.width / nw, ir.height / nh);
+    const dw = nw * scale;
+    const dh = nh * scale;
+    const dx = ir.left - sr.left + (ir.width - dw) / 2;
+    const dy = ir.top - sr.top + (ir.height - dh) / 2;
+    const side = Math.min(dw, dh);
+    overlay.style.left = (dx + (dw - side) / 2) + 'px';
+    overlay.style.top = (dy + (dh - side) / 2) + 'px';
+    overlay.style.width = side + 'px';
+    overlay.style.height = side + 'px';
+    overlay.classList.remove('hidden');
+  }
+
+  if (img.complete) layout();
+  else img.onload = layout;
+  requestAnimationFrame(layout);
+}
+
 function ocShowFileIntakeError(msg) {
   const errEl = document.getElementById('ocFileIntakeInlineError');
   if (errEl) {
@@ -4321,6 +4409,10 @@ function ocOpenFileIntakeMobilePreview(file) {
 }
 
 function ocShowFileIntakePreview(file, source) {
+  if (ocShouldAutoOpenMobileImageCrop(file, source)) {
+    ocOpenFileIntakeCropModal();
+    return;
+  }
   if (ocShouldUseMobileFileIntakePreview(source)) {
     ocOpenFileIntakeMobilePreview(file);
     return;
@@ -4417,7 +4509,9 @@ function ocOpenFileIntakeCropModal() {
   if (overlay) overlay.classList.add('hidden');
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
+  ocCloseFileIntakeMobilePreview();
   ocSetMobileFileIntakeOpen(true);
+  ocPositionCropCenterOverlay();
 }
 
 function ocRevokePendingImagePreviewUrl() {
@@ -4475,7 +4569,7 @@ async function ocAttachImageToComposer(opts) {
       file = await ocCropImageCenterSquare(file);
       cropData = { mode: 'center_square' };
     } catch (err) {
-      console.warn('[COCO] crop failed, using original image', err);
+      console.warn('[COCO] crop failed, using original image', { crop_failed_fallback_original: true }, err);
       ocSetFileIntakeMobileStatus('Recadrage indisponible — image originale conservée.', '');
     }
   }
@@ -4874,6 +4968,7 @@ async function copyAssistantPlain() {
   });
   ocBindFileIntakeTap(btnCropCancel, function () {
     ocCloseFileIntakeCropModal();
+    ocClearFileIntakeDraft();
   });
 
   if (btnValidate) btnValidate.addEventListener('click', ocValidateFileIntakeDraft);

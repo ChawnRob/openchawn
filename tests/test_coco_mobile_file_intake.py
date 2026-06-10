@@ -15,19 +15,23 @@ def test_mobile_attach_button_visible_in_composer():
     html = _html()
     assert 'id="btnFileIntake"' in html
     assert "oc-file-attach-btn" in html
+    assert "oc-composer-plus-glyph" in html
     assert 'id="btnMobileFileAttach"' not in html
     assert "oc-file-intake-desktop-only" not in html
     assert "oc-file-intake-mobile-only" not in html
     assert "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake" in html
     assert "display: grid !important" in html
     assert "html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus" in html
+    mobile_block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
+    assert "oc-mobile-composer-plus-wrap" in mobile_block
+    assert "display: none !important" in mobile_block.split("oc-mobile-composer-plus-wrap")[1][:80]
 
 
 def test_mobile_action_sheet_french_labels():
     html = _html()
     assert 'id="ocFileIntakeActionSheet"' in html
     assert "Prendre une photo" in html
-    assert "Choisir une photo" in html
+    assert "Photothèque" in html
     assert "Choisir un fichier" in html
 
 
@@ -86,7 +90,7 @@ def test_mobile_crop_modal_actions_exist():
     assert 'id="ocFileIntakeCropModal"' in html
     assert 'id="btnFileIntakeCropConfirm"' in html
     assert 'id="btnFileIntakeCropCancel"' in html
-    assert "Recadrer et joindre" in html
+    assert "Valider" in html.split('id="btnFileIntakeCropConfirm"')[1][:80]
     assert "Annuler" in html.split('id="btnFileIntakeCropCancel"')[1][:80]
 
 
@@ -111,6 +115,7 @@ def test_mobile_send_without_crop_fallback_exists():
     assert 'id="btnFileIntakeCropSendDirect"' in html
     attach_fn = html.split("async function ocAttachImageToComposer")[1].split("async function ocSendFileIntakeDraft")[0]
     assert "crop failed, using original image" in attach_fn
+    assert "crop_failed_fallback_original: true" in attach_fn
 
 
 def test_mobile_actions_portaled_to_document_body():
@@ -184,12 +189,13 @@ def test_file_intake_attach_button_has_tap_binding():
     assert "ocHandleAttachButtonClick" in setup
 
 
-def test_mobile_trombone_opens_action_sheet_not_direct_picker():
+def test_mobile_plus_opens_action_sheet_not_direct_picker():
     html = _html()
     handler = html.split("function ocHandleAttachButtonClick")[1].split("function ocBindFileIntakeTap")[0]
     assert "if (ocFileIntakeIsMobileComposer())" in handler
     mobile_branch = handler.split("if (ocFileIntakeIsMobileComposer())")[1].split("ocPickFileIntakeSource('file')")[0]
     assert "ocOpenFileIntakeActionSheet()" in mobile_branch
+    assert "oc-composer-plus-glyph" in html
 
 
 def test_action_sheet_wires_expected_input_ids():
@@ -236,7 +242,7 @@ def test_attach_button_not_desktop_only():
     assert "display: grid" in base
     assert "display: none" not in base
     assert "width: 44px" in base
-    assert 'aria-label="Joindre photo ou fichier"' in html
+    assert 'aria-label="Ajouter photo ou fichier"' in html
     mobile_rule = html.split(
         "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake"
     )[1].split("}")[0]

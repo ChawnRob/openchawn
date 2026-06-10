@@ -119,6 +119,7 @@ def test_crop_failure_does_not_block_attach_in_frontend():
     html = _html()
     attach_fn = html.split("async function ocAttachImageToComposer")[1].split("async function ocSendFileIntakeDraft")[0]
     assert "crop failed, using original image" in attach_fn
+    assert "crop_failed_fallback_original: true" in attach_fn
     assert "Recadrage indisponible" in attach_fn
     assert "return;" not in attach_fn.split("catch (err)")[1].split("ocRevokePendingImagePreviewUrl")[0]
 
