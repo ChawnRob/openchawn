@@ -132,7 +132,14 @@ def test_interactive_crop_supports_touch_and_pinch():
     html = _html()
     assert "function ocInitInteractiveCrop" in html
     assert "function ocCropImageFromInteractiveState" in html
-    assert "touchmove" in html.split("function ocBindCropTouchHandlers")[1].split("function ocInitInteractiveCrop")[0]
+    bind_fn = html.split("function ocBindCropTouchHandlers")[1].split("function ocInitInteractiveCrop")[0]
+    assert "touchstart" in bind_fn
+    assert "touchmove" in bind_fn
+    assert "touchend" in bind_fn
+    assert "preventDefault" in bind_fn
+    assert "passive: false" in bind_fn
+    assert "ocFileIntakeCropTouchLayer" in html
+    assert "ocCropTouchAbort" in html
     assert "cropInteractive: true" in html
     assert "Glissez l’image au doigt ou pincez pour zoomer" in html
 
