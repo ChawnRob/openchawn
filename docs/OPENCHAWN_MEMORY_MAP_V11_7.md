@@ -18,6 +18,12 @@ Official request path:
 
 This is the only memory routing path that should be treated as the main chat runtime unless another path is explicitly wired and this document is updated.
 
+## Memory scope (V16)
+
+User isolation keys are resolved centrally in `app/memory/memory_scope.py` (`resolve_memory_scope`, `MemoryScope`).
+Image context and fractal chat memory both consume `fractal_user_key` / `context_key` from that module.
+Full storage audit: `docs/MEMORY_AUDIT_V16.md`.
+
 ## Exact Files Involved
 
 Primary official runtime files:
@@ -25,6 +31,7 @@ Primary official runtime files:
 - `app/main.py`
 - `app/api/chat.py`
 - `app/memory/fractal_memory.py`
+- `app/memory/memory_scope.py`
 
 Supporting official memory files used by the fractal path:
 

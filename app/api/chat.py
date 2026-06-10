@@ -30,9 +30,14 @@ from app.core.runtime_language_guard import (
 from app.files_intake.session_image_context import (
     context_key_for_log,
     format_image_context_for_prompt,
-    get_last_image_context,
+    get_last_image_context_for_user,
     message_references_recent_image,
-    session_key_from_user,
+    memory_scope_from_user,
+)
+from app.memory.memory_scope import (
+    log_memory_read_scope,
+    log_memory_write_scope,
+    media_id_allowed_for_scope,
 )
 from app.llm import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
@@ -147,10 +152,8 @@ def assemble_chat_generation_inputs(
     """
     lt = language_trace or derive_response_language_trace(req.message)
     proj_hint = (req.project_name or "").strip()
-    if user.get("is_guest"):
-        user_key = f"guest-{(user.get('guest_session_id') or '')[:28]}"
-    else:
-        user_key = f"user-{user.get('id', '')}"
+    mem_scope = memory_scope_from_user(user)
+    user_key = mem_scope.fractal_user_key
 
     profile_id = resolve_profile_id(req, user)
     profile = get_profile(profile_id)
@@ -176,19 +179,20 @@ def assemble_chat_generation_inputs(
     )
     if memory_context:
         memory_used = True
+        log_memory_read_scope(mem_scope, "fractal_memory")
 
     base_request = req.message
     image_context_block = ""
     image_context_injected = False
-    context_key = session_key_from_user(user)
+    context_key = mem_scope.context_key
     user_message_references_image = message_references_recent_image(req.message)
     media_id = (req.media_id or "").strip()
-    img_ctx = get_last_image_context(context_key)
+    img_ctx = get_last_image_context_for_user(user, media_id=media_id or None)
     last_image_context_found = img_ctx is not None
 
     should_inject = False
-    if img_ctx and media_id and img_ctx.media_id == media_id:
-        should_inject = True
+    if img_ctx and media_id:
+        should_inject = media_id_allowed_for_scope(mem_scope, media_id, img_ctx.media_id)
     elif img_ctx and user_message_references_image:
         should_inject = True
 
@@ -415,6 +419,8 @@ def handle_chat_request(
     # ── Phase 7: official V11.7 chat memory write path. Keep in sync with
     # docs/OPENCHAWN_MEMORY_MAP_V11_7.md if this routing changes. ──
     source = "chat_guest" if is_guest else "chat_user"
+    mem_scope = memory_scope_from_user(user)
+    log_memory_write_scope(mem_scope, "fractal_memory")
     write_result = write_exchange(
         source=source,
         user_message=req.message,

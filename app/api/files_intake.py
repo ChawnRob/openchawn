@@ -21,8 +21,8 @@ from app.files_intake.image_analysis import (
 from app.files_intake.session_image_context import (
     build_last_image_context,
     context_key_for_log,
-    session_key_from_user,
-    set_last_image_context,
+    memory_scope_from_user,
+    set_last_image_context_scoped,
 )
 
 logger = logging.getLogger("openchawn.files_intake")
@@ -237,8 +237,9 @@ async def post_files_intake(
             description=analysis.description,
             detected_elements=analysis.detected_elements,
         )
-        context_key = session_key_from_user(user)
-        storage_backend = set_last_image_context(context_key, image_ctx)
+        mem_scope = memory_scope_from_user(user)
+        context_key = mem_scope.context_key
+        storage_backend = set_last_image_context_scoped(mem_scope, image_ctx)
         logger.info(
             "file_intake image_context stored | file_intake_session_key=%s | media_id_created=%s | "
             "has_last_image_context=true | storage=%s",

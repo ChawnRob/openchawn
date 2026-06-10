@@ -20,6 +20,14 @@ from app.files_intake.image_context_persistence import (
     load_image_context,
     persist_image_context,
 )
+from app.memory.memory_scope import (
+    MemoryScope,
+    assert_scope_allows_context_key,
+    log_memory_read_scope,
+    log_memory_write_scope,
+    media_id_allowed_for_scope,
+    resolve_memory_scope_from_user,
+)
 
 # Re-export for tests simulating multi-worker RAM isolation.
 __all__ = ["clear_image_context_memory_cache"]
@@ -74,14 +82,12 @@ def new_media_id() -> str:
 
 
 def session_key_from_user(user: dict) -> str:
-    if user.get("is_guest"):
-        sid = str(user.get("guest_session_id") or "").strip()
-        return f"guest:{sid}" if sid else f"guest-ip:{user.get('ip', 'unknown')}"
-    if user.get("id") is not None:
-        return f"user:{user['id']}"
-    if user.get("is_owner"):
-        return f"owner:{user.get('ip', 'unknown')}"
-    return f"anon:{user.get('ip', 'unknown')}"
+    """Session / image context key — aligned with ``MemoryScope.context_key``."""
+    return resolve_memory_scope_from_user(user).context_key
+
+
+def memory_scope_from_user(user: dict) -> MemoryScope:
+    return resolve_memory_scope_from_user(user)
 
 
 def context_key_for_log(context_key: str) -> str:
@@ -142,6 +148,13 @@ def set_last_image_context(session_key: str, ctx: LastImageContext) -> str:
     return backend
 
 
+def set_last_image_context_scoped(scope: MemoryScope, ctx: LastImageContext) -> str:
+    """Scoped write — context key must match resolved memory scope."""
+    assert_scope_allows_context_key(scope, scope.context_key)
+    log_memory_write_scope(scope, "last_image_context", context_key=scope.context_key)
+    return set_last_image_context(scope.context_key, ctx)
+
+
 def get_last_image_context(session_key: str) -> LastImageContext | None:
     raw = load_image_context(session_key)
     if not raw:
@@ -151,6 +164,27 @@ def get_last_image_context(session_key: str) -> LastImageContext | None:
     if not raw:
         return None
     return LastImageContext(**raw)
+
+
+def get_last_image_context_scoped(scope: MemoryScope) -> LastImageContext | None:
+    """Scoped read — only the resolved context_key is accessed."""
+    log_memory_read_scope(scope, "last_image_context", context_key=scope.context_key)
+    return get_last_image_context(scope.context_key)
+
+
+def get_last_image_context_for_user(
+    user: dict,
+    *,
+    media_id: str | None = None,
+) -> LastImageContext | None:
+    """Load image context for a principal; optional media_id must match stored value."""
+    scope = resolve_memory_scope_from_user(user)
+    ctx = get_last_image_context_scoped(scope)
+    if ctx is None:
+        return None
+    if media_id and not media_id_allowed_for_scope(scope, media_id, ctx.media_id):
+        return None
+    return ctx
 
 
 def clear_image_context_store() -> None:
