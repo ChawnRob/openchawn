@@ -1232,11 +1232,78 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .clean-input-shell {
-    gap: 6px;
+    gap: 4px;
+  }
+
+  /* Slim mobile toolbar: Second Brain + mic only (no duplicate row below) */
+  html.ux-chat-clean .oc-composer-mobile-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 0 2px 2px;
+    min-height: 0;
+    max-height: 34px;
+    overflow: hidden;
+  }
+
+  html.ux-chat-clean .coco-future-controls {
+    display: none !important;
+  }
+
+  html.ux-chat-clean .coco-prompt-chips {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    gap: 0;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  html.ux-chat-clean .coco-prompt-chips .coco-prompt-chip:not(.coco-second-brain-btn) {
+    display: none !important;
+  }
+
+  html.ux-chat-clean .coco-prompt-chip.coco-second-brain-btn {
+    font-size: 10px;
+    padding: 5px 10px;
+    line-height: 1.2;
+    max-height: 30px;
+    white-space: nowrap;
+  }
+
+  html.ux-chat-clean .coco-mobile-mic-mount {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn {
+    display: grid !important;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0;
+    border-radius: 50%;
+    flex: 0 0 34px;
+  }
+
+  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn svg {
+    width: 17px;
+    height: 17px;
   }
 
   html.ux-chat-clean .oc-mobile-composer-plus-wrap {
     display: none !important;
+  }
+
+  html.ux-chat-clean .oc-composer-attachment {
+    margin: 0 0 4px;
+    padding: 6px 8px;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
@@ -1247,14 +1314,15 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     display: none !important;
   }
 
+  /* Composer final: [ + ] [ champ texte large ] [ envoyer ] */
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {
     display: grid !important;
     pointer-events: auto;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    flex: 0 0 40px;
-    width: 40px;
-    height: 40px;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
     order: -1;
     position: relative;
     z-index: 4;
@@ -1262,7 +1330,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-plus-glyph {
     display: block;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     line-height: 1;
   }
@@ -1272,8 +1340,9 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
-    gap: 8px;
-    padding: 8px;
+    gap: 6px;
+    padding: 5px 6px;
+    align-items: center;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper,
@@ -1287,35 +1356,21 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     width: 100%;
     font-size: 16px; /* évite zoom iOS au focus */
     line-height: 1.35;
-    min-height: 53px !important;
-    padding-top: 12px;
-    padding-bottom: 12px;
+    min-height: 42px !important;
+    max-height: 120px;
+    padding: 9px 10px;
     margin: 0;
+    order: 0;
   }
 
-  html.ux-chat-clean .coco-future-second-brain-dup,
-  html.ux-chat-clean .coco-future-voice-placeholder {
-    display: none !important;
+  html.ux-chat-clean .clean-input-shell .input-wrapper .send-btn {
+    order: 1;
+    flex: 0 0 40px;
   }
 
-  html.ux-chat-clean .coco-mobile-mic-mount {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn {
-    display: grid !important;
-    width: auto;
-    min-width: 44px;
-    height: 36px;
-    padding: 0 14px;
-    border-radius: 999px;
-    flex: 0 0 auto;
-  }
-
-  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn svg {
-    width: 18px;
-    height: 18px;
+  html.ux-chat-clean .input-area.oc-composer-centered {
+    padding-left: 4px;
+    padding-right: 4px;
   }
 
   html.ux-chat-clean .msg {
@@ -1325,13 +1380,13 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .send-btn {
-    width: 46px !important;
-    height: 46px !important;
+    width: 40px !important;
+    height: 40px !important;
   }
 
   html.ux-chat-clean .oc-clean-toolbar-btn {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
   }
 
   html.ux-chat-clean #btnImportPlus,
@@ -3042,11 +3097,24 @@ html.oc-theme-night .coco-prompt-chip {
   background: rgba(12, 32, 48, 0.5);
 }
 
+html.ux-chat-clean .oc-composer-mobile-toolbar {
+  display: block;
+  width: 100%;
+}
+
+html.ux-chat-clean .coco-mobile-mic-mount {
+  display: none;
+}
+
 html.ux-chat-clean .coco-prompt-chips {
   display: flex;
 }
 
 html.ux-legacy .coco-prompt-chips {
+  display: none !important;
+}
+
+html.ux-legacy .oc-composer-mobile-toolbar {
   display: none !important;
 }
 
@@ -3101,6 +3169,33 @@ html.ux-chat-clean .coco-future-controls {
 html.ux-legacy .coco-future-controls,
 html.ux-legacy .coco-companion-presence {
   display: none !important;
+}
+
+@media (max-width: 430px) {
+  /* iPhone-class widths (~390px) — maximize text field */
+  html.ux-chat-clean .clean-input-shell .input-wrapper {
+    gap: 5px;
+    padding: 4px 5px;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+  }
+
+  html.ux-chat-clean .clean-input-shell .input-wrapper .send-btn {
+    flex: 0 0 38px;
+  }
+
+  html.ux-chat-clean .send-btn {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  html.ux-chat-clean .oc-composer-mobile-toolbar {
+    max-height: 32px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -3272,14 +3367,16 @@ html.ux-legacy .coco-companion-presence {
     <!-- COCO voice layer placeholder -->
     <!-- COCO second brain placeholder -->
     <!-- COCO prompt suggestions placeholder -->
-    <div class="coco-prompt-chips" id="cocoPromptChips" role="group" aria-label="Prompt suggestions">
-      <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
-      <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
-      <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
-      <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Open Second Brain</button>
+    <div class="oc-composer-mobile-toolbar" id="ocComposerMobileToolbar">
+      <div class="coco-prompt-chips" id="cocoPromptChips" role="group" aria-label="Prompt suggestions">
+        <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
+        <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
+        <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
+        <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Open Second Brain</button>
+      </div>
+      <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true" aria-label="Voice dictation slot"></span>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
-      <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true"></span>
       <button type="button" class="coco-future-btn coco-future-voice-placeholder" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
       <button type="button" class="coco-future-btn coco-second-brain-btn coco-future-second-brain-dup" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Second Brain</button>
