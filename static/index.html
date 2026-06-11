@@ -6264,6 +6264,17 @@ async function send() {
     return;
   }
 
+  if (!hasAttachment && ocDetectObsidianConnectIntent(text)) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+    addMsg('user', text);
+    ocAddObsidianConnectAssistantMessage();
+    ocSetCocoState('ready', 'Ready');
+    scrollDown();
+    dom.input.focus();
+    return;
+  }
+
   sending = true;
   dom.send.disabled = true;
 
@@ -6385,6 +6396,62 @@ function ocDetectAffineOpenIntent(text) {
     }
   }
   return false;
+}
+
+var OC_OBSIDIAN_URI_CONNECT_FR =
+  'Oui, je peux préparer une note Markdown et déclencher l\u2019ouverture d\u2019Obsidian via le bouton Sync Obsidian. En mode actuel, je ne peux pas confirmer une synchronisation profonde dans le vault, mais je peux générer le contenu et demander l\u2019ouverture d\u2019Obsidian.';
+
+function ocDetectObsidianConnectIntent(text) {
+  var t = ocNormalizeAffineIntentText(text).trim();
+  if (!t || !/\bobsidian\b/.test(t)) return false;
+  if (/\baffine\b/.test(t) && !/\bobsidian\b/.test(t.replace(/\baffine\b/g, ''))) return false;
+  var connectVerb = /\b(connect|connec|sync|synchron|envoy|envoi|envie|ouvr|open|lier|link|relier|acces)\w*/.test(t);
+  var askConnect =
+    /\b(peux|peut|possible|capable|tu)\b/.test(t) &&
+    (/\b(connect|connec|sync|obsidian)\w*/.test(t) || /\bse connecter\b/.test(t));
+  return (
+    connectVerb ||
+    askConnect ||
+    /\b(sync obsidian|connecte[- ]?toi|se connecter a obsidian)\b/.test(t)
+  );
+}
+
+function ocAddObsidianConnectAssistantMessage() {
+  if (dom.welcome) dom.welcome.remove();
+  var cfg = ocObsidianSyncConfig;
+  var bodyText =
+    cfg.enabled && cfg.mode === 'uri'
+      ? OC_OBSIDIAN_URI_CONNECT_FR
+      : OC_OBSIDIAN_NOT_CONFIGURED_FR;
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = bodyText;
+  div.appendChild(body);
+  if (cfg.enabled && cfg.mode === 'uri') {
+    var actions = document.createElement('div');
+    actions.className = 'oc-affine-chat-action';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ux-tool-btn tool-accent coco-obsidian-sync-btn';
+    btn.setAttribute('data-coco-action', 'open-obsidian-sync');
+    btn.setAttribute('title', 'Sync Obsidian');
+    btn.setAttribute('aria-label', 'Sync Obsidian');
+    btn.textContent = 'Sync Obsidian';
+    actions.appendChild(btn);
+    div.appendChild(actions);
+  }
+  div.appendChild(ocBuildAssistantMsgActions());
+  dom.messages.insertBefore(div, dom.typing);
+  lastAssistantPlain = bodyText;
+  refreshExportButtons();
+  ocSyncChatCleanLayout();
+  scrollDown();
 }
 
 function ocAddAffineOpenAssistantMessage() {

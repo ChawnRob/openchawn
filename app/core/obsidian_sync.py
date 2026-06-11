@@ -32,3 +32,46 @@ def get_obsidian_sync_status() -> dict[str, Any]:
         "configured": enabled,
         "uri_open_available": enabled and mode == "uri",
     }
+
+
+def build_obsidian_sync_context() -> str:
+    """English system-prompt block for COCO (model answers in user language)."""
+    st = get_obsidian_sync_status()
+    if not st["enabled"]:
+        return (
+            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+            "Obsidian optional Markdown export (separate from AFFiNE Second Brain):\n"
+            "- OBSIDIAN_ENABLED=false — Obsidian Sync is not configured.\n"
+            "- If asked to connect, sync, or send to Obsidian, say Obsidian Sync is not configured.\n"
+            "- Never claim sync succeeded or that a note was written inside Obsidian.\n"
+        )
+    if st["mode"] == "uri" and not st["sync_enabled"]:
+        return (
+            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+            "Obsidian URI mode (optional Markdown export — AFFiNE remains the primary Second Brain):\n"
+            f"- OBSIDIAN_ENABLED=true; OBSIDIAN_MODE=uri; vault={st['vault_name']}; folder={st['default_folder']}.\n"
+            "- COCO can prepare Markdown from the visible conversation and request Obsidian open via the "
+            "Sync Obsidian UI chip (obsidian://new) on user tap only.\n"
+            "- Do NOT deny Obsidian connectivity. Forbidden when URI mode is active: "
+            "« aucun connecteur Obsidian actif », « no Obsidian connector », « je ne peux pas me connecter à Obsidian ».\n"
+            "- When asked (FR examples): « tu peux te connecter à Obsidian ? », « sync Obsidian », "
+            "« envoie ça dans Obsidian », « ouvre Obsidian » — answer YES with substance equivalent to:\n"
+            "  « Oui, je peux préparer une note Markdown et déclencher l'ouverture d'Obsidian via le bouton "
+            "Sync Obsidian. En mode actuel, je ne peux pas confirmer une synchronisation profonde dans le vault, "
+            "mais je peux générer le contenu et demander l'ouverture d'Obsidian. »\n"
+            "- Never claim from chat alone: « sync réussie », « note écrite dans Obsidian », "
+            "« connexion profonde active ».\n"
+            "- Direct the user to tap Sync Obsidian for the actual open action.\n"
+        )
+    if st["sync_enabled"] and st["mode"] == "local_rest":
+        return (
+            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+            "Obsidian local REST mode is flagged enabled, but COCO must only claim direct vault write/sync "
+            "after explicit connector confirmation. Until confirmed, describe URI/chip flow only and do not say "
+            "« sync réussie » or « note écrite dans Obsidian ».\n"
+        )
+    return (
+        f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+        f"Obsidian export enabled (mode={st['mode']}); use Sync Obsidian chip for user-triggered actions. "
+        "Do not claim deep sync or vault write without connector confirmation.\n"
+    )

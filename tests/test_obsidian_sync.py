@@ -105,3 +105,83 @@ def test_affine_open_path_unchanged():
     open_fn = html.split("function ocOpenAffineSecondBrain")[1].split("var ocObsidianSyncConfig")[0]
     assert "window.location.href" not in open_fn
     assert "window.open(affineUrl" in open_fn
+
+
+def test_build_obsidian_sync_context_uri_mode_default():
+    from app.core.obsidian_sync import build_obsidian_sync_context
+
+    ctx = build_obsidian_sync_context()
+    low = ctx.lower()
+    assert "obsidian uri mode" in low
+    assert "sync obsidian" in low
+    assert "markdown" in low
+    assert "obsidian://new" in low
+    assert "do not deny obsidian connectivity" in low
+    assert "forbidden when uri mode is active" in low
+    yes_answer = (
+        "oui, je peux préparer une note markdown et déclencher l'ouverture d'obsidian "
+        "via le bouton sync obsidian"
+    )
+    assert yes_answer in low
+    assert "never claim from chat alone" in low
+
+
+def test_build_obsidian_sync_context_uri_mode_explicit(monkeypatch):
+    from app.core.obsidian_sync import build_obsidian_sync_context
+
+    monkeypatch.setenv("OBSIDIAN_ENABLED", "true")
+    monkeypatch.setenv("OBSIDIAN_MODE", "uri")
+    monkeypatch.setenv("OBSIDIAN_SYNC_ENABLED", "false")
+    ctx = build_obsidian_sync_context()
+    assert "OBSIDIAN_MODE=uri" in ctx
+    assert "Sync Obsidian" in ctx
+    assert "answer YES with substance" in ctx
+
+
+def test_build_obsidian_sync_context_disabled(monkeypatch):
+    from app.core.obsidian_sync import build_obsidian_sync_context
+
+    monkeypatch.setenv("OBSIDIAN_ENABLED", "false")
+    ctx = build_obsidian_sync_context()
+    low = ctx.lower()
+    assert "not configured" in low
+    assert "obsidian uri mode" not in low
+
+
+def test_build_obsidian_sync_context_local_rest_conservative(monkeypatch):
+    from app.core.obsidian_sync import build_obsidian_sync_context
+
+    monkeypatch.setenv("OBSIDIAN_ENABLED", "true")
+    monkeypatch.setenv("OBSIDIAN_MODE", "local_rest")
+    monkeypatch.setenv("OBSIDIAN_SYNC_ENABLED", "true")
+    ctx = build_obsidian_sync_context()
+    assert "connector confirmation" in ctx.lower()
+    assert "sync réussie" in ctx
+    assert "note écrite dans Obsidian" in ctx
+
+
+def test_coco_system_prompt_includes_obsidian_sync():
+    from app.api.chat import build_openchawn_base_system_prompt
+
+    prompt = build_openchawn_base_system_prompt()
+    assert "OBSIDIAN_SYNC_RUNTIME_MARKER" in prompt
+    assert "Obsidian URI mode" in prompt
+    assert "Sync Obsidian" in prompt
+
+
+def test_obsidian_connect_intent_uri_aware_in_ui():
+    html = _html()
+    assert "function ocDetectObsidianConnectIntent" in html
+    assert "function ocAddObsidianConnectAssistantMessage" in html
+    assert "OC_OBSIDIAN_URI_CONNECT_FR" in html
+    assert "préparer une note Markdown" in html
+    assert "bouton Sync Obsidian" in html
+    assert "aucun connecteur Obsidian actif" not in html
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocDetectObsidianConnectIntent(text)" in send_fn
+    assert "ocAddObsidianConnectAssistantMessage()" in send_fn
+    connect_fn = html.split("function ocAddObsidianConnectAssistantMessage")[1].split(
+        "function ocAddAffineOpenAssistantMessage"
+    )[0]
+    assert "sync réussie" not in connect_fn
+    assert "note écrite" not in connect_fn
