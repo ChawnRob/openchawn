@@ -1237,7 +1237,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     gap: 4px;
   }
 
-  /* Slim mobile toolbar: Second Brain + mic only (no duplicate row below) */
+  /* Slim mobile toolbar: AFFiNE + mic only (no duplicate row below) */
   html.ux-chat-clean .oc-composer-mobile-toolbar {
     display: flex;
     align-items: center;
@@ -6347,6 +6347,8 @@ function ocShowCocoSecondBrainToast() {
 }
 
 /* COCO second brain placeholder — AFFiNE local-first open (no OpenChawn document storage) */
+var ocAffineOpenInFlight = false;
+
 function ocOpenAffineSecondBrain(btn) {
   /*
   TODO:
@@ -6357,25 +6359,26 @@ function ocOpenAffineSecondBrain(btn) {
   - no OpenChawn document storage by default
   - backend bridge only for retrieval/indexing if user enables it
   */
+  if (ocAffineOpenInFlight) return;
+  ocAffineOpenInFlight = true;
+  setTimeout(function () {
+    ocAffineOpenInFlight = false;
+  }, 800);
+
   var affineUrl = ocResolveAffineUrl(btn);
   ocShowCocoSecondBrainToast();
-  var opened = null;
   try {
-    opened = window.open(affineUrl, '_blank', 'noopener,noreferrer');
+    window.open(affineUrl, '_blank', 'noopener,noreferrer');
   } catch (e) {}
-  if (!opened) {
-    try {
-      window.location.href = affineUrl;
-    } catch (e2) {}
-  }
 }
 
 document.addEventListener('click', function (e) {
   var sb = e.target.closest('[data-coco-action="open-affine-second-brain"], .coco-second-brain-btn');
   if (!sb) return;
   e.preventDefault();
+  e.stopPropagation();
   ocOpenAffineSecondBrain(sb);
-});
+}, true);
 
 document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
   var chip = e.target.closest('.coco-prompt-chip');

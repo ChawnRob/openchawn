@@ -50,7 +50,22 @@ def test_affine_url_resolution_and_fallback():
     assert "data-affine-url" in html
     assert "https://app.affine.pro" in html
     assert "window.open(affineUrl, '_blank', 'noopener,noreferrer')" in html
-    assert "window.location.href = affineUrl" in html
+
+
+def test_affine_open_single_navigation_path():
+    html = _html()
+    open_fn = html.split("function ocOpenAffineSecondBrain")[1].split("document.addEventListener('click'")[0]
+    assert open_fn.count("window.open(affineUrl") == 1
+    assert "window.location.href" not in open_fn
+    assert "window.location.assign" not in open_fn
+    assert "window.location.replace" not in open_fn
+    handler = html.split("document.addEventListener('click', function (e) {")[1].split(
+        "document.getElementById('cocoPromptChips')"
+    )[0]
+    assert 'data-coco-action="open-affine-second-brain"' in handler
+    assert "preventDefault" in handler
+    assert "stopPropagation" in handler
+    assert handler.count("ocOpenAffineSecondBrain(sb)") == 1
 
 
 def test_second_brain_microcopy_safe():
