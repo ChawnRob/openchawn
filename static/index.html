@@ -276,8 +276,9 @@ html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper textarea::pl
 }
 
 html.oc-theme-night .mic-btn {
-  background: linear-gradient(160deg, rgba(30, 52, 68, 0.95) 0%, rgba(20, 44, 60, 0.92) 45%, var(--phoenix-soft) 100%);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  background: rgba(3, 18, 31, 0.96);
+  border-color: rgba(89, 226, 255, 0.7);
+  color: rgba(210, 250, 255, 1);
 }
 
 #btnFileIntake,
@@ -302,6 +303,8 @@ html.oc-theme-night .mic-btn {
   -webkit-tap-highlight-color: transparent;
   flex: 0 0 44px;
   flex-shrink: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 #btnFileIntake svg,
@@ -334,17 +337,65 @@ body.oc-night-mode #btnFileIntake,
 body.oc-night-mode #btnMobileFileAttach,
 body.oc-night-mode .oc-attach-btn,
 body.oc-night-mode .oc-file-attach-btn,
+body.oc-night-mode #btnSpeech,
+body.oc-night-mode .mic-btn,
 html.oc-theme-night #btnFileIntake,
 html.oc-theme-night #btnMobileFileAttach,
 html.oc-theme-night .oc-attach-btn,
 html.oc-theme-night .oc-file-attach-btn,
+html.oc-theme-night #btnSpeech,
+html.oc-theme-night .mic-btn,
+html[data-theme="night"] #btnFileIntake,
+html[data-theme="night"] #btnMobileFileAttach,
+html[data-theme="night"] .oc-attach-btn,
+html[data-theme="night"] .oc-file-attach-btn,
+html[data-theme="night"] #btnSpeech,
+html[data-theme="night"] .mic-btn,
+body[data-theme="night"] #btnFileIntake,
+body[data-theme="night"] #btnMobileFileAttach,
+body[data-theme="night"] .oc-attach-btn,
+body[data-theme="night"] .oc-file-attach-btn,
+body[data-theme="night"] #btnSpeech,
+body[data-theme="night"] .mic-btn,
 [data-theme="night"] #btnFileIntake,
 [data-theme="night"] #btnMobileFileAttach,
 [data-theme="night"] .oc-attach-btn,
-[data-theme="night"] .oc-file-attach-btn {
+[data-theme="night"] .oc-file-attach-btn,
+[data-theme="night"] #btnSpeech,
+[data-theme="night"] .mic-btn {
   background: rgba(3, 18, 31, 0.96) !important;
   color: rgba(210, 250, 255, 1) !important;
   border-color: rgba(89, 226, 255, 0.7) !important;
+  box-shadow:
+    0 0 0 1px rgba(90, 220, 255, 0.15),
+    0 0 18px rgba(0, 210, 255, 0.18) !important;
+}
+
+html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech,
+html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex: 0 0 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 220, 255, 0.55);
+  background: rgba(6, 28, 42, 0.92);
+  color: rgba(210, 245, 255, 0.98);
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  order: -1;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech svg,
+html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  opacity: 1;
 }
 
 html.oc-theme-night .oc-composer-toast {
@@ -1358,24 +1409,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .coco-mobile-mic-mount {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-  }
-
-  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn {
-    display: grid !important;
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    padding: 0;
-    border-radius: 50%;
-    flex: 0 0 34px;
-  }
-
-  html.ux-chat-clean .coco-mobile-mic-mount .mic-btn svg {
-    width: 17px;
-    height: 17px;
+    display: none !important;
   }
 
   html.ux-chat-clean .oc-mobile-composer-plus-wrap {
@@ -1385,10 +1419,6 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .oc-composer-attachment {
     margin: 0 0 4px;
     padding: 6px 8px;
-  }
-
-  html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
-    display: none !important;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus {
@@ -1405,7 +1435,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     width: 44px;
     height: 44px;
     min-width: 44px;
-    order: -1;
+    order: -2;
     position: relative;
     z-index: 4;
   }
@@ -1972,6 +2002,11 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.msg-body strong {
+  font-weight: 700;
+  color: inherit;
 }
 
 .msg-body {
@@ -2791,18 +2826,25 @@ html.oc-theme-night.ux-chat-clean .oc-file-intake-sheet-item {
 }
 
 .mic-btn {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex: 0 0 44px;
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 2px solid rgba(244, 160, 70, 0.55);
-  background: linear-gradient(160deg, #fff 0%, rgba(56,221,245,0.12) 45%, var(--phoenix-soft) 100%);
-  color: var(--deep-blue);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 220, 255, 0.55);
+  background: rgba(6, 28, 42, 0.92);
+  color: rgba(210, 245, 255, 0.98);
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(6, 37, 54, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(90, 220, 255, 0.15),
+    0 0 18px rgba(0, 210, 255, 0.18);
   transition: box-shadow 0.2s, transform 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .mic-btn:hover:not(:disabled) {
   box-shadow: 0 2px 16px rgba(255, 179, 92, 0.25);
@@ -4166,8 +4208,10 @@ function ocUpdateMobileComposerChrome() {
 
   if (ocChatCleanMobileComposer()) {
     if (wrap) wrap.setAttribute('aria-hidden', 'true');
-    if (micMount && mic && mic.parentElement !== micMount) micMount.appendChild(mic);
-    micMount?.removeAttribute('aria-hidden');
+    if (micMount) micMount.setAttribute('aria-hidden', 'true');
+    if (inputWrapper && mic && mic.parentElement !== inputWrapper) {
+      inputWrapper.insertBefore(mic, dom.input || null);
+    }
     if (attachBtn) {
       attachBtn.setAttribute('aria-label', 'Ajouter photo ou fichier');
       attachBtn.title = 'Ajouter photo ou fichier';
@@ -6215,6 +6259,18 @@ function ocCopyAssistantMessage(btn, assistantMsg) {
   ocShowCopyConfirmation(btn, fallbackCopy());
 }
 
+function ocEscapeHtmlText(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function ocFormatAssistantMessageHtml(text) {
+  var escaped = ocEscapeHtmlText(text);
+  return escaped.replace(/\*\*([^*\n][^*\n]*)\*\*/g, '<strong>$1</strong>');
+}
+
 // ── Add message ─────────────────────────────────────
 function addMsg(role, text, meta) {
   if (dom.welcome) dom.welcome.remove();
@@ -6229,7 +6285,11 @@ function addMsg(role, text, meta) {
 
   const body = document.createElement('div');
   body.className = 'msg-body';
-  body.textContent = text;
+  if (role === 'assistant') {
+    body.innerHTML = ocFormatAssistantMessageHtml(text);
+  } else {
+    body.textContent = text;
+  }
   div.appendChild(body);
 
   if (role === 'assistant') {
@@ -6303,6 +6363,17 @@ async function send() {
   const text = dom.input.value.trim();
   const hasAttachment = ocHasPendingImageAttachment();
   if ((!text && !hasAttachment) || sending) return;
+
+  if (!hasAttachment && ocDetectLanguageComplaintIntent(text)) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+    addMsg('user', text);
+    ocAddLanguageComplaintAssistantMessage();
+    ocSetCocoState('ready', 'Ready');
+    scrollDown();
+    dom.input.focus();
+    return;
+  }
 
   if (!hasAttachment && ocDetectAffineOpenIntent(text)) {
     dom.input.value = '';
@@ -6387,7 +6458,7 @@ async function send() {
   scrollDown();
 
   try {
-    const chatBody = { message: chatMessage };
+    const chatBody = { message: ocSanitizeChatOutboundMessage(chatMessage) };
     if (mediaId) chatBody.media_id = mediaId;
     const r = await apiFetch('/chat', {
       method: 'POST',
@@ -6468,7 +6539,9 @@ function ocDetectAffineOpenIntent(text) {
 }
 
 var OC_OBSIDIAN_URI_CONNECT_FR =
-  'Oui. COCO peut préparer une note Markdown et utiliser le bouton Sync Obsidian pour déclencher Obsidian via obsidian://new. Ce n\u2019est pas une connexion API complète : tu valides l\u2019envoi depuis ton appareil.';
+  'Oui. COCO peut préparer une note Markdown et utiliser le bouton Sync Obsidian pour l\u2019envoyer vers Obsidian sur votre appareil.';
+var OC_LANGUAGE_COMPLAINT_FR =
+  'Je réponds en français lorsque votre dernier message est en français. Si une réponse est sortie en anglais par erreur, reformulez votre demande : je reprends en français sans consigne de langue imposée.';
 var OC_OBSIDIAN_URI_NOTE_FR =
   'Oui. J\u2019ai préparé une note Markdown pour Obsidian. Appuie sur Sync Obsidian pour l\u2019ouvrir dans Obsidian et valider l\u2019enregistrement depuis ton appareil.';
 var OC_OBSIDIAN_URI_MAX_CONTENT = 6000;
@@ -6493,11 +6566,54 @@ function ocDetectObsidianNoteIntent(text) {
   return false;
 }
 
+function ocDetectLanguageComplaintIntent(text) {
+  var t = ocNormalizeObsidianIntentText(text);
+  if (!t) return false;
+  return (
+    /\b(pourquoi|why)\b/.test(t) &&
+    (/\b(repond|reply|replies|parle|speak|ecri)\w*\b/.test(t) || /\b(en anglais|in english)\b/.test(t)) &&
+    /\b(anglais|english)\b/.test(t)
+  );
+}
+
+function ocSanitizeChatOutboundMessage(text) {
+  var s = String(text || '').trim();
+  if (!s) return s;
+  s = s.replace(/^OUTPUT LANGUAGE:[^\n]*\n?/gim, '');
+  s = s.replace(/^The user explicitly requested English\.[^\n]*\n?/gim, '');
+  s = s.replace(/^Réponds obligatoirement dans la langue[^\n]*\n?/gim, '');
+  s = s.replace(/^Write your entire reply in English[^\n]*\n?/gim, '');
+  return s.trim() || String(text || '').trim();
+}
+
+function ocAddLanguageComplaintAssistantMessage() {
+  if (dom.welcome) dom.welcome.remove();
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.innerHTML = ocFormatAssistantMessageHtml(OC_LANGUAGE_COMPLAINT_FR);
+  div.appendChild(body);
+  div.appendChild(ocBuildAssistantMsgActions());
+  dom.messages.insertBefore(div, dom.typing);
+  lastAssistantPlain = OC_LANGUAGE_COMPLAINT_FR;
+  refreshExportButtons();
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
+
 function ocDetectObsidianConnectIntent(text) {
   var t = ocNormalizeObsidianIntentText(text);
   if (!t || !/\bobsidian\b/.test(t)) return false;
   if (/\baffine\b/.test(t) && !/\bobsidian\b/.test(t.replace(/\baffine\b/g, ''))) return false;
   var phrasePatterns = [
+    /\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+obsidian\b/,
+    /\b(peux|peut)\s+tu\s+me\s+connect\w*\s+a\s+obsidian\b/,
+    /\bsynchronis\w*\s+obsidian\b/,
     /\bsync\s+(avec|to)\s+obsidian\b/,
     /\bsync\s+obsidian\b/,
     /\bfaire\s+le\s+sync\s+avec\s+obsidian\b/,

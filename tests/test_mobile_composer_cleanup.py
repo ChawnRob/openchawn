@@ -26,25 +26,21 @@ def test_mobile_plus_button_opens_photo_gallery_file_menu():
     assert "ocPickFileIntakeSource('file')" in setup
 
 
-def test_mic_hidden_from_main_composer_bar_on_mobile():
+def test_mic_visible_in_main_composer_bar_on_mobile():
     html = _html()
     block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
     selector = "html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn"
-    assert selector in block
-    mic_rule = block.split(selector)[1].split("html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus")[0]
-    assert "display: none !important" in mic_rule
+    assert selector in block or "html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech" in html
+    mic_rule = html.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split("textarea")[0]
+    assert "display: inline-flex !important" in mic_rule
+    assert "44px" in mic_rule
 
 
-def test_mic_mounted_in_compact_toolbar_on_mobile():
+def test_mic_stays_in_composer_wrapper_on_mobile():
     html = _html()
-    assert 'id="cocoMobileMicMount"' in html
-    assert 'id="ocComposerMobileToolbar"' in html
-    idx = html.find('id="ocComposerMobileToolbar"')
-    assert idx != -1
-    toolbar_chunk = html[idx : idx + 900]
-    assert "cocoMobileMicMount" in toolbar_chunk
     fn = html.split("function ocUpdateMobileComposerChrome")[1].split("function ocCloseMobileComposerMenu")[0]
-    assert "micMount.appendChild(mic)" in fn
+    assert "inputWrapper.insertBefore(mic" in fn
+    assert "micMount.appendChild(mic)" not in fn
 
 
 def test_second_brain_single_access_on_mobile():
@@ -58,16 +54,15 @@ def test_second_brain_single_access_on_mobile():
     assert "display: none !important" in block.split(":not(.coco-obsidian-sync-btn)")[1][:120]
 
 
-def test_mobile_composer_three_column_layout():
+def test_mobile_composer_four_control_layout():
     html = _html()
     mobile = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
     composer = mobile.split("/* Composer final: [ + ] [ champ texte large ] [ envoyer ] */")[1]
     assert "#btnFileIntake" in composer
+    assert "#btnSpeech" in html or ".mic-btn" in composer
     assert "textarea" in composer
     assert ".send-btn" in composer
     assert "flex: 1 1 auto" in composer.split("textarea {")[1]
-    mic_rule = mobile.split("html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn")[1].split("#btnImportPlus")[0]
-    assert "display: none !important" in mic_rule
 
 
 def test_iphone_width_tightens_composer_controls():

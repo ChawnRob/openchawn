@@ -20,7 +20,7 @@ def test_mobile_attach_button_visible_in_composer():
     assert "oc-file-intake-desktop-only" not in html
     assert "oc-file-intake-mobile-only" not in html
     assert "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake" in html
-    assert "display: grid !important" in html
+    assert "display: inline-flex !important" in html
     assert "html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus" in html
     mobile_block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
     assert "oc-mobile-composer-plus-wrap" in mobile_block

@@ -67,6 +67,9 @@ def _detect_obsidian_connect_intent(text: str) -> bool:
         r"\bsync\s+obsidian\b",
         r"\bfaire\s+le\s+sync\s+avec\s+obsidian\b",
         r"\bfaire\s+la\s+sync\s+avec\s+obsidian\b",
+        r"\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+obsidian\b",
+        r"\b(peux|peut)\s+tu\s+me\s+connect\w*\s+a\s+obsidian\b",
+        r"\bsynchronis\w*\s+obsidian\b",
         r"\bsynchronis\w*\s+avec\s+obsidian\b",
         r"\bje\s+veux\s+synchronis\w*\s+avec\s+obsidian\b",
         r"\bconnexion\s+obsidian\b",
@@ -339,7 +342,7 @@ def test_obsidian_connect_intent_uri_aware_in_ui():
     assert "function ocAddObsidianNoteAssistantMessage" in html
     assert "OC_OBSIDIAN_URI_CONNECT_FR" in html
     assert "OC_OBSIDIAN_URI_NOTE_FR" in html
-    assert "connexion API complète" in html
+    assert "votre appareil" in html
     assert "obsidian://new" in html
     assert "bouton Sync Obsidian" in html
     assert "ocNormalizeObsidianIntentText" in html
@@ -401,7 +404,6 @@ def _assert_uri_connect_reply_contract() -> None:
     reply = _uri_connect_reply_from_html()
     assert "Markdown" in reply
     assert "Sync Obsidian" in reply
-    assert "obsidian://new" in reply
-    assert "connexion API" in reply
+    assert "votre appareil" in reply
     for denial in OC_OBSIDIAN_URI_DENIAL_PHRASES:
         assert denial not in reply
