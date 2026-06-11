@@ -70,9 +70,8 @@ def build_second_brain_context() -> str:
         if st["api_sync_active"]
         else (
             "Deep AFFiNE API sync is NOT active in this deployment. Do not claim you can read, "
-            "write, search, or index the user's AFFiNE workspace via API. You can open AFFiNE "
-            "and help prepare content (notes, summaries, project pages) for the user to place "
-            "in their workspace."
+            "write, search, or index the user's AFFiNE workspace via API. Help prepare content "
+            "(notes, summaries, project pages) for the user to place in their workspace."
         )
     )
     return (
@@ -81,8 +80,17 @@ def build_second_brain_context() -> str:
         f"- Provider: {st['provider']}; mode: {st['mode']}; ownership: {st['ownership']}.\n"
         "- AFFiNE is the user's workspace for notes, images, and knowledge. Prefer local-first / desktop workspace when the user controls data on their machine.\n"
         "- OpenChawn does NOT store user documents by default (openchawn_document_storage_default=false).\n"
-        f"- Open AFFiNE from COCO: {'available' if st['open_action_configured'] else 'not configured'}.\n"
+        f"- Open AFFiNE UI button in COCO: {'available' if st['open_action_configured'] else 'not configured'}.\n"
         f"- {sync_line}\n"
+        "- CRITICAL — Opening AFFiNE in the browser requires the user to tap the « Ouvrir AFFiNE » UI button. "
+        "Chat/backend cannot trigger browser navigation. Never claim AFFiNE was opened, launched, or started "
+        "from chat alone — forbidden phrases include: « AFFiNE est lancé », « J'ouvre AFFiNE », « c'est ouvert », "
+        "« Second Brain est lancé », « ✅ AFFiNE est lancé ».\n"
+        "- When the user asks to open AFFiNE (e.g. « ouvre AFFiNE », « ouvre moi Affine », « oui ouvre AFFiNE », "
+        "« open affine »), respond that AFFiNE is ready and they must tap the button — e.g. "
+        "« AFFiNE est prêt. Appuyez sur le bouton Ouvrir AFFiNE pour l'ouvrir. » "
+        "(English: AFFiNE is ready. Tap the Open AFFiNE button to open it.)\n"
+        "- open_affine in supported_actions_current means the UI button exists — not automatic chat-triggered open.\n"
         "- Future workspace read/write/indexing requires explicit user consent (consent_required_for_sync=true).\n"
         "- Current supported actions: "
         + ", ".join(st["supported_actions_current"])

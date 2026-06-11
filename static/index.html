@@ -2002,6 +2002,15 @@ html.ux-legacy .coco-msg-actions {
   display: none !important;
 }
 
+.oc-affine-chat-action {
+  margin-top: 10px;
+}
+.oc-affine-chat-action .ux-tool-btn {
+  width: 100%;
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
 .msg-meta {
   display: flex;
   gap: 6px;
@@ -3495,14 +3504,14 @@ html.ux-legacy .coco-companion-presence {
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
-        <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE" aria-label="Open AFFiNE">Open AFFiNE</button>
+        <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Ouvrir AFFiNE" aria-label="Ouvrir AFFiNE">Ouvrir AFFiNE</button>
       </div>
       <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true" aria-label="Voice dictation slot"></span>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
       <button type="button" class="coco-future-btn coco-future-voice-placeholder" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
-      <button type="button" class="coco-future-btn coco-second-brain-btn coco-future-second-brain-dup" data-coco-action="open-affine-second-brain" title="Open AFFiNE" aria-label="Open AFFiNE">AFFiNE</button>
+      <button type="button" class="coco-future-btn coco-second-brain-btn coco-future-second-brain-dup" data-coco-action="open-affine-second-brain" title="Ouvrir AFFiNE" aria-label="Ouvrir AFFiNE">Ouvrir AFFiNE</button>
     </div>
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
@@ -6225,6 +6234,17 @@ async function send() {
   const hasAttachment = ocHasPendingImageAttachment();
   if ((!text && !hasAttachment) || sending) return;
 
+  if (!hasAttachment && ocDetectAffineOpenIntent(text)) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+    addMsg('user', text);
+    ocAddAffineOpenAssistantMessage();
+    ocSetCocoState('ready', 'Ready');
+    scrollDown();
+    dom.input.focus();
+    return;
+  }
+
   sending = true;
   dom.send.disabled = true;
 
@@ -6320,6 +6340,64 @@ async function send() {
 }
 
 var COCO_AFFINE_FALLBACK_URL = 'https://app.affine.pro';
+var OC_AFFINE_OPEN_PROMPT_FR =
+  'AFFiNE est prêt. Appuyez sur le bouton Ouvrir AFFiNE pour l\u2019ouvrir.';
+
+function ocNormalizeAffineIntentText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2019']/g, "'");
+}
+
+function ocDetectAffineOpenIntent(text) {
+  var t = ocNormalizeAffineIntentText(text).trim();
+  if (!t) return false;
+  var mentionsAffine = /\baffine\b/.test(t) || /\bsecond brain\b/.test(t);
+  var openVerb = /\b(ouvr|open|lance|lancer|launch|demarr|start)\w*/.test(t);
+  if (mentionsAffine && (openVerb || /\b(oui|yes|ok)\b/.test(t))) return true;
+  if (/^(oui|yes|ok|d'accord|vas[- ]?y)\s*[.!]?$/.test(t)) {
+    var last = ocNormalizeAffineIntentText(lastAssistantPlain || '');
+    if (last.indexOf('affine') !== -1 || last.indexOf('second brain') !== -1) {
+      if (openVerb || /\b(souhait|voulez|want|souhaitez|ouvr|open|lance)\w*/.test(last)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function ocAddAffineOpenAssistantMessage() {
+  if (dom.welcome) dom.welcome.remove();
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = OC_AFFINE_OPEN_PROMPT_FR;
+  div.appendChild(body);
+  var actions = document.createElement('div');
+  actions.className = 'oc-affine-chat-action';
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ux-tool-btn tool-accent coco-second-brain-btn';
+  btn.setAttribute('data-coco-action', 'open-affine-second-brain');
+  btn.setAttribute('title', 'Ouvrir AFFiNE');
+  btn.setAttribute('aria-label', 'Ouvrir AFFiNE');
+  btn.textContent = 'Ouvrir AFFiNE';
+  actions.appendChild(btn);
+  div.appendChild(actions);
+  div.appendChild(ocBuildAssistantMsgActions());
+  dom.messages.insertBefore(div, dom.typing);
+  lastAssistantPlain = OC_AFFINE_OPEN_PROMPT_FR;
+  refreshExportButtons();
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
 
 function ocResolveAffineUrl(btn) {
   var local = (typeof window.OPENCHAWN_AFFINE_LOCAL_URL === 'string' && window.OPENCHAWN_AFFINE_LOCAL_URL.trim()) || '';

@@ -49,7 +49,7 @@ def test_mic_mounted_in_compact_toolbar_on_mobile():
 
 def test_second_brain_single_access_on_mobile():
     html = _html()
-    assert "Open AFFiNE" in html
+    assert "Ouvrir AFFiNE" in html
     assert "Open Second Brain" not in html
     block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
     assert "coco-future-controls" in block

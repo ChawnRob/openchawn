@@ -37,8 +37,7 @@ def test_second_brain_buttons_exist():
     html = _html()
     assert "coco-second-brain-btn" in html
     assert 'data-coco-action="open-affine-second-brain"' in html
-    assert "Open AFFiNE" in html
-    assert ">AFFiNE</button>" in html
+    assert "Ouvrir AFFiNE" in html
     assert "Open Second Brain" not in html
 
 
@@ -79,8 +78,19 @@ def test_second_brain_microcopy_safe():
 
 def test_second_brain_aria_and_title():
     html = _html()
-    assert html.count('title="Open AFFiNE"') >= 2
-    assert html.count('aria-label="Open AFFiNE"') >= 2
+    assert html.count('title="Ouvrir AFFiNE"') >= 2
+    assert html.count('aria-label="Ouvrir AFFiNE"') >= 2
+
+
+def test_affine_open_intent_no_false_launch_in_ui():
+    html = _html()
+    assert "function ocDetectAffineOpenIntent" in html
+    assert "function ocAddAffineOpenAssistantMessage" in html
+    assert "AFFiNE est prêt. Appuyez sur le bouton Ouvrir AFFiNE" in html
+    assert "AFFiNE est lancé" not in html
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocDetectAffineOpenIntent(text)" in send_fn
+    assert "ocAddAffineOpenAssistantMessage()" in send_fn
 
 
 def test_affine_handler_todo_comment():

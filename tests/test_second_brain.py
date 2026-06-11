@@ -39,6 +39,9 @@ def test_build_second_brain_context_principles():
     assert "affine (user-owned workspace)" in low
     assert "est-ce que tu peux gérer mon espace affine" in low
     assert "using affine (not « second brain »)" in low
+    assert "never claim affine was opened" in low
+    assert "appuyez sur le bouton ouvrir affine" in low
+    assert "affine est lancé" in low
 
 
 def test_coco_system_prompt_includes_second_brain():
