@@ -6264,6 +6264,17 @@ async function send() {
     return;
   }
 
+  if (!hasAttachment && ocDetectObsidianNoteIntent(text)) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+    addMsg('user', text);
+    ocAddObsidianNoteAssistantMessage(text);
+    ocSetCocoState('ready', 'Ready');
+    scrollDown();
+    dom.input.focus();
+    return;
+  }
+
   if (!hasAttachment && ocDetectObsidianConnectIntent(text)) {
     dom.input.value = '';
     dom.input.style.height = 'auto';
@@ -6407,6 +6418,29 @@ function ocDetectAffineOpenIntent(text) {
 
 var OC_OBSIDIAN_URI_CONNECT_FR =
   'Oui. COCO peut préparer une note Markdown et utiliser le bouton Sync Obsidian pour déclencher Obsidian via obsidian://new. Ce n\u2019est pas une connexion API complète : tu valides l\u2019envoi depuis ton appareil.';
+var OC_OBSIDIAN_URI_NOTE_FR =
+  'Oui. J\u2019ai préparé une note Markdown pour Obsidian. Appuie sur Sync Obsidian pour l\u2019ouvrir dans Obsidian et valider l\u2019enregistrement depuis ton appareil.';
+var OC_OBSIDIAN_URI_MAX_CONTENT = 6000;
+
+function ocDetectObsidianNoteIntent(text) {
+  var t = ocNormalizeObsidianIntentText(text);
+  if (!t || !/\bobsidian\b/.test(t)) return false;
+  if (/\baffine\b/.test(t) && !/\bobsidian\b/.test(t.replace(/\baffine\b/g, ''))) return false;
+  var notePatterns = [
+    /\bnote\s+(ca\s+)?dans\s+obsidian\b/,
+    /\bajout\w*\s+(ca\s+)?dans\s+obsidian\b/,
+    /\bsauvegard\w*\s+dans\s+obsidian\b/,
+    /\becri\w*\s+(ca\s+)?dans\s+obsidian\b/,
+    /\bcree\w*\s+une\s+note\s+obsidian\b/,
+    /\bmet\w*\s+(ca\s+)?dans\s+obsidian\b/,
+    /\benregistr\w*\s+dans\s+obsidian\b/,
+    /\btravaill\w*\s+dans\s+obsidian\b/,
+  ];
+  for (var i = 0; i < notePatterns.length; i++) {
+    if (notePatterns[i].test(t)) return true;
+  }
+  return false;
+}
 
 function ocDetectObsidianConnectIntent(text) {
   var t = ocNormalizeObsidianIntentText(text);
@@ -6446,6 +6480,24 @@ function ocDetectObsidianConnectIntent(text) {
   return false;
 }
 
+function ocBuildObsidianSyncButton(uri, markdown) {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ux-tool-btn tool-accent coco-obsidian-sync-btn';
+  btn.setAttribute('data-coco-action', 'open-obsidian-sync');
+  btn.setAttribute('title', 'Sync Obsidian');
+  btn.setAttribute('aria-label', 'Sync Obsidian');
+  btn.textContent = 'Sync Obsidian';
+  if (uri) btn.setAttribute('data-obsidian-uri', uri);
+  if (markdown) btn.setAttribute('data-obsidian-markdown', markdown);
+  return btn;
+}
+
+function ocObsidianNoteTitlePath(cfg, title) {
+  var folder = String((cfg && cfg.default_folder) || 'COCO').replace(/^\/+|\/+$/g, '');
+  return folder ? folder + '/' + title : title;
+}
+
 function ocAddObsidianConnectAssistantMessage() {
   if (dom.welcome) dom.welcome.remove();
   var cfg = ocObsidianSyncConfig;
@@ -6466,14 +6518,51 @@ function ocAddObsidianConnectAssistantMessage() {
   if (cfg.enabled && cfg.mode === 'uri') {
     var actions = document.createElement('div');
     actions.className = 'oc-affine-chat-action';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'ux-tool-btn tool-accent coco-obsidian-sync-btn';
-    btn.setAttribute('data-coco-action', 'open-obsidian-sync');
-    btn.setAttribute('title', 'Sync Obsidian');
-    btn.setAttribute('aria-label', 'Sync Obsidian');
-    btn.textContent = 'Sync Obsidian';
-    actions.appendChild(btn);
+    actions.appendChild(ocBuildObsidianSyncButton('', ''));
+    div.appendChild(actions);
+  }
+  div.appendChild(ocBuildAssistantMsgActions());
+  dom.messages.insertBefore(div, dom.typing);
+  lastAssistantPlain = bodyText;
+  refreshExportButtons();
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
+
+function ocAddObsidianNoteAssistantMessage(userText) {
+  if (dom.welcome) dom.welcome.remove();
+  var cfg = ocObsidianSyncConfig;
+  var bodyText =
+    cfg.enabled && cfg.mode === 'uri'
+      ? OC_OBSIDIAN_URI_NOTE_FR
+      : OC_OBSIDIAN_NOT_CONFIGURED_FR;
+  var note = ocBuildObsidianMarkdownNote({
+    userText: userText,
+    assistantText: '',
+    createdAt: new Date().toISOString(),
+  });
+  var uri = '';
+  if (cfg.enabled && cfg.mode === 'uri') {
+    uri = ocBuildObsidianNewNoteUri({
+      vault: cfg.vault_name || '',
+      title: ocObsidianNoteTitlePath(cfg, note.title),
+      markdown: note.markdown,
+    });
+  }
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = bodyText;
+  div.appendChild(body);
+  if (cfg.enabled && cfg.mode === 'uri') {
+    var actions = document.createElement('div');
+    actions.className = 'oc-affine-chat-action';
+    actions.appendChild(ocBuildObsidianSyncButton(uri, note.markdown));
     div.appendChild(actions);
   }
   div.appendChild(ocBuildAssistantMsgActions());
@@ -6605,6 +6694,35 @@ function ocShowComposerToast(text) {
   }, 4500);
 }
 
+function ocBuildObsidianMarkdownNote(opts) {
+  opts = opts || {};
+  var createdAt = opts.createdAt || new Date().toISOString();
+  var title = 'COCO-' + String(createdAt).slice(0, 10);
+  var userText = String(opts.userText || '').trim() || '_Aucune demande._';
+  var assistantText = String(opts.assistantText || '').trim() || '_Aucune réponse._';
+  var markdown = [
+    '# ' + title,
+    '',
+    '- **Date:** ' + createdAt,
+    '- **Source:** COCO / OpenChawn',
+    '',
+    '## Demande utilisateur',
+    '',
+    userText,
+    '',
+    '## Réponse COCO',
+    '',
+    assistantText,
+    '',
+  ].join('\n');
+  if (markdown.length > OC_OBSIDIAN_URI_MAX_CONTENT) {
+    markdown =
+      markdown.slice(0, OC_OBSIDIAN_URI_MAX_CONTENT - 72) +
+      '\n\n---\n\n_Contenu tronqué pour respecter la limite URI Obsidian._\n';
+  }
+  return { title: title, markdown: markdown };
+}
+
 function ocBuildObsidianNoteMarkdown() {
   var now = new Date();
   var stamp = now.toISOString();
@@ -6613,7 +6731,7 @@ function ocBuildObsidianNoteMarkdown() {
     '# ' + title,
     '',
     '- **Date:** ' + stamp,
-    '- **Source:** OpenChawn / COCO',
+    '- **Source:** COCO / OpenChawn',
     '',
     '## Conversation',
     '',
@@ -6637,21 +6755,23 @@ function ocBuildObsidianNoteMarkdown() {
     lines.push('_Aucun message visible dans cette session._');
     lines.push('');
   }
-  return { title: title, markdown: lines.join('\n') };
+  var markdown = lines.join('\n');
+  if (markdown.length > OC_OBSIDIAN_URI_MAX_CONTENT) {
+    markdown =
+      markdown.slice(0, OC_OBSIDIAN_URI_MAX_CONTENT - 72) +
+      '\n\n---\n\n_Contenu tronqué pour respecter la limite URI Obsidian._\n';
+  }
+  return { title: title, markdown: markdown };
 }
 
-function ocBuildObsidianNewUri(cfg, title, markdown) {
-  var vault = encodeURIComponent(cfg.vault_name || 'OpenChawn');
-  var folder = String(cfg.default_folder || 'COCO').replace(/^\/+|\/+$/g, '');
-  var name = folder ? folder + '/' + title : title;
-  return (
-    'obsidian://new?vault=' +
-    vault +
-    '&name=' +
-    encodeURIComponent(name) +
-    '&content=' +
-    encodeURIComponent(markdown)
-  );
+function ocBuildObsidianNewNoteUri(opts) {
+  opts = opts || {};
+  var params = new URLSearchParams();
+  if (opts.vault) params.set('vault', String(opts.vault));
+  if (opts.title) params.set('name', String(opts.title));
+  if (opts.markdown) params.set('content', String(opts.markdown));
+  var qs = params.toString();
+  return qs ? 'obsidian://new?' + qs : 'obsidian://new';
 }
 
 function ocCopyObsidianMarkdown(md) {
@@ -6710,9 +6830,16 @@ function ocSyncObsidian(event) {
 
   ocShowComposerToast(OC_OBSIDIAN_PREPARING_FR);
 
+  var btn =
+    event && event.target
+      ? event.target.closest('[data-coco-action="open-obsidian-sync"], .coco-obsidian-sync-btn')
+      : null;
+  var presetUri = btn && btn.getAttribute('data-obsidian-uri');
+  var presetMd = btn && btn.getAttribute('data-obsidian-markdown');
+
   var finish = function () {
     var cfg = ocObsidianSyncConfig;
-    var note = ocBuildObsidianNoteMarkdown();
+    var note = presetMd ? { title: '', markdown: presetMd } : ocBuildObsidianNoteMarkdown();
     var md = note.markdown;
 
     if (!cfg.enabled || cfg.mode !== 'uri') {
@@ -6722,7 +6849,13 @@ function ocSyncObsidian(event) {
       return;
     }
 
-    var uri = ocBuildObsidianNewUri(cfg, note.title, md);
+    var uri =
+      presetUri ||
+      ocBuildObsidianNewNoteUri({
+        vault: cfg.vault_name || '',
+        title: ocObsidianNoteTitlePath(cfg, note.title),
+        markdown: md,
+      });
     var opened = ocOpenObsidianUri(uri);
     ocCopyObsidianMarkdown(md);
     if (opened) {

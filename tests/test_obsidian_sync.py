@@ -31,6 +31,28 @@ def _normalize_obsidian_intent_text(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+def _detect_obsidian_note_intent(text: str) -> bool:
+    """Mirror of ocDetectObsidianNoteIntent in static/index.html."""
+    t = _normalize_obsidian_intent_text(text)
+    if not t or not re.search(r"\bobsidian\b", t):
+        return False
+    if re.search(r"\baffine\b", t) and not re.search(
+        r"\bobsidian\b", re.sub(r"\baffine\b", "", t)
+    ):
+        return False
+    note_patterns = [
+        r"\bnote\s+(ca\s+)?dans\s+obsidian\b",
+        r"\bajout\w*\s+(ca\s+)?dans\s+obsidian\b",
+        r"\bsauvegard\w*\s+dans\s+obsidian\b",
+        r"\becri\w*\s+(ca\s+)?dans\s+obsidian\b",
+        r"\bcree\w*\s+une\s+note\s+obsidian\b",
+        r"\bmet\w*\s+(ca\s+)?dans\s+obsidian\b",
+        r"\benregistr\w*\s+dans\s+obsidian\b",
+        r"\btravaill\w*\s+dans\s+obsidian\b",
+    ]
+    return any(re.search(p, t) for p in note_patterns)
+
+
 def _detect_obsidian_connect_intent(text: str) -> bool:
     """Mirror of ocDetectObsidianConnectIntent in static/index.html."""
     t = _normalize_obsidian_intent_text(text)
@@ -72,10 +94,18 @@ def _detect_obsidian_connect_intent(text: str) -> bool:
     return False
 
 
-def _uri_connect_reply_from_html() -> str:
-    reply = _html().split("var OC_OBSIDIAN_URI_CONNECT_FR =")[1].split(";")[0]
+def _uri_reply_from_html(var_name: str) -> str:
+    reply = _html().split(f"var {var_name} =")[1].split(";")[0]
     reply = reply.strip().strip("'")
     return reply.encode("utf-8").decode("unicode_escape").replace("\\u2019", "'")
+
+
+def _uri_connect_reply_from_html() -> str:
+    return _uri_reply_from_html("OC_OBSIDIAN_URI_CONNECT_FR")
+
+
+def _uri_note_reply_from_html() -> str:
+    return _uri_reply_from_html("OC_OBSIDIAN_URI_NOTE_FR")
 
 
 OC_OBSIDIAN_URI_DENIAL_PHRASES = (
@@ -144,13 +174,36 @@ def test_ui_affine_and_obsidian_chips_separate():
     assert "coco-second-brain-btn" in html
 
 
+def test_oc_build_obsidian_new_note_uri_includes_encoded_name_and_content():
+    block = _obsidian_block()
+    assert "function ocBuildObsidianNewNoteUri" in block
+    assert "URLSearchParams" in block
+    assert "obsidian://new" in block
+    assert "params.set('name'" in block
+    assert "params.set('content'" in block
+
+
+def test_oc_build_obsidian_new_note_uri_omits_missing_vault():
+    block = _obsidian_block()
+    assert "if (opts.vault)" in block
+    assert "vault: cfg.vault_name || ''" in block
+
+
+def test_oc_build_obsidian_markdown_note_structure():
+    block = _obsidian_block()
+    assert "function ocBuildObsidianMarkdownNote" in block
+    assert "COCO / OpenChawn" in block
+    assert "Demande utilisateur" in block
+    assert "Réponse COCO" in block
+    assert "OC_OBSIDIAN_URI_MAX_CONTENT" in block
+    assert "tronqué pour respecter la limite URI Obsidian" in block
+
+
 def test_oc_sync_obsidian_builds_uri_with_encoded_content():
     block = _obsidian_block()
     assert "function ocSyncObsidian" in _html()
-    assert "obsidian://new?vault=" in block
-    assert "&name=" in block
-    assert "&content=" in block
-    assert "encodeURIComponent(markdown)" in block
+    assert "ocBuildObsidianNewNoteUri" in block
+    assert "data-obsidian-uri" in block
     assert "ocBuildObsidianNoteMarkdown" in block
 
 
@@ -187,10 +240,13 @@ def test_build_obsidian_sync_context_uri_mode_default():
     assert "sync obsidian" in low
     assert "markdown" in low
     assert "obsidian://new" in low
+    assert "name=" in low or "name and content" in low
     assert "do not deny obsidian connectivity" in low
     assert "forbidden when uri mode is active" in low
     assert "local device handoff" in low
-    assert "obsidian://new" in low
+    assert "user validates final save" in low
+    assert "note/save intent" in low
+    assert "travaille dans obsidian" in low
     assert "je ne peux pas vous connecter à obsidian" in low
     assert "obsidian indisponible" in low
     assert "pas de connecteur obsidian" in low
@@ -206,7 +262,7 @@ def test_build_obsidian_sync_context_uri_mode_explicit(monkeypatch):
     ctx = build_obsidian_sync_context()
     assert "OBSIDIAN_MODE=uri" in ctx
     assert "Sync Obsidian" in ctx
-    assert "answer YES with substance" in ctx
+    assert "answer YES equivalent to" in ctx
 
 
 def test_build_obsidian_sync_context_disabled(monkeypatch):
@@ -240,11 +296,49 @@ def test_coco_system_prompt_includes_obsidian_sync():
     assert "Sync Obsidian" in prompt
 
 
+def test_obsidian_note_intent_phrases_detected():
+    phrases = [
+        "note ça dans Obsidian",
+        "ajoute ça dans Obsidian",
+        "sauvegarde dans Obsidian",
+        "écris ça dans Obsidian",
+        "crée une note Obsidian",
+        "mets ça dans Obsidian",
+        "enregistre dans Obsidian",
+        "Es ce que tu peux maintenant travailler dans Obsidian ?",
+    ]
+    for phrase in phrases:
+        assert _detect_obsidian_note_intent(phrase), phrase
+
+
+def test_obsidian_note_intent_reply_contract():
+    reply = _uri_note_reply_from_html()
+    assert "Markdown" in reply
+    assert "Sync Obsidian" in reply
+    assert "sync réussie" not in reply.lower()
+    assert "note écrite" not in reply.lower()
+    for denial in OC_OBSIDIAN_URI_DENIAL_PHRASES:
+        assert denial not in reply
+
+    html = _html()
+    note_fn = html.split("function ocAddObsidianNoteAssistantMessage")[1].split(
+        "function ocAddAffineOpenAssistantMessage"
+    )[0]
+    btn_fn = html.split("function ocBuildObsidianSyncButton")[1].split(
+        "function ocObsidianNoteTitlePath"
+    )[0]
+    assert "data-obsidian-uri" in btn_fn
+    assert "ocBuildObsidianNewNoteUri" in note_fn
+
+
 def test_obsidian_connect_intent_uri_aware_in_ui():
     html = _html()
+    assert "function ocDetectObsidianNoteIntent" in html
     assert "function ocDetectObsidianConnectIntent" in html
     assert "function ocAddObsidianConnectAssistantMessage" in html
+    assert "function ocAddObsidianNoteAssistantMessage" in html
     assert "OC_OBSIDIAN_URI_CONNECT_FR" in html
+    assert "OC_OBSIDIAN_URI_NOTE_FR" in html
     assert "connexion API complète" in html
     assert "obsidian://new" in html
     assert "bouton Sync Obsidian" in html
@@ -252,14 +346,16 @@ def test_obsidian_connect_intent_uri_aware_in_ui():
     assert "faire\\s+le\\s+sync\\s+avec\\s+obsidian" in html
     assert "send\\s+to\\s+obsidian" in html
     send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocDetectObsidianNoteIntent(text)" in send_fn
+    assert "ocAddObsidianNoteAssistantMessage(text)" in send_fn
     assert "ocDetectObsidianConnectIntent(text)" in send_fn
     assert "ocAddObsidianConnectAssistantMessage()" in send_fn
     connect_fn = html.split("function ocAddObsidianConnectAssistantMessage")[1].split(
-        "function ocAddAffineOpenAssistantMessage"
+        "function ocAddObsidianNoteAssistantMessage"
     )[0]
     assert "sync réussie" not in connect_fn
     assert "note écrite" not in connect_fn
-    assert "open-obsidian-sync" in connect_fn
+    assert "ocBuildObsidianSyncButton" in connect_fn
     for phrase in OC_OBSIDIAN_URI_DENIAL_PHRASES:
         assert phrase not in connect_fn
 
