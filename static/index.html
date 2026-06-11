@@ -3495,14 +3495,14 @@ html.ux-legacy .coco-companion-presence {
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
-        <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Open Second Brain</button>
+        <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Open AFFiNE" aria-label="Open AFFiNE">Open AFFiNE</button>
       </div>
       <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true" aria-label="Voice dictation slot"></span>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
       <button type="button" class="coco-future-btn coco-future-voice-placeholder" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
       <button type="button" class="coco-future-btn" disabled aria-disabled="true" title="Face (coming soon)">Face</button>
-      <button type="button" class="coco-future-btn coco-second-brain-btn coco-future-second-brain-dup" data-coco-action="open-affine-second-brain" title="Open AFFiNE Second Brain" aria-label="Open AFFiNE Second Brain">Second Brain</button>
+      <button type="button" class="coco-future-btn coco-second-brain-btn coco-future-second-brain-dup" data-coco-action="open-affine-second-brain" title="Open AFFiNE" aria-label="Open AFFiNE">AFFiNE</button>
     </div>
     <div class="clean-input-shell">
     <div class="ux-toolbar" id="uxToolbar" aria-label="Outils OpenChawn">
@@ -6340,7 +6340,7 @@ function ocShowCocoSecondBrainToast() {
     el.setAttribute('aria-live', 'polite');
     shell.insertBefore(el, shell.firstChild);
   }
-  el.textContent = 'Opening AFFiNE Second Brain. Your workspace stays under your control.';
+  el.textContent = 'Opening AFFiNE. Your workspace stays under your control.';
   el.classList.add('is-visible');
   clearTimeout(ocShowCocoSecondBrainToast._t);
   ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 4500);

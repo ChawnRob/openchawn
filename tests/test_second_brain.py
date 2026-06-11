@@ -36,8 +36,9 @@ def test_build_second_brain_context_principles():
     assert "user-owned" in low
     assert "not store user documents" in low or "does not store user documents" in low
     assert "api sync is not active" in low
-    assert "second brain" in low
-    assert "est-ce que tu peux gérer mon second brain" in low
+    assert "affine (user-owned workspace)" in low
+    assert "est-ce que tu peux gérer mon espace affine" in low
+    assert "using affine (not « second brain »)" in low
 
 
 def test_coco_system_prompt_includes_second_brain():

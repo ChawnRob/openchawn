@@ -37,8 +37,9 @@ def test_second_brain_buttons_exist():
     html = _html()
     assert "coco-second-brain-btn" in html
     assert 'data-coco-action="open-affine-second-brain"' in html
-    assert "Open Second Brain" in html
-    assert ">Second Brain</button>" in html
+    assert "Open AFFiNE" in html
+    assert ">AFFiNE</button>" in html
+    assert "Open Second Brain" not in html
 
 
 def test_affine_url_resolution_and_fallback():
@@ -54,7 +55,8 @@ def test_affine_url_resolution_and_fallback():
 
 def test_second_brain_microcopy_safe():
     html = _html()
-    assert "Opening AFFiNE Second Brain. Your workspace stays under your control." in html
+    assert "Opening AFFiNE. Your workspace stays under your control." in html
+    assert "Opening AFFiNE Second Brain" not in html
     assert "AFFiNE is connected" not in html
     assert "OpenChawn stores your documents" not in html
     assert "Memory sync is active" not in html
@@ -62,8 +64,8 @@ def test_second_brain_microcopy_safe():
 
 def test_second_brain_aria_and_title():
     html = _html()
-    assert html.count('title="Open AFFiNE Second Brain"') >= 2
-    assert html.count('aria-label="Open AFFiNE Second Brain"') >= 2
+    assert html.count('title="Open AFFiNE"') >= 2
+    assert html.count('aria-label="Open AFFiNE"') >= 2
 
 
 def test_affine_handler_todo_comment():

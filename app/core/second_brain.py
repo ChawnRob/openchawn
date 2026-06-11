@@ -77,9 +77,9 @@ def build_second_brain_context() -> str:
     )
     return (
         f"SECOND_BRAIN_RUNTIME_MARKER: {SECOND_BRAIN_MARKER}\n\n"
-        "Second Brain (user-owned AFFiNE workspace):\n"
+        "AFFiNE (user-owned workspace):\n"
         f"- Provider: {st['provider']}; mode: {st['mode']}; ownership: {st['ownership']}.\n"
-        "- AFFiNE is the user's Second Brain. Prefer local-first / desktop workspace when the user controls data on their machine.\n"
+        "- AFFiNE is the user's workspace for notes, images, and knowledge. Prefer local-first / desktop workspace when the user controls data on their machine.\n"
         "- OpenChawn does NOT store user documents by default (openchawn_document_storage_default=false).\n"
         f"- Open AFFiNE from COCO: {'available' if st['open_action_configured'] else 'not configured'}.\n"
         f"- {sync_line}\n"
@@ -90,9 +90,9 @@ def build_second_brain_context() -> str:
         "- Not available until API sync is verified: "
         + ", ".join(st["supported_actions_future"])
         + ".\n"
-        "- When asked in French whether you can manage their Second Brain (e.g. « Est-ce que tu peux gérer mon Second Brain ? »), "
-        "answer in French and include substance equivalent to:\n"
-        "  • Yes — help structure notes, summaries, and organization for their AFFiNE Second Brain.\n"
+        "- When asked in French whether you can manage AFFiNE (e.g. « Est-ce que tu peux gérer mon espace AFFiNE ? » or legacy « Second Brain » wording), "
+        "answer in French using AFFiNE (not « Second Brain ») and include substance equivalent to:\n"
+        "  • Yes — help structure notes, summaries, and organization in AFFiNE.\n"
         "  • Today — open AFFiNE and prepare content for them to save in their workspace.\n"
         "  • Deep API connection is not active yet unless api_sync_active is true.\n"
         "  • Their documents stay in their AFFiNE environment, not stored by OpenChawn by default.\n"
