@@ -125,23 +125,22 @@ def test_auto_open_crop_after_mobile_image_selection():
     assert "ocShouldAutoOpenMobileImageCrop" in preview_fn
     assert "ocOpenFileIntakeCropModal()" in preview_fn
     crop_open = html.split("function ocOpenFileIntakeCropModal")[1].split("function ocRevokePendingImagePreviewUrl")[0]
-    assert "ocPositionCropCenterOverlay" in crop_open
+    assert "ocScheduleFileIntakeCropperInit" in crop_open
 
 
 def test_interactive_crop_supports_touch_and_pinch():
     html = _html()
-    assert "function ocInitInteractiveCrop" in html
-    assert "function ocCropImageFromInteractiveState" in html
-    bind_fn = html.split("function ocBindCropTouchHandlers")[1].split("function ocInitInteractiveCrop")[0]
-    assert "touchstart" in bind_fn
-    assert "touchmove" in bind_fn
-    assert "touchend" in bind_fn
-    assert "preventDefault" in bind_fn
-    assert "passive: false" in bind_fn
-    assert "ocFileIntakeCropTouchLayer" in html
-    assert "ocCropTouchAbort" in html
+    assert "/static/vendor/cropperjs/cropper.min.js" in html
+    assert "function ocInitFileIntakeCropper" in html
+    assert "function ocCropImageFromCropper" in html
+    assert "getCroppedCanvas" in html
+    assert "zoomOnTouch: true" in html
+    assert "rotatable: true" in html
+    assert 'id="btnCropReset"' in html
+    assert 'id="btnCropRotate"' in html
+    assert "ocCropperHasInstance" in html
     assert "cropInteractive: true" in html
-    assert "Glissez l’image au doigt ou pincez pour zoomer" in html
+    assert "Glissez l’image, pincez pour zoomer" in html
 
 
 def test_image_pipeline_status_visible_during_send():

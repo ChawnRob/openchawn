@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>COCO</title>
+<link rel="stylesheet" href="/static/vendor/cropperjs/cropper.min.css">
+<script src="/static/vendor/cropperjs/cropper.min.js"></script>
 <script>
 (function () {
   function ocParisHour() {
@@ -2388,9 +2390,7 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   background: rgba(0, 0, 0, 0.35);
   position: relative;
 }
-.oc-file-intake-mobile-thumb img,
-.oc-file-intake-crop-stage img,
-.oc-file-intake-crop-stage canvas {
+.oc-file-intake-mobile-thumb img {
   display: block;
   max-width: 100%;
   max-height: min(52vh, 420px);
@@ -2458,71 +2458,61 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.72);
 }
-.oc-file-intake-crop-overlay {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  border: 2px solid rgba(56, 221, 245, 0.95);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-  pointer-events: none;
-  z-index: 2;
-}
 .oc-file-intake-crop-stage {
   position: relative;
-  margin: 12px 16px 0;
+  margin: 0;
   touch-action: none;
   -ms-touch-action: none;
-  cursor: grab;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   min-height: min(52vh, 420px);
-}
-.oc-file-intake-crop-stage.is-crop-interactive {
+  height: min(52vh, 420px);
+  width: 100%;
   display: block;
+  background: rgba(0, 0, 0, 0.55);
 }
-.oc-file-intake-crop-stage.is-crop-dragging {
-  cursor: grabbing;
-}
-.oc-crop-transform-layer {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform-origin: center center;
-  will-change: transform;
-  z-index: 0;
-  pointer-events: none;
-  -webkit-user-drag: none;
-}
-.oc-crop-transform-layer .oc-crop-interactive-img,
-.oc-file-intake-crop-stage .oc-crop-interactive-img {
+.oc-file-intake-crop-stage.is-cropper-active img {
   display: block;
   max-width: none !important;
   max-height: none !important;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  pointer-events: none;
-  -webkit-user-drag: none;
-  user-select: none;
-  -webkit-user-select: none;
 }
-.oc-crop-touch-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+.oc-file-intake-crop-stage .cropper-container {
+  width: 100% !important;
+  height: 100% !important;
   touch-action: none;
-  -ms-touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-  background: transparent;
-  cursor: grab;
+}
+.oc-file-intake-crop-stage .cropper-view-box {
+  outline: 2px solid rgba(56, 221, 245, 0.95);
+  outline-color: rgba(56, 221, 245, 0.95);
+}
+.oc-file-intake-crop-stage .cropper-line,
+.oc-file-intake-crop-stage .cropper-point {
+  background-color: rgba(56, 221, 245, 0.9);
+}
+.oc-file-intake-crop-stage .cropper-bg {
+  background-image: none;
+  background-color: rgba(0, 0, 0, 0.35);
+}
+.oc-file-intake-crop-stage .cropper-modal {
+  opacity: 0.55;
+}
+.oc-crop-toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 4px;
+}
+.oc-crop-toolbar .ux-tool-btn {
+  width: 100%;
+  min-height: 44px;
+  font-size: 14px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   pointer-events: auto;
 }
-.oc-file-intake-crop-stage.is-crop-dragging .oc-crop-touch-layer {
-  cursor: grabbing;
+.oc-crop-toolbar .oc-crop-toolbar-wide {
+  grid-column: span 2;
 }
 .msg.oc-image-pipeline-status {
   opacity: 0.94;
@@ -3534,13 +3524,19 @@ html.ux-legacy .coco-companion-presence {
       </header>
       <div class="oc-fi-mobile-body">
         <div class="oc-file-intake-crop-stage" id="ocFileIntakeCropStage">
-          <div class="oc-crop-transform-layer" id="ocFileIntakeCropTransformLayer">
-            <img id="ocFileIntakeCropImg" alt="">
-          </div>
-          <div class="oc-crop-touch-layer" id="ocFileIntakeCropTouchLayer" aria-hidden="true"></div>
-          <div class="oc-file-intake-crop-overlay hidden" id="ocFileIntakeCropOverlay"></div>
+          <img id="ocFileIntakeCropImg" alt="">
         </div>
-        <p class="oc-file-intake-crop-hint">Glissez l’image au doigt ou pincez pour zoomer, puis validez.</p>
+        <div class="oc-crop-toolbar" id="ocFileIntakeCropToolbar" aria-label="Outils de recadrage">
+          <button type="button" class="ux-tool-btn" id="btnCropNudgeLeft" aria-label="Déplacer à gauche">←</button>
+          <button type="button" class="ux-tool-btn" id="btnCropNudgeRight" aria-label="Déplacer à droite">→</button>
+          <button type="button" class="ux-tool-btn" id="btnCropNudgeUp" aria-label="Déplacer vers le haut">↑</button>
+          <button type="button" class="ux-tool-btn" id="btnCropNudgeDown" aria-label="Déplacer vers le bas">↓</button>
+          <button type="button" class="ux-tool-btn" id="btnCropZoomOut" aria-label="Zoom arrière">−</button>
+          <button type="button" class="ux-tool-btn" id="btnCropZoomIn" aria-label="Zoom avant">+</button>
+          <button type="button" class="ux-tool-btn" id="btnCropRotate" aria-label="Rotation 90 degrés">⟳ 90°</button>
+          <button type="button" class="ux-tool-btn" id="btnCropReset" aria-label="Réinitialiser le recadrage">Réinit.</button>
+        </div>
+        <p class="oc-file-intake-crop-hint">Glissez l’image, pincez pour zoomer, utilisez les boutons si besoin, puis validez.</p>
       </div>
       <footer class="oc-file-intake-crop-actions" id="ocFileIntakeCropFooter">
         <button type="button" class="ux-tool-btn tool-accent" id="btnFileIntakeCropConfirm">Valider</button>
@@ -4423,232 +4419,120 @@ function ocShouldAutoOpenMobileImageCrop(file, source) {
   return source === 'camera' || source === 'gallery' || source === 'file';
 }
 
-let ocCropInteractiveState = null;
-let ocCropTouchAbort = null;
+let ocCropperInstance = null;
 
-function ocResetCropInteractiveState() {
-  ocCropInteractiveState = null;
-  if (ocCropTouchAbort) {
-    ocCropTouchAbort.abort();
-    ocCropTouchAbort = null;
+function ocDestroyCropper() {
+  if (ocCropperInstance) {
+    try {
+      ocCropperInstance.destroy();
+    } catch (_) {}
+    ocCropperInstance = null;
   }
   const stage = document.getElementById('ocFileIntakeCropStage');
   const img = document.getElementById('ocFileIntakeCropImg');
-  const layer = document.getElementById('ocFileIntakeCropTransformLayer');
-  if (stage) stage.classList.remove('is-crop-interactive', 'is-crop-dragging');
+  if (stage) stage.classList.remove('is-cropper-active', 'is-cropper-ready');
   if (img) {
-    img.classList.remove('oc-crop-interactive-img');
-    img.style.width = '';
-    img.style.height = '';
-    img.style.transform = '';
-  }
-  if (layer) {
-    layer.classList.remove('oc-crop-interactive-layer');
-    layer.style.transform = '';
+    img.removeAttribute('style');
+    img.classList.remove('cropper-hidden');
   }
 }
 
-function ocClampCropPan() {
-  const st = ocCropInteractiveState;
-  if (!st) return;
-  const dw = st.nw * st.baseScale * st.zoom;
-  const dh = st.nh * st.baseScale * st.zoom;
-  const halfCrop = st.cropSide / 2;
-  const maxPanX = Math.max(0, dw / 2 - halfCrop);
-  const maxPanY = Math.max(0, dh / 2 - halfCrop);
-  st.panX = Math.max(-maxPanX, Math.min(maxPanX, st.panX));
-  st.panY = Math.max(-maxPanY, Math.min(maxPanY, st.panY));
-}
-
-function ocApplyCropTransform(layer, img) {
-  const st = ocCropInteractiveState;
-  if (!st || !layer || !img) return;
-  const dw = st.nw * st.baseScale * st.zoom;
-  const dh = st.nh * st.baseScale * st.zoom;
-  img.style.width = dw + 'px';
-  img.style.height = dh + 'px';
-  layer.style.transform =
-    'translate(calc(-50% + ' + st.panX + 'px), calc(-50% + ' + st.panY + 'px))';
-}
-
-function ocCropTouchDistance(touches) {
-  if (!touches || touches.length < 2) return 0;
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.hypot(dx, dy);
-}
-
-function ocBindCropTouchHandlers(touchLayer, stage, transformLayer, img) {
-  if (!touchLayer || !stage || !transformLayer || !img) return;
-  if (ocCropTouchAbort) ocCropTouchAbort.abort();
-  ocCropTouchAbort = new AbortController();
-  const signal = ocCropTouchAbort.signal;
-  const touchOpts = { capture: true, passive: false, signal: signal };
-  let dragging = false;
-  let lastX = 0;
-  let lastY = 0;
-  let pinchStartDist = 0;
-  let pinchStartZoom = 1;
-
-  function onPan(dx, dy) {
-    if (!ocCropInteractiveState) return;
-    ocCropInteractiveState.panX += dx;
-    ocCropInteractiveState.panY += dy;
-    ocClampCropPan();
-    ocApplyCropTransform(transformLayer, img);
-  }
-
-  function endGesture() {
-    dragging = false;
-    pinchStartDist = 0;
-    stage.classList.remove('is-crop-dragging');
-  }
-
-  function onTouchStart(ev) {
-    if (!ocCropInteractiveState) return;
-    if (ev.touches.length === 1) {
-      dragging = true;
-      lastX = ev.touches[0].clientX;
-      lastY = ev.touches[0].clientY;
-      stage.classList.add('is-crop-dragging');
-    } else if (ev.touches.length >= 2) {
-      dragging = false;
-      pinchStartDist = ocCropTouchDistance(ev.touches);
-      pinchStartZoom = ocCropInteractiveState.zoom;
-    }
-    ev.preventDefault();
-  }
-
-  function onTouchMove(ev) {
-    if (!ocCropInteractiveState) return;
-    if (ev.touches.length === 1 && dragging) {
-      ev.preventDefault();
-      const dx = ev.touches[0].clientX - lastX;
-      const dy = ev.touches[0].clientY - lastY;
-      lastX = ev.touches[0].clientX;
-      lastY = ev.touches[0].clientY;
-      onPan(dx, dy);
-      return;
-    }
-    if (ev.touches.length >= 2 && pinchStartDist > 0) {
-      ev.preventDefault();
-      const dist = ocCropTouchDistance(ev.touches);
-      if (dist > 0) {
-        const ratio = dist / pinchStartDist;
-        ocCropInteractiveState.zoom = Math.min(3, Math.max(1, pinchStartZoom * ratio));
-        ocClampCropPan();
-        ocApplyCropTransform(transformLayer, img);
-      }
-    }
-  }
-
-  touchLayer.addEventListener('touchstart', onTouchStart, touchOpts);
-  touchLayer.addEventListener('touchmove', onTouchMove, touchOpts);
-  touchLayer.addEventListener('touchend', endGesture, touchOpts);
-  touchLayer.addEventListener('touchcancel', endGesture, touchOpts);
-  document.addEventListener('touchmove', onTouchMove, touchOpts);
-
-  touchLayer.addEventListener(
-    'mousedown',
-    function (ev) {
-      if (!ocCropInteractiveState || ev.button !== 0) return;
-      dragging = true;
-      lastX = ev.clientX;
-      lastY = ev.clientY;
-      stage.classList.add('is-crop-dragging');
-      ev.preventDefault();
+function ocCropperOptions() {
+  return {
+    aspectRatio: 1,
+    viewMode: 1,
+    dragMode: 'move',
+    autoCropArea: 0.82,
+    movable: true,
+    zoomable: true,
+    zoomOnTouch: true,
+    zoomOnWheel: true,
+    wheelZoomRatio: 0.08,
+    rotatable: true,
+    scalable: false,
+    cropBoxMovable: false,
+    cropBoxResizable: false,
+    toggleDragModeOnDblclick: false,
+    guides: true,
+    center: true,
+    highlight: true,
+    background: true,
+    responsive: true,
+    restore: false,
+    checkOrientation: true,
+    minContainerWidth: 180,
+    minContainerHeight: 180,
+    ready: function () {
+      document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
     },
-    { signal: signal }
-  );
-
-  window.addEventListener(
-    'mousemove',
-    function (ev) {
-      if (!dragging || !ocCropInteractiveState) return;
-      onPan(ev.clientX - lastX, ev.clientY - lastY);
-      lastX = ev.clientX;
-      lastY = ev.clientY;
-    },
-    { signal: signal }
-  );
-
-  window.addEventListener('mouseup', endGesture, { signal: signal });
+  };
 }
 
-function ocInitInteractiveCrop(img, stage, overlay, touchLayer, transformLayer) {
+function ocInitFileIntakeCropper(img, stage) {
+  if (!img || !stage || typeof window.Cropper !== 'function') return false;
   const nw = img.naturalWidth || img.width;
   const nh = img.naturalHeight || img.height;
-  if (!nw || !nh || !touchLayer || !transformLayer) return false;
+  if (!nw || !nh) return false;
   const sr = stage.getBoundingClientRect();
-  const stageW = sr.width;
-  const stageH = sr.height;
-  if (stageW < 2 || stageH < 2) return false;
-  const baseScale = Math.min(stageW / nw, stageH / nh);
-  const cropSide = Math.min(stageW, stageH) * 0.78;
+  if (sr.width < 2 || sr.height < 2) return false;
 
-  ocCropInteractiveState = {
-    nw: nw,
-    nh: nh,
-    stageW: stageW,
-    stageH: stageH,
-    baseScale: baseScale,
-    zoom: 1,
-    panX: 0,
-    panY: 0,
-    cropSide: cropSide,
-  };
-
-  stage.classList.add('is-crop-interactive');
-  img.classList.add('oc-crop-interactive-img');
-  transformLayer.classList.add('oc-crop-interactive-layer');
-  overlay.classList.remove('hidden');
-  overlay.style.width = cropSide + 'px';
-  overlay.style.height = cropSide + 'px';
-  ocApplyCropTransform(transformLayer, img);
-  ocBindCropTouchHandlers(touchLayer, stage, transformLayer, img);
-  return true;
+  ocDestroyCropper();
+  stage.classList.add('is-cropper-active');
+  ocCropperInstance = new window.Cropper(img, ocCropperOptions());
+  return !!ocCropperInstance;
 }
 
-function ocInitInteractiveCropWhenReady(img, stage, overlay, touchLayer, transformLayer, attempt) {
+function ocInitFileIntakeCropperWhenReady(attempt) {
+  const img = document.getElementById('ocFileIntakeCropImg');
+  const stage = document.getElementById('ocFileIntakeCropStage');
+  if (!img || !stage) return;
   const tries = typeof attempt === 'number' ? attempt : 0;
-  if (ocInitInteractiveCrop(img, stage, overlay, touchLayer, transformLayer)) return;
+  if (ocInitFileIntakeCropper(img, stage)) return;
   if (tries >= 40) return;
   requestAnimationFrame(function () {
-    ocInitInteractiveCropWhenReady(img, stage, overlay, touchLayer, transformLayer, tries + 1);
+    ocInitFileIntakeCropperWhenReady(tries + 1);
   });
 }
 
-function ocPositionCropCenterOverlay() {
+function ocScheduleFileIntakeCropperInit() {
   const img = document.getElementById('ocFileIntakeCropImg');
-  const overlay = document.getElementById('ocFileIntakeCropOverlay');
   const stage = document.getElementById('ocFileIntakeCropStage');
-  const touchLayer = document.getElementById('ocFileIntakeCropTouchLayer');
-  const transformLayer = document.getElementById('ocFileIntakeCropTransformLayer');
-  if (!img || !overlay || !stage) return;
+  if (!img || !stage) return;
 
-  function layout() {
-    ocResetCropInteractiveState();
-    if (ocFileIntakeIsMobileUi()) {
-      ocInitInteractiveCropWhenReady(img, stage, overlay, touchLayer, transformLayer, 0);
-      return;
-    }
-    const nw = img.naturalWidth || img.width;
-    const nh = img.naturalHeight || img.height;
-    if (!nw || !nh) return;
-    const ir = img.getBoundingClientRect();
-    const sr = stage.getBoundingClientRect();
-    const scale = Math.min(ir.width / nw, ir.height / nh);
-    const dw = nw * scale;
-    const dh = nh * scale;
-    const side = Math.min(dw, dh);
-    overlay.style.width = side + 'px';
-    overlay.style.height = side + 'px';
-    overlay.classList.remove('hidden');
+  function start() {
+    ocDestroyCropper();
+    requestAnimationFrame(function () {
+      ocInitFileIntakeCropperWhenReady(0);
+    });
   }
 
-  if (img.complete && (img.naturalWidth || img.width)) layout();
-  else img.onload = layout;
-  requestAnimationFrame(layout);
+  if (img.complete && (img.naturalWidth || img.width)) start();
+  else img.onload = start;
+  requestAnimationFrame(start);
+}
+
+function ocCropperHasInstance() {
+  return !!ocCropperInstance;
+}
+
+function ocCropperNudge(dx, dy) {
+  if (!ocCropperInstance) return;
+  ocCropperInstance.move(dx, dy);
+}
+
+function ocCropperZoom(ratio) {
+  if (!ocCropperInstance) return;
+  ocCropperInstance.zoom(ratio);
+}
+
+function ocCropperRotate() {
+  if (!ocCropperInstance) return;
+  ocCropperInstance.rotate(90);
+}
+
+function ocCropperReset() {
+  if (!ocCropperInstance) return;
+  ocCropperInstance.reset();
 }
 
 function ocShowFileIntakeError(msg) {
@@ -4726,6 +4610,14 @@ function ocSetFileIntakeMobileActionsDisabled(disabled) {
     'btnFileIntakeCropConfirm',
     'btnFileIntakeCropSendDirect',
     'btnFileIntakeCropCancel',
+    'btnCropNudgeLeft',
+    'btnCropNudgeRight',
+    'btnCropNudgeUp',
+    'btnCropNudgeDown',
+    'btnCropZoomOut',
+    'btnCropZoomIn',
+    'btnCropRotate',
+    'btnCropReset',
   ].forEach(function (id) {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = !!disabled;
@@ -4748,7 +4640,7 @@ function ocCloseFileIntakeCropModal() {
   const modal = document.getElementById('ocFileIntakeCropModal');
   modal?.classList.add('hidden');
   modal?.setAttribute('aria-hidden', 'true');
-  ocResetCropInteractiveState();
+  ocDestroyCropper();
   const preview = document.getElementById('ocFileIntakeMobilePreview');
   if (!preview || preview.classList.contains('hidden')) {
     ocSetMobileFileIntakeOpen(false);
@@ -4883,20 +4775,33 @@ function ocCropImageCenterSquare(file) {
   });
 }
 
-function ocCropImageFromInteractiveState(file) {
-  const st = ocCropInteractiveState;
-  if (!st) return ocCropImageCenterSquare(file);
-  const dw = st.nw * st.baseScale * st.zoom;
-  const dh = st.nh * st.baseScale * st.zoom;
-  const imgLeft = st.stageW / 2 - dw / 2 + st.panX;
-  const imgTop = st.stageH / 2 - dh / 2 + st.panY;
-  const cropLeft = st.stageW / 2 - st.cropSide / 2;
-  const cropTop = st.stageH / 2 - st.cropSide / 2;
-  const scaleNatural = st.nw / dw;
-  const sx = Math.max(0, Math.min(st.nw - 1, (cropLeft - imgLeft) * scaleNatural));
-  const sy = Math.max(0, Math.min(st.nh - 1, (cropTop - imgTop) * scaleNatural));
-  const size = Math.max(1, Math.min(st.cropSide * scaleNatural, st.nw - sx, st.nh - sy));
-  return ocCropImageToFile(file, sx, sy, size);
+function ocCropImageFromCropper(file) {
+  if (!ocCropperInstance) return ocCropImageCenterSquare(file);
+  const canvas = ocCropperInstance.getCroppedCanvas({
+    maxWidth: 2048,
+    maxHeight: 2048,
+    fillColor: '#000',
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'high',
+  });
+  if (!canvas) return Promise.reject(new Error('Recadrage impossible.'));
+  return new Promise(function (resolve, reject) {
+    const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    canvas.toBlob(
+      function (blob) {
+        if (!blob) {
+          reject(new Error('Recadrage impossible.'));
+          return;
+        }
+        const base = (file.name || 'photo').replace(/\.[^.]+$/, '');
+        resolve(
+          new File([blob], base + (outType === 'image/png' ? '.png' : '.jpg'), { type: outType })
+        );
+      },
+      outType,
+      0.92
+    );
+  });
 }
 
 function ocUpdateFileIntakeDraftFile(file) {
@@ -4913,18 +4818,17 @@ function ocOpenFileIntakeCropModal() {
   ocPortalFileIntakeMobileNodes();
   const modal = document.getElementById('ocFileIntakeCropModal');
   const img = document.getElementById('ocFileIntakeCropImg');
-  const overlay = document.getElementById('ocFileIntakeCropOverlay');
   if (!modal || !img) {
     ocSendFileIntakeDraft();
     return;
   }
+  ocDestroyCropper();
   img.src = ocFileIntakeDraft.previewUrl || '';
-  if (overlay) overlay.classList.add('hidden');
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   ocCloseFileIntakeMobilePreview();
   ocSetMobileFileIntakeOpen(true);
-  ocPositionCropCenterOverlay();
+  ocScheduleFileIntakeCropperInit();
 }
 
 function ocRevokePendingImagePreviewUrl() {
@@ -4979,9 +4883,9 @@ async function ocAttachImageToComposer(opts) {
 
   if (options.cropCenter && ocIsImageIntakeFile(file)) {
     try {
-      if (options.cropInteractive && ocCropInteractiveState) {
-        file = await ocCropImageFromInteractiveState(file);
-        cropData = { mode: 'interactive_square' };
+      if (options.cropInteractive && ocCropperHasInstance()) {
+        file = await ocCropImageFromCropper(file);
+        cropData = { mode: 'cropper_square' };
       } else {
         file = await ocCropImageCenterSquare(file);
         cropData = { mode: 'center_square' };
@@ -5387,6 +5291,30 @@ async function copyAssistantPlain() {
   ocBindFileIntakeTap(btnCropCancel, function () {
     ocCloseFileIntakeCropModal();
     ocClearFileIntakeDraft();
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropNudgeLeft'), function () {
+    ocCropperNudge(-12, 0);
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropNudgeRight'), function () {
+    ocCropperNudge(12, 0);
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropNudgeUp'), function () {
+    ocCropperNudge(0, -12);
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropNudgeDown'), function () {
+    ocCropperNudge(0, 12);
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropZoomOut'), function () {
+    ocCropperZoom(-0.08);
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropZoomIn'), function () {
+    ocCropperZoom(0.08);
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropRotate'), function () {
+    ocCropperRotate();
+  });
+  ocBindFileIntakeTap(document.getElementById('btnCropReset'), function () {
+    ocCropperReset();
   });
 
   if (btnValidate) btnValidate.addEventListener('click', ocValidateFileIntakeDraft);
