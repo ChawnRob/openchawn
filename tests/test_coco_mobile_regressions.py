@@ -59,32 +59,89 @@ OC_OBSIDIAN_DENIAL_EN = (
 )
 
 
-def test_mobile_mic_visible_in_composer_bar():
+def test_mobile_composer_dual_control_layout():
     html = _html()
     mobile = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split(
         "@media (max-width: 896px)"
     )[0]
-    mic_rule = html.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split(
-        "textarea"
+    composer = mobile.split("/* Composer final: [ attach ] [ champ texte ] [ micro|envoyer ] */")[1]
+    assert "#btnFileIntake" in composer
+    assert "#sendBtn" in html or ".send-btn" in composer
+    assert "textarea" in composer
+    mic_hide = mobile.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split(
+        "#btnFileIntake"
     )[0]
-    assert "display: none" not in mic_rule
-    assert "display: inline-flex !important" in html
-    fn = html.split("function ocUpdateMobileComposerChrome")[1].split("function ocCloseMobileComposerMenu")[0]
-    assert "inputWrapper.insertBefore(mic" in fn
-    assert "micMount.appendChild(mic)" not in fn
+    assert "display: none !important" in mic_hide
 
 
-def test_night_mode_attach_and_mic_selectors():
+def test_mobile_composer_action_toggle_contract():
+    html = _html()
+    assert "oc-composer-action-mic" in html
+    assert "oc-composer-action-send" in html
+    assert "oc-composer-mic-icon" in html
+    assert "oc-composer-send-icon" in html
+    assert "function ocSyncMobileComposerActionButton" in html
+    assert "function ocComposerActionIsMicMode" in html
+    toggle_fn = html.split("function ocSyncMobileComposerActionButton")[1].split(
+        "function ocUpdateMobileComposerChrome"
+    )[0]
+    assert "oc-composer-action-mic" in toggle_fn
+    assert "oc-composer-action-send" in toggle_fn
+    click_block = html.split("dom.send.addEventListener('click'")[1].split("ocSyncMobileComposerActionButton();")[0]
+    assert "ocComposerActionIsMicMode()" in click_block
+    assert "dom.btnSpeech?.click?.()" in click_block
+    input_block = html.split("dom.input.addEventListener('input'")[1].split("dom.input.addEventListener('keydown'")[0]
+    assert "ocSyncMobileComposerActionButton()" in input_block
+    mic_css = html.split(".send-btn.oc-composer-action-mic .oc-composer-mic-icon")[1].split(
+        ".send-btn.oc-composer-action-mic .oc-composer-send-icon"
+    )[0]
+    assert "display: block" in mic_css
+    send_hide = html.split(".send-btn.oc-composer-action-mic .oc-composer-send-icon")[1].split(
+        "html.ux-chat-clean .send-btn.oc-composer-action-mic"
+    )[0]
+    assert "display: none" in send_hide
+
+
+def test_mobile_composer_empty_input_shows_mic_on_action_button():
+    html = _html()
+    mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split("function ocSyncMobileComposerActionButton")[0]
+    sync_fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
+    assert "!ocComposerInputHasSendAction()" in mic_mode_fn
+    assert "oc-composer-mic-icon" in html
+    assert "Micro dictée" in sync_fn
+
+
+def test_mobile_composer_non_empty_input_shows_send_and_clears_mic_mode():
+    html = _html()
+    toggle_fn = html.split("function ocSyncMobileComposerActionButton")[1].split(
+        "function ocUpdateMobileComposerChrome"
+    )[0]
+    assert "oc-composer-action-send" in toggle_fn
+    assert "remove('oc-composer-action-mic'" in toggle_fn
+    assert "Envoyer à OpenChawn" in toggle_fn
+
+
+def test_attach_button_stays_visible_mobile_css():
+    html = _html()
+    mobile = html.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {")[1].split(
+        ".oc-composer-plus-glyph"
+    )[0]
+    assert "display: inline-flex !important" in mobile
+    assert "44px" in mobile
+
+
+def test_night_mode_attach_and_action_mic_selectors():
     html = _html()
     for sel in (
         "html.oc-theme-night #btnFileIntake",
         "body.oc-night-mode #btnFileIntake",
         "html[data-theme=\"night\"] #btnFileIntake",
-        "body[data-theme=\"night\"] #btnSpeech",
-        "html.oc-theme-night .mic-btn",
+        "body[data-theme=\"night\"] #sendBtn.oc-composer-action-mic",
+        "html.oc-theme-night #sendBtn.oc-composer-action-mic",
     ):
         assert sel in html
     assert "rgba(3, 18, 31, 0.96) !important" in html
+    assert "rgba(255,255,255,0.98)" not in html.split("#btnFileIntake,")[1].split("cursor: pointer")[0]
 
 
 def test_language_complaint_short_circuit_and_backend_meta():

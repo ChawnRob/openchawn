@@ -26,21 +26,24 @@ def test_mobile_plus_button_opens_photo_gallery_file_menu():
     assert "ocPickFileIntakeSource('file')" in setup
 
 
-def test_mic_visible_in_main_composer_bar_on_mobile():
+def test_mic_not_separate_slot_on_mobile():
     html = _html()
     block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
-    selector = "html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn"
-    assert selector in block or "html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech" in html
-    mic_rule = html.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split("textarea")[0]
-    assert "display: inline-flex !important" in mic_rule
-    assert "44px" in mic_rule
+    mic_rule = block.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split(
+        "/* Composer final"
+    )[0]
+    assert "display: none !important" in mic_rule
+    assert "oc-composer-mic-icon" in html
+    assert "ocSyncMobileComposerActionButton" in html
 
 
-def test_mic_stays_in_composer_wrapper_on_mobile():
+def test_mobile_action_button_toggles_mic_and_send():
     html = _html()
-    fn = html.split("function ocUpdateMobileComposerChrome")[1].split("function ocCloseMobileComposerMenu")[0]
-    assert "inputWrapper.insertBefore(mic" in fn
-    assert "micMount.appendChild(mic)" not in fn
+    fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
+    assert "oc-composer-action-mic" in fn
+    assert "oc-composer-action-send" in fn
+    click = html.split("dom.send.addEventListener('click'")[1].split("ocSyncMobileComposerActionButton();")[0]
+    assert "ocComposerActionIsMicMode()" in click
 
 
 def test_second_brain_single_access_on_mobile():
@@ -54,22 +57,25 @@ def test_second_brain_single_access_on_mobile():
     assert "display: none !important" in block.split(":not(.coco-obsidian-sync-btn)")[1][:120]
 
 
-def test_mobile_composer_four_control_layout():
+def test_mobile_composer_three_slot_layout():
     html = _html()
     mobile = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
-    composer = mobile.split("/* Composer final: [ + ] [ champ texte large ] [ envoyer ] */")[1]
+    composer = mobile.split("/* Composer final: [ attach ] [ champ texte ] [ micro|envoyer ] */")[1]
     assert "#btnFileIntake" in composer
-    assert "#btnSpeech" in html or ".mic-btn" in composer
     assert "textarea" in composer
     assert ".send-btn" in composer
     assert "flex: 1 1 auto" in composer.split("textarea {")[1]
+    mic_hide = mobile.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split(
+        "/* Composer final"
+    )[0]
+    assert "display: none !important" in mic_hide
 
 
 def test_iphone_width_tightens_composer_controls():
     html = _html()
     iphone = html.split("@media (max-width: 430px)")[1].split("@media (max-width: 640px)")[0]
     assert "flex: 0 0 44px" in iphone
-    assert "38px !important" in iphone
+    assert "44px !important" in iphone
 
 
 def test_message_field_keeps_width_on_mobile():

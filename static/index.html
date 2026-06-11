@@ -337,32 +337,27 @@ body.oc-night-mode #btnFileIntake,
 body.oc-night-mode #btnMobileFileAttach,
 body.oc-night-mode .oc-attach-btn,
 body.oc-night-mode .oc-file-attach-btn,
-body.oc-night-mode #btnSpeech,
-body.oc-night-mode .mic-btn,
+body.oc-night-mode #sendBtn.oc-composer-action-mic,
 html.oc-theme-night #btnFileIntake,
 html.oc-theme-night #btnMobileFileAttach,
 html.oc-theme-night .oc-attach-btn,
 html.oc-theme-night .oc-file-attach-btn,
-html.oc-theme-night #btnSpeech,
-html.oc-theme-night .mic-btn,
+html.oc-theme-night #sendBtn.oc-composer-action-mic,
 html[data-theme="night"] #btnFileIntake,
 html[data-theme="night"] #btnMobileFileAttach,
 html[data-theme="night"] .oc-attach-btn,
 html[data-theme="night"] .oc-file-attach-btn,
-html[data-theme="night"] #btnSpeech,
-html[data-theme="night"] .mic-btn,
+html[data-theme="night"] #sendBtn.oc-composer-action-mic,
 body[data-theme="night"] #btnFileIntake,
 body[data-theme="night"] #btnMobileFileAttach,
 body[data-theme="night"] .oc-attach-btn,
 body[data-theme="night"] .oc-file-attach-btn,
-body[data-theme="night"] #btnSpeech,
-body[data-theme="night"] .mic-btn,
+body[data-theme="night"] #sendBtn.oc-composer-action-mic,
 [data-theme="night"] #btnFileIntake,
 [data-theme="night"] #btnMobileFileAttach,
 [data-theme="night"] .oc-attach-btn,
 [data-theme="night"] .oc-file-attach-btn,
-[data-theme="night"] #btnSpeech,
-[data-theme="night"] .mic-btn {
+[data-theme="night"] #sendBtn.oc-composer-action-mic {
   background: rgba(3, 18, 31, 0.96) !important;
   color: rgba(210, 250, 255, 1) !important;
   border-color: rgba(89, 226, 255, 0.7) !important;
@@ -371,31 +366,47 @@ body[data-theme="night"] .mic-btn,
     0 0 18px rgba(0, 210, 255, 0.18) !important;
 }
 
-html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech,
-html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  flex: 0 0 44px;
-  border-radius: 999px;
-  border: 1px solid rgba(90, 220, 255, 0.55);
-  background: rgba(6, 28, 42, 0.92);
-  color: rgba(210, 245, 255, 0.98);
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  order: -1;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech svg,
-html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn svg {
+.send-btn .oc-composer-mic-icon {
+  display: none;
   width: 22px;
   height: 22px;
   stroke: currentColor;
   fill: none;
-  opacity: 1;
+}
+
+.send-btn .oc-composer-send-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+.send-btn.oc-composer-action-send .oc-composer-send-icon {
+  fill: #fff;
+}
+
+.send-btn.oc-composer-action-mic .oc-composer-mic-icon {
+  display: block;
+}
+
+.send-btn.oc-composer-action-mic .oc-composer-send-icon {
+  display: none;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-mic {
+  border: 1px solid rgba(90, 220, 255, 0.55);
+  background: rgba(6, 28, 42, 0.92);
+  color: rgba(210, 245, 255, 0.98);
+  box-shadow:
+    0 0 0 1px rgba(90, 220, 255, 0.15),
+    0 0 18px rgba(0, 210, 255, 0.18);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-mic.recording {
+  border-color: rgba(56, 221, 245, 0.85);
+  box-shadow: 0 0 0 4px rgba(232, 93, 117, 0.25);
 }
 
 html.oc-theme-night .oc-composer-toast {
@@ -1425,7 +1436,12 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     display: none !important;
   }
 
-  /* Composer final: [ + ] [ champ texte large ] [ envoyer ] */
+  html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech,
+  html.ux-chat-clean .clean-input-shell .input-wrapper .mic-btn {
+    display: none !important;
+  }
+
+  /* Composer final: [ attach ] [ champ texte ] [ micro|envoyer ] */
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {
     display: inline-flex !important;
     pointer-events: auto;
@@ -1474,7 +1490,10 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 
   html.ux-chat-clean .clean-input-shell .input-wrapper .send-btn {
     order: 1;
-    flex: 0 0 40px;
+    flex: 0 0 44px;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
   }
 
   html.ux-chat-clean .input-area.oc-composer-centered {
@@ -1489,8 +1508,9 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .send-btn {
-    width: 40px !important;
-    height: 40px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
   }
 
   html.ux-chat-clean .oc-clean-toolbar-btn {
@@ -3428,12 +3448,16 @@ html.ux-legacy .coco-companion-presence {
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper .send-btn {
-    flex: 0 0 38px;
+    flex: 0 0 44px;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
   }
 
   html.ux-chat-clean .send-btn {
-    width: 38px !important;
-    height: 38px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
   }
 
   html.ux-chat-clean .oc-composer-mobile-toolbar {
@@ -3749,8 +3773,12 @@ html.ux-legacy .coco-companion-presence {
         </svg>
       </button>
       <textarea id="input" rows="1" placeholder="Transmettez votre requête… (Entrée pour envoyer)" autofocus></textarea>
-      <button type="button" class="send-btn" id="sendBtn" title="Envoyer à OpenChawn">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      <button type="button" class="send-btn oc-composer-action-send" id="sendBtn" title="Envoyer à OpenChawn" aria-label="Envoyer à OpenChawn">
+        <svg class="oc-composer-send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        <svg class="oc-composer-mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
+          <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
+          <path d="M19 11a7 7 0 0 1-14 0M12 17v4M9 21h6"/>
+        </svg>
       </button>
       <span class="clean-gear-slot">
         <button type="button" class="oc-clean-toolbar-btn gear-btn oc-clean-input-quick" id="btnUxSettingsGear" aria-label="Réglages" title="Réglages">⚙︎</button>
@@ -4197,6 +4225,40 @@ function ocChatCleanMobileComposer() {
     && window.matchMedia('(max-width: 640px)').matches;
 }
 
+function ocComposerInputHasSendAction() {
+  const text = (dom.input && dom.input.value ? dom.input.value : '').trim();
+  if (text) return true;
+  return typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
+}
+
+function ocComposerActionIsMicMode() {
+  return ocChatCleanMobileComposer() && !ocComposerInputHasSendAction();
+}
+
+function ocSyncMobileComposerActionButton() {
+  if (!dom.send) return;
+  if (!ocChatCleanMobileComposer()) {
+    dom.send.classList.remove('oc-composer-action-mic', 'recording');
+    dom.send.classList.add('oc-composer-action-send');
+    dom.send.setAttribute('title', 'Envoyer à OpenChawn');
+    dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
+    dom.send.removeAttribute('aria-pressed');
+    return;
+  }
+  if (ocComposerActionIsMicMode()) {
+    dom.send.classList.add('oc-composer-action-mic');
+    dom.send.classList.remove('oc-composer-action-send');
+    dom.send.setAttribute('title', 'Dictée navigateur — ne envoie pas automatiquement');
+    dom.send.setAttribute('aria-label', 'Micro dictée');
+  } else {
+    dom.send.classList.remove('oc-composer-action-mic', 'recording');
+    dom.send.classList.add('oc-composer-action-send');
+    dom.send.setAttribute('title', 'Envoyer à OpenChawn');
+    dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
+    dom.send.removeAttribute('aria-pressed');
+  }
+}
+
 function ocUpdateMobileComposerChrome() {
   const btnImport = document.getElementById('btnImportPlus');
   const wrap = document.getElementById('ocMobileComposerPlusWrap');
@@ -4212,6 +4274,7 @@ function ocUpdateMobileComposerChrome() {
     if (inputWrapper && mic && mic.parentElement !== inputWrapper) {
       inputWrapper.insertBefore(mic, dom.input || null);
     }
+    ocSyncMobileComposerActionButton();
     if (attachBtn) {
       attachBtn.setAttribute('aria-label', 'Ajouter photo ou fichier');
       attachBtn.title = 'Ajouter photo ou fichier';
@@ -4240,6 +4303,7 @@ function ocUpdateMobileComposerChrome() {
       attachBtn.setAttribute('aria-label', 'Joindre photo ou fichier');
       attachBtn.title = 'Joindre photo ou fichier (max 10 Mo)';
     }
+    ocSyncMobileComposerActionButton();
   }
 }
 
@@ -4319,6 +4383,7 @@ ocUpdateMobileComposerChrome();
 window.addEventListener('resize', () => {
   ocUxSetInputPlaceholder();
   ocUpdateMobileComposerChrome();
+  ocSyncMobileComposerActionButton();
   if (!ocChatCleanMobileComposer()) ocCloseMobileComposerMenu();
 }, { passive: true });
 
@@ -5023,6 +5088,7 @@ function ocClearPendingImageAttachment() {
   if (thumb) thumb.innerHTML = '';
   if (nameEl) nameEl.textContent = '';
   chip?.classList.add('hidden');
+  ocSyncMobileComposerActionButton();
 }
 
 function ocShowComposerAttachmentChip() {
@@ -5044,6 +5110,7 @@ function ocShowComposerAttachmentChip() {
     }
   }
   chip.classList.remove('hidden');
+  ocSyncMobileComposerActionButton();
 }
 
 function ocHasPendingImageAttachment() {
@@ -5970,6 +6037,11 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
     btn.classList.toggle('recording', listening);
     btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
     btn.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
+    if (ocChatCleanMobileComposer() && dom.send) {
+      dom.send.classList.toggle('recording', listening);
+      dom.send.setAttribute('aria-pressed', listening ? 'true' : 'false');
+      dom.send.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
+    }
     if (mirror) mirror.title = listening ? 'Dictée en cours' : 'Micro dictée';
     if (dom.input) {
       if (listening) dom.input.placeholder = 'Écoute en cours…';
@@ -6092,13 +6164,22 @@ setInterval(checkHealth, 15000);
 dom.input.addEventListener('input', () => {
   dom.input.style.height = 'auto';
   dom.input.style.height = Math.min(dom.input.scrollHeight, 120) + 'px';
+  ocSyncMobileComposerActionButton();
 });
 
 dom.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
-dom.send.addEventListener('click', send);
+dom.send.addEventListener('click', () => {
+  if (ocComposerActionIsMicMode()) {
+    dom.btnSpeech?.click?.();
+    return;
+  }
+  send();
+});
+
+ocSyncMobileComposerActionButton();
 
 // ── Scan effect ─────────────────────────────────────
 function triggerScan() {
