@@ -25,12 +25,15 @@ def _normalize_obsidian_intent_text(text: str) -> str:
     t = str(text or "").lower()
     t = unicodedata.normalize("NFD", t)
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
-    return t.replace("\u2019", "'").replace("'", "'")
+    t = t.replace("\u2019", "'").replace("'", "'")
+    t = re.sub(r"\bes\s+ce\b", "est-ce", t)
+    t = re.sub(r"\best\s+ce\b", "est-ce", t)
+    return re.sub(r"\s+", " ", t).strip()
 
 
 def _detect_obsidian_connect_intent(text: str) -> bool:
     """Mirror of ocDetectObsidianConnectIntent in static/index.html."""
-    t = _normalize_obsidian_intent_text(text).strip()
+    t = _normalize_obsidian_intent_text(text)
     if not t or not re.search(r"\bobsidian\b", t):
         return False
     if re.search(r"\baffine\b", t) and not re.search(
@@ -39,15 +42,21 @@ def _detect_obsidian_connect_intent(text: str) -> bool:
         return False
     phrase_patterns = [
         r"\bsync\s+(avec|to)\s+obsidian\b",
+        r"\bsync\s+obsidian\b",
         r"\bfaire\s+le\s+sync\s+avec\s+obsidian\b",
         r"\bfaire\s+la\s+sync\s+avec\s+obsidian\b",
         r"\bsynchronis\w*\s+avec\s+obsidian\b",
+        r"\bje\s+veux\s+synchronis\w*\s+avec\s+obsidian\b",
         r"\bconnexion\s+obsidian\b",
-        r"\bconnect\w*\s+a\s+obsidian\b",
+        r"\bconnecter\s+a\s+obsidian\b",
+        r"\bme\s+connecter\s+a\s+obsidian\b",
+        r"\bconnecte[- ]?moi\s+a\s+obsidian\b",
         r"\bconnecte[- ]?toi\s+a\s+obsidian\b",
+        r"\b(tu\s+)?peux\s+me\s+connecter\s+a\s+obsidian\b",
+        r"\bconnect\w*\s+a\s+obsidian\b",
+        r"\bouvr\w*\s+obsidian\b",
         r"\benvoy\w*\s+(ca\s+)?dans\s+obsidian\b",
         r"\bsend\s+to\s+obsidian\b",
-        r"\bsync\s+obsidian\b",
         r"\b(sync|connect|connec|synchron|envoy|envoi|ouvr|open|lier|link|relier|acces)\w*.*\bobsidian\b",
         r"\bobsidian\b.*\b(sync|connect|connec|synchron|envoy|envoi|ouvr|open)\w*",
         r"\b(sync obsidian|connecte[- ]?toi|se connecter a obsidian)\b",
@@ -55,25 +64,28 @@ def _detect_obsidian_connect_intent(text: str) -> bool:
     for pattern in phrase_patterns:
         if re.search(pattern, t):
             return True
-    if re.search(r"\b(peux|peut|possible|capable|tu|est-ce)\b", t) and (
+    if re.search(r"\b(peux|peut|possible|capable|tu|est-ce|es-ce)\b", t) and (
         re.search(r"\b(sync|connect|connec|synchron)\w*", t)
-        or re.search(r"\bse connecter\b", t)
+        or re.search(r"\b(se connecter|me connecter)\b", t)
     ):
         return True
     return False
 
 
-OC_OBSIDIAN_URI_CONNECT_EXPECTED = (
-    "Oui, je peux préparer une note Markdown depuis cette conversation et déclencher "
-    "l'ouverture d'Obsidian via le bouton Sync Obsidian. En mode actuel, je ne peux pas "
-    "confirmer une synchronisation profonde dans le vault : j'utilise obsidian://new pour "
-    "ouvrir Obsidian avec le contenu préparé."
-)
+def _uri_connect_reply_from_html() -> str:
+    reply = _html().split("var OC_OBSIDIAN_URI_CONNECT_FR =")[1].split(";")[0]
+    reply = reply.strip().strip("'")
+    return reply.encode("utf-8").decode("unicode_escape").replace("\\u2019", "'")
+
 
 OC_OBSIDIAN_URI_DENIAL_PHRASES = (
     "Non, je ne peux pas synchroniser avec Obsidian",
+    "je ne peux pas vous connecter à Obsidian",
+    "aucune synchronisation",
     "aucune capacité Obsidian",
+    "pas de connecteur Obsidian",
     "aucun connecteur Obsidian actif",
+    "Obsidian indisponible",
     "API Obsidian n'est pas active",
 )
 
@@ -177,10 +189,11 @@ def test_build_obsidian_sync_context_uri_mode_default():
     assert "obsidian://new" in low
     assert "do not deny obsidian connectivity" in low
     assert "forbidden when uri mode is active" in low
-    assert "depuis cette conversation" in low
+    assert "local device handoff" in low
     assert "obsidian://new" in low
-    assert "non, je ne peux pas synchroniser avec obsidian" in low
-    assert "aucune capacité obsidian" in low
+    assert "je ne peux pas vous connecter à obsidian" in low
+    assert "obsidian indisponible" in low
+    assert "pas de connecteur obsidian" in low
     assert "never claim from chat alone" in low
 
 
@@ -232,9 +245,10 @@ def test_obsidian_connect_intent_uri_aware_in_ui():
     assert "function ocDetectObsidianConnectIntent" in html
     assert "function ocAddObsidianConnectAssistantMessage" in html
     assert "OC_OBSIDIAN_URI_CONNECT_FR" in html
-    assert "depuis cette conversation" in html
+    assert "connexion API complète" in html
     assert "obsidian://new" in html
     assert "bouton Sync Obsidian" in html
+    assert "ocNormalizeObsidianIntentText" in html
     assert "faire\\s+le\\s+sync\\s+avec\\s+obsidian" in html
     assert "send\\s+to\\s+obsidian" in html
     send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
@@ -273,15 +287,25 @@ def test_obsidian_connect_intent_french_english_variants():
 def test_obsidian_connect_intent_exact_user_phrase_reply_contract():
     phrase = "Est-ce que tu peux maintenant faire le sync avec Obsidian ?"
     assert _detect_obsidian_connect_intent(phrase)
+    _assert_uri_connect_reply_contract()
 
-    html = _html()
-    reply = html.split("var OC_OBSIDIAN_URI_CONNECT_FR =")[1].split(";")[0]
-    reply = reply.strip().strip("'")
-    reply = reply.encode("utf-8").decode("unicode_escape").replace("\\u2019", "'")
 
+def test_obsidian_connect_intent_typo_connect_phrases():
+    phrases = [
+        "Es ce que tu peux me connecter à Obsidian ?",
+        "Connecte moi à Obsidian",
+        "Je veux synchroniser avec Obsidian",
+    ]
+    for phrase in phrases:
+        assert _detect_obsidian_connect_intent(phrase), phrase
+    _assert_uri_connect_reply_contract()
+
+
+def _assert_uri_connect_reply_contract() -> None:
+    reply = _uri_connect_reply_from_html()
     assert "Markdown" in reply
     assert "Sync Obsidian" in reply
     assert "obsidian://new" in reply
-    assert "synchronisation profonde" in reply
+    assert "connexion API" in reply
     for denial in OC_OBSIDIAN_URI_DENIAL_PHRASES:
         assert denial not in reply

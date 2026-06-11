@@ -6381,6 +6381,13 @@ function ocNormalizeAffineIntentText(text) {
     .replace(/[\u2019']/g, "'");
 }
 
+function ocNormalizeObsidianIntentText(text) {
+  var t = ocNormalizeAffineIntentText(text);
+  t = t.replace(/\bes\s+ce\b/g, 'est-ce');
+  t = t.replace(/\best\s+ce\b/g, 'est-ce');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
 function ocDetectAffineOpenIntent(text) {
   var t = ocNormalizeAffineIntentText(text).trim();
   if (!t) return false;
@@ -6399,23 +6406,29 @@ function ocDetectAffineOpenIntent(text) {
 }
 
 var OC_OBSIDIAN_URI_CONNECT_FR =
-  'Oui, je peux préparer une note Markdown depuis cette conversation et déclencher l\u2019ouverture d\u2019Obsidian via le bouton Sync Obsidian. En mode actuel, je ne peux pas confirmer une synchronisation profonde dans le vault : j\u2019utilise obsidian://new pour ouvrir Obsidian avec le contenu préparé.';
+  'Oui. COCO peut préparer une note Markdown et utiliser le bouton Sync Obsidian pour déclencher Obsidian via obsidian://new. Ce n\u2019est pas une connexion API complète : tu valides l\u2019envoi depuis ton appareil.';
 
 function ocDetectObsidianConnectIntent(text) {
-  var t = ocNormalizeAffineIntentText(text).trim();
+  var t = ocNormalizeObsidianIntentText(text);
   if (!t || !/\bobsidian\b/.test(t)) return false;
   if (/\baffine\b/.test(t) && !/\bobsidian\b/.test(t.replace(/\baffine\b/g, ''))) return false;
   var phrasePatterns = [
     /\bsync\s+(avec|to)\s+obsidian\b/,
+    /\bsync\s+obsidian\b/,
     /\bfaire\s+le\s+sync\s+avec\s+obsidian\b/,
     /\bfaire\s+la\s+sync\s+avec\s+obsidian\b/,
     /\bsynchronis\w*\s+avec\s+obsidian\b/,
+    /\bje\s+veux\s+synchronis\w*\s+avec\s+obsidian\b/,
     /\bconnexion\s+obsidian\b/,
-    /\bconnect\w*\s+a\s+obsidian\b/,
+    /\bconnecter\s+a\s+obsidian\b/,
+    /\bme\s+connecter\s+a\s+obsidian\b/,
+    /\bconnecte[- ]?moi\s+a\s+obsidian\b/,
     /\bconnecte[- ]?toi\s+a\s+obsidian\b/,
+    /\b(tu\s+)?peux\s+me\s+connecter\s+a\s+obsidian\b/,
+    /\bconnect\w*\s+a\s+obsidian\b/,
+    /\bouvr\w*\s+obsidian\b/,
     /\benvoy\w*\s+(ca\s+)?dans\s+obsidian\b/,
     /\bsend\s+to\s+obsidian\b/,
-    /\bsync\s+obsidian\b/,
     /\b(sync|connect|connec|synchron|envoy|envoi|ouvr|open|lier|link|relier|acces)\w*.*\bobsidian\b/,
     /\bobsidian\b.*\b(sync|connect|connec|synchron|envoy|envoi|ouvr|open)\w*/,
     /\b(sync obsidian|connecte[- ]?toi|se connecter a obsidian)\b/,
@@ -6424,8 +6437,9 @@ function ocDetectObsidianConnectIntent(text) {
     if (phrasePatterns[i].test(t)) return true;
   }
   if (
-    /\b(peux|peut|possible|capable|tu|est-ce)\b/.test(t) &&
-    (/\b(sync|connect|connec|synchron)\w*/.test(t) || /\bse connecter\b/.test(t))
+    /\b(peux|peut|possible|capable|tu|est-ce|es-ce)\b/.test(t) &&
+    (/\b(sync|connect|connec|synchron)\w*/.test(t) ||
+      /\b(se connecter|me connecter)\b/.test(t))
   ) {
     return true;
   }
