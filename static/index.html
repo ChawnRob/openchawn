@@ -60,12 +60,23 @@
       night = ocParisAutoNight(h);
       mode = night ? 'auto-night' : 'default';
     }
-    if (night) document.documentElement.classList.add('oc-theme-night');
-    else document.documentElement.classList.remove('oc-theme-night');
+    if (night) {
+      document.documentElement.classList.add('oc-theme-night');
+      document.documentElement.setAttribute('data-theme', 'night');
+    } else {
+      document.documentElement.classList.remove('oc-theme-night');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+    if (document.body) {
+      document.body.classList.toggle('oc-night-mode', night);
+    }
     console.log('[OpenChawn] Paris hour:', h === null ? 'n/a' : h);
     console.log('[OpenChawn] theme mode:', mode);
   };
   ocApplyOpenChawnTheme();
+  document.addEventListener('DOMContentLoaded', function () {
+    ocApplyOpenChawnTheme();
+  });
   try {
     setInterval(ocApplyOpenChawnTheme, 60000);
   } catch (e3) {}
@@ -267,6 +278,73 @@ html.oc-theme-night.ux-chat-clean .clean-input-shell .input-wrapper textarea::pl
 html.oc-theme-night .mic-btn {
   background: linear-gradient(160deg, rgba(30, 52, 68, 0.95) 0%, rgba(20, 44, 60, 0.92) 45%, var(--phoenix-soft) 100%);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+#btnFileIntake,
+#btnMobileFileAttach,
+.oc-attach-btn,
+.oc-file-attach-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 220, 255, 0.55);
+  background: rgba(6, 28, 42, 0.92);
+  color: rgba(210, 245, 255, 0.98);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 1px rgba(90, 220, 255, 0.15),
+    0 0 18px rgba(0, 210, 255, 0.18);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  flex: 0 0 44px;
+  flex-shrink: 0;
+}
+
+#btnFileIntake svg,
+#btnMobileFileAttach svg,
+.oc-attach-btn svg,
+.oc-file-attach-btn svg,
+.oc-file-attach-btn .oc-composer-attach-icon {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  opacity: 1;
+}
+
+.oc-file-attach-btn .oc-composer-plus-glyph {
+  color: currentColor;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#btnFileIntake:active,
+#btnMobileFileAttach:active,
+.oc-attach-btn:active,
+.oc-file-attach-btn:active {
+  background: rgba(12, 48, 68, 0.96);
+}
+
+body.oc-night-mode #btnFileIntake,
+body.oc-night-mode #btnMobileFileAttach,
+body.oc-night-mode .oc-attach-btn,
+body.oc-night-mode .oc-file-attach-btn,
+html.oc-theme-night #btnFileIntake,
+html.oc-theme-night #btnMobileFileAttach,
+html.oc-theme-night .oc-attach-btn,
+html.oc-theme-night .oc-file-attach-btn,
+[data-theme="night"] #btnFileIntake,
+[data-theme="night"] #btnMobileFileAttach,
+[data-theme="night"] .oc-attach-btn,
+[data-theme="night"] .oc-file-attach-btn {
+  background: rgba(3, 18, 31, 0.96) !important;
+  color: rgba(210, 250, 255, 1) !important;
+  border-color: rgba(89, 226, 255, 0.7) !important;
 }
 
 html.oc-theme-night .oc-composer-toast {
@@ -1319,27 +1397,25 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
 
   /* Composer final: [ + ] [ champ texte large ] [ envoyer ] */
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {
-    display: grid !important;
+    display: inline-flex !important;
     pointer-events: auto;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    flex: 0 0 36px;
-    width: 36px;
-    height: 36px;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
     order: -1;
     position: relative;
     z-index: 4;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-plus-glyph {
-    display: block;
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1;
+    display: none;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-attach-icon {
-    display: none;
+    display: block;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper {
@@ -2627,35 +2703,9 @@ body.is-mobile-file-intake-open .oc-file-intake-crop-modal:not(.hidden) {
   line-height: 1.35;
 }
 .oc-file-intake-inline-error.hidden { display: none; }
-.oc-file-attach-btn {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--border-cyan);
-  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(237,250,252,0.95) 100%);
-  color: var(--deep-blue);
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(6, 37, 54, 0.08);
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
 .oc-composer-plus-glyph {
   display: none;
   font-family: var(--font-ui);
-  font-weight: 700;
-  line-height: 1;
-}
-.oc-file-attach-btn svg,
-.oc-file-attach-btn .oc-composer-attach-icon {
-  width: 22px;
-  height: 22px;
-}
-.oc-file-attach-btn:active {
-  background: rgba(56, 221, 245, 0.15);
 }
 html.ux-chat-clean .clean-input-shell .input-wrapper .oc-file-attach-btn {
   flex-shrink: 0;
@@ -3329,9 +3379,10 @@ html.ux-legacy .coco-companion-presence {
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {
-    flex: 0 0 34px;
-    width: 34px;
-    height: 34px;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper .send-btn {
@@ -3643,7 +3694,7 @@ html.ux-legacy .coco-companion-presence {
       <input type="file" id="fileIntakeInputCamera" class="hidden" accept="image/*" capture="environment">
       <input type="file" id="fileIntakeInputGallery" class="hidden" accept="image/png,image/jpeg,image/webp,image/*">
       <input type="file" id="fileIntakeInputFile" class="hidden" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/csv,.png,.jpg,.jpeg,.webp,.pdf,.txt,.csv">
-      <button type="button" class="oc-file-attach-btn oc-composer-attach-btn" id="btnFileIntake" title="Ajouter photo ou fichier (max 10 Mo)" aria-label="Ajouter photo ou fichier" aria-haspopup="menu">
+      <button type="button" class="oc-file-attach-btn oc-composer-attach-btn oc-attach-btn" id="btnFileIntake" title="Ajouter photo ou fichier (max 10 Mo)" aria-label="Ajouter photo ou fichier" aria-haspopup="menu">
         <span class="oc-composer-plus-glyph" aria-hidden="true">+</span>
         <svg class="oc-composer-attach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>

@@ -73,7 +73,7 @@ def test_mobile_composer_three_column_layout():
 def test_iphone_width_tightens_composer_controls():
     html = _html()
     iphone = html.split("@media (max-width: 430px)")[1].split("@media (max-width: 640px)")[0]
-    assert "flex: 0 0 34px" in iphone
+    assert "flex: 0 0 44px" in iphone
     assert "38px !important" in iphone
 
 
@@ -85,7 +85,7 @@ def test_message_field_keeps_width_on_mobile():
     assert "min-width: 0" in ta
     assert "width: 100%" in ta
     bar = block.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {")[1].split(".oc-composer-plus-glyph")[0]
-    assert "flex: 0 0 36px" in bar
+    assert "flex: 0 0 44px" in bar
 
 
 def test_crop_success_uses_center_square_crop():
