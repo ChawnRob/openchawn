@@ -1266,11 +1266,12 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     overflow: hidden;
   }
 
-  html.ux-chat-clean .coco-prompt-chips .coco-prompt-chip:not(.coco-second-brain-btn) {
+  html.ux-chat-clean .coco-prompt-chips .coco-prompt-chip:not(.coco-second-brain-btn):not(.coco-obsidian-sync-btn) {
     display: none !important;
   }
 
-  html.ux-chat-clean .coco-prompt-chip.coco-second-brain-btn {
+  html.ux-chat-clean .coco-prompt-chip.coco-second-brain-btn,
+  html.ux-chat-clean .coco-prompt-chip.coco-obsidian-sync-btn {
     font-size: 10px;
     padding: 5px 10px;
     line-height: 1.2;
@@ -3505,6 +3506,7 @@ html.ux-legacy .coco-companion-presence {
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Next engineer move">Next engineer move</button>
         <button type="button" class="coco-prompt-chip coco-second-brain-btn" data-coco-action="open-affine-second-brain" title="Ouvrir AFFiNE" aria-label="Ouvrir AFFiNE">Ouvrir AFFiNE</button>
+        <button type="button" class="coco-prompt-chip coco-obsidian-sync-btn" data-coco-action="open-obsidian-sync" title="Sync Obsidian" aria-label="Sync Obsidian">Sync Obsidian</button>
       </div>
       <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true" aria-label="Voice dictation slot"></span>
     </div>
@@ -6407,21 +6409,7 @@ function ocResolveAffineUrl(btn) {
 }
 
 function ocShowCocoSecondBrainToast() {
-  var shell = dom.inputArea?.querySelector('.clean-input-shell');
-  if (!shell) return;
-  var el = document.getElementById('ocComposerToast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'ocComposerToast';
-    el.className = 'oc-composer-toast';
-    el.setAttribute('role', 'status');
-    el.setAttribute('aria-live', 'polite');
-    shell.insertBefore(el, shell.firstChild);
-  }
-  el.textContent = 'Opening AFFiNE. Your workspace stays under your control.';
-  el.classList.add('is-visible');
-  clearTimeout(ocShowCocoSecondBrainToast._t);
-  ocShowCocoSecondBrainToast._t = setTimeout(function () { el.classList.remove('is-visible'); }, 4500);
+  ocShowComposerToast('Opening AFFiNE. Your workspace stays under your control.');
 }
 
 /* COCO second brain placeholder — AFFiNE local-first open (no OpenChawn document storage) */
@@ -6450,18 +6438,120 @@ function ocOpenAffineSecondBrain(btn) {
   } catch (e) {}
 }
 
+var ocObsidianSyncConfig = {
+  enabled: false,
+  mode: 'uri',
+  vault_name: 'OpenChawn',
+  default_folder: 'COCO',
+  sync_enabled: false,
+};
+var OC_OBSIDIAN_NOT_CONFIGURED_FR =
+  'Obsidian Sync n\u2019est pas encore configuré. Je peux préparer une note Markdown à copier.';
+var ocObsidianOpenInFlight = false;
+
+function ocRefreshObsidianSyncConfig() {
+  return fetch('/api/obsidian-sync/status')
+    .then(function (r) {
+      return r.ok ? r.json() : null;
+    })
+    .then(function (d) {
+      if (!d || typeof d !== 'object') return;
+      ocObsidianSyncConfig.enabled = !!d.enabled;
+      ocObsidianSyncConfig.mode = d.mode || 'uri';
+      ocObsidianSyncConfig.vault_name = d.vault_name || 'OpenChawn';
+      ocObsidianSyncConfig.default_folder = d.default_folder || 'COCO';
+      ocObsidianSyncConfig.sync_enabled = !!d.sync_enabled;
+    })
+    .catch(function () {});
+}
+ocRefreshObsidianSyncConfig();
+
+function ocShowComposerToast(text) {
+  var shell = dom.inputArea?.querySelector('.clean-input-shell');
+  if (!shell) return;
+  var el = document.getElementById('ocComposerToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ocComposerToast';
+    el.className = 'oc-composer-toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    shell.insertBefore(el, shell.firstChild);
+  }
+  el.textContent = text;
+  el.classList.add('is-visible');
+  clearTimeout(ocShowComposerToast._t);
+  ocShowComposerToast._t = setTimeout(function () {
+    el.classList.remove('is-visible');
+  }, 4500);
+}
+
+function ocBuildObsidianNewUri(cfg) {
+  var vault = encodeURIComponent(cfg.vault_name || 'OpenChawn');
+  var folder = String(cfg.default_folder || 'COCO').replace(/^\/+|\/+$/g, '');
+  var stamp = new Date().toISOString().slice(0, 10);
+  var file = folder ? folder + '/COCO-' + stamp + '.md' : 'COCO-' + stamp + '.md';
+  return 'obsidian://new?vault=' + vault + '&file=' + encodeURIComponent(file);
+}
+
+function ocPrepareObsidianMarkdownCopy() {
+  var stamp = new Date().toISOString();
+  var md = '# COCO\n\n' + stamp + '\n\n';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(md).catch(function () {});
+  }
+  return Promise.resolve();
+}
+
+function ocHandleObsidianSyncClick(btn) {
+  if (ocObsidianOpenInFlight) return;
+  ocObsidianOpenInFlight = true;
+  setTimeout(function () {
+    ocObsidianOpenInFlight = false;
+  }, 800);
+
+  var finish = function () {
+    var cfg = ocObsidianSyncConfig;
+    if (!cfg.enabled || cfg.mode !== 'uri') {
+      ocShowComposerToast(OC_OBSIDIAN_NOT_CONFIGURED_FR);
+      ocPrepareObsidianMarkdownCopy();
+      return;
+    }
+    if (!cfg.sync_enabled) {
+      try {
+        window.open(ocBuildObsidianNewUri(cfg), '_blank', 'noopener,noreferrer');
+      } catch (e) {}
+      ocShowComposerToast('Préparation d\u2019une note Obsidian\u2026');
+      return;
+    }
+    ocShowComposerToast(OC_OBSIDIAN_NOT_CONFIGURED_FR);
+  };
+
+  ocRefreshObsidianSyncConfig().then(finish).catch(finish);
+}
+
 document.addEventListener('click', function (e) {
   var sb = e.target.closest('[data-coco-action="open-affine-second-brain"], .coco-second-brain-btn');
-  if (!sb) return;
+  if (sb) {
+    e.preventDefault();
+    e.stopPropagation();
+    ocOpenAffineSecondBrain(sb);
+    return;
+  }
+  var ob = e.target.closest('[data-coco-action="open-obsidian-sync"], .coco-obsidian-sync-btn');
+  if (!ob) return;
   e.preventDefault();
   e.stopPropagation();
-  ocOpenAffineSecondBrain(sb);
+  ocHandleObsidianSyncClick(ob);
 }, true);
 
 document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {
   var chip = e.target.closest('.coco-prompt-chip');
   if (!chip || chip.disabled || !dom.input) return;
   if (chip.classList.contains('coco-second-brain-btn') || chip.getAttribute('data-coco-action') === 'open-affine-second-brain') {
+    return;
+  }
+  if (chip.classList.contains('coco-obsidian-sync-btn') || chip.getAttribute('data-coco-action') === 'open-obsidian-sync') {
     return;
   }
   var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();

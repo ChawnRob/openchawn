@@ -304,6 +304,23 @@ def second_brain_status():
     }
 
 
+@app.get("/api/obsidian-sync/status")
+def obsidian_sync_status():
+    """Safe Obsidian sync status (optional Markdown backend — no secrets)."""
+    from app.core.obsidian_sync import get_obsidian_sync_status
+
+    st = get_obsidian_sync_status()
+    return {
+        "enabled": st["enabled"],
+        "mode": st["mode"],
+        "vault_name": st["vault_name"],
+        "default_folder": st["default_folder"],
+        "sync_enabled": st["sync_enabled"],
+        "configured": st["configured"],
+        "uri_open_available": st["uri_open_available"],
+    }
+
+
 @app.get("/health/providers")
 def health_providers():
     """État des providers LLM (Railway / ops) — sans secrets."""

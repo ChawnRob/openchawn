@@ -54,8 +54,8 @@ def test_second_brain_single_access_on_mobile():
     block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
     assert "coco-future-controls" in block
     assert "display: none !important" in block.split(".coco-future-controls")[1][:80]
-    assert "coco-prompt-chips .coco-prompt-chip:not(.coco-second-brain-btn)" in block
-    assert "display: none !important" in block.split(":not(.coco-second-brain-btn)")[1][:80]
+    assert "coco-prompt-chips .coco-prompt-chip:not(.coco-second-brain-btn):not(.coco-obsidian-sync-btn)" in block
+    assert "display: none !important" in block.split(":not(.coco-obsidian-sync-btn)")[1][:120]
 
 
 def test_mobile_composer_three_column_layout():
