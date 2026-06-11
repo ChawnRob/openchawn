@@ -2343,9 +2343,12 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   -webkit-user-select: none;
 }
 .oc-file-intake-crop-modal:not(.hidden) .oc-fi-mobile-body {
-  overflow: hidden;
-  touch-action: none;
-  -webkit-overflow-scrolling: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  gap: 8px;
+  padding-bottom: 10px;
 }
 .oc-file-intake-mobile-preview.hidden,
 .oc-file-intake-crop-modal.hidden {
@@ -2458,6 +2461,12 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.72);
 }
+.oc-file-intake-crop-modal .oc-file-intake-crop-stage {
+  flex: 0 0 auto;
+  min-height: 160px;
+  height: min(38vh, 300px);
+  max-height: min(38vh, 300px);
+}
 .oc-file-intake-crop-stage {
   position: relative;
   margin: 0;
@@ -2466,8 +2475,6 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  min-height: min(52vh, 420px);
-  height: min(52vh, 420px);
   width: 100%;
   display: block;
   background: rgba(0, 0, 0, 0.55);
@@ -2497,22 +2504,63 @@ html.oc-theme-night .oc-file-intake-ready { color: #5ff0c4; }
 .oc-file-intake-crop-stage .cropper-modal {
   opacity: 0.55;
 }
-.oc-crop-toolbar {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0 4px;
-}
-.oc-crop-toolbar .ux-tool-btn {
+.oc-crop-controls {
+  flex: 0 0 auto;
   width: 100%;
+  max-width: 100%;
+  margin: 10px auto 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+.oc-crop-controls-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(64px, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.oc-crop-controls .ux-tool-btn {
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
-  font-size: 14px;
+  max-height: 48px;
+  padding: 8px 6px;
+  font-size: 12px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  border-radius: 10px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   pointer-events: auto;
 }
-.oc-crop-toolbar .oc-crop-toolbar-wide {
-  grid-column: span 2;
+.oc-file-intake-crop-modal .oc-file-intake-crop-hint {
+  flex: 0 0 auto;
+  margin: 0 0 4px;
+  padding: 0 8px;
+}
+.oc-file-intake-crop-actions {
+  margin-top: 4px;
+}
+@media (max-width: 390px) {
+  .oc-crop-controls-row {
+    grid-template-columns: repeat(4, minmax(58px, 1fr));
+    gap: 6px;
+  }
+  .oc-crop-controls .ux-tool-btn {
+    min-height: 42px;
+    max-height: 44px;
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+  .oc-file-intake-crop-modal .oc-file-intake-crop-stage {
+    height: min(34vh, 260px);
+    max-height: min(34vh, 260px);
+  }
 }
 .msg.oc-image-pipeline-status {
   opacity: 0.94;
@@ -3526,15 +3574,19 @@ html.ux-legacy .coco-companion-presence {
         <div class="oc-file-intake-crop-stage" id="ocFileIntakeCropStage">
           <img id="ocFileIntakeCropImg" alt="">
         </div>
-        <div class="oc-crop-toolbar" id="ocFileIntakeCropToolbar" aria-label="Outils de recadrage">
-          <button type="button" class="ux-tool-btn" id="btnCropNudgeLeft" aria-label="Déplacer à gauche">←</button>
-          <button type="button" class="ux-tool-btn" id="btnCropNudgeRight" aria-label="Déplacer à droite">→</button>
-          <button type="button" class="ux-tool-btn" id="btnCropNudgeUp" aria-label="Déplacer vers le haut">↑</button>
-          <button type="button" class="ux-tool-btn" id="btnCropNudgeDown" aria-label="Déplacer vers le bas">↓</button>
-          <button type="button" class="ux-tool-btn" id="btnCropZoomOut" aria-label="Zoom arrière">−</button>
-          <button type="button" class="ux-tool-btn" id="btnCropZoomIn" aria-label="Zoom avant">+</button>
-          <button type="button" class="ux-tool-btn" id="btnCropRotate" aria-label="Rotation 90 degrés">⟳ 90°</button>
-          <button type="button" class="ux-tool-btn" id="btnCropReset" aria-label="Réinitialiser le recadrage">Réinit.</button>
+        <div class="oc-crop-controls" id="ocFileIntakeCropToolbar" aria-label="Outils de recadrage">
+          <div class="oc-crop-controls-row" aria-label="Déplacer l’image">
+            <button type="button" class="ux-tool-btn" id="btnCropNudgeLeft" aria-label="Déplacer à gauche">←</button>
+            <button type="button" class="ux-tool-btn" id="btnCropNudgeRight" aria-label="Déplacer à droite">→</button>
+            <button type="button" class="ux-tool-btn" id="btnCropNudgeUp" aria-label="Déplacer vers le haut">↑</button>
+            <button type="button" class="ux-tool-btn" id="btnCropNudgeDown" aria-label="Déplacer vers le bas">↓</button>
+          </div>
+          <div class="oc-crop-controls-row" aria-label="Zoom et rotation">
+            <button type="button" class="ux-tool-btn" id="btnCropZoomOut" aria-label="Zoom arrière">Zoom −</button>
+            <button type="button" class="ux-tool-btn" id="btnCropZoomIn" aria-label="Zoom avant">Zoom +</button>
+            <button type="button" class="ux-tool-btn" id="btnCropRotate" aria-label="Rotation 90 degrés">90°</button>
+            <button type="button" class="ux-tool-btn" id="btnCropReset" aria-label="Réinitialiser le recadrage">Reset</button>
+          </div>
         </div>
         <p class="oc-file-intake-crop-hint">Glissez l’image, pincez pour zoomer, utilisez les boutons si besoin, puis validez.</p>
       </div>
