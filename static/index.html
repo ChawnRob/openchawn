@@ -2011,6 +2011,23 @@ html.ux-legacy .coco-msg-actions {
   min-height: 44px;
   touch-action: manipulation;
 }
+.oc-obsidian-md-fallback {
+  margin-top: 8px;
+}
+.oc-obsidian-md-fallback pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  max-height: min(28vh, 220px);
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 221, 245, 0.25);
+  background: rgba(0, 0, 0, 0.35);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .msg-meta {
   display: flex;
@@ -6439,7 +6456,7 @@ function ocOpenAffineSecondBrain(btn) {
 }
 
 var ocObsidianSyncConfig = {
-  enabled: false,
+  enabled: true,
   mode: 'uri',
   vault_name: 'OpenChawn',
   default_folder: 'COCO',
@@ -6447,6 +6464,11 @@ var ocObsidianSyncConfig = {
 };
 var OC_OBSIDIAN_NOT_CONFIGURED_FR =
   'Obsidian Sync n\u2019est pas encore configuré. Je peux préparer une note Markdown à copier.';
+var OC_OBSIDIAN_PREPARING_FR = 'Pr\u00e9paration de la note Obsidian\u2026';
+var OC_OBSIDIAN_URI_OPENED_FR =
+  'Ouverture d\u2019Obsidian demand\u00e9e. Si la note ne s\u2019ouvre pas, copie le Markdown g\u00e9n\u00e9r\u00e9.';
+var OC_OBSIDIAN_COPY_FALLBACK_FR =
+  'Note Markdown pr\u00eate. Si Obsidian ne s\u2019ouvre pas, copie cette note manuellement.';
 var ocObsidianOpenInFlight = false;
 
 function ocRefreshObsidianSyncConfig() {
@@ -6486,45 +6508,132 @@ function ocShowComposerToast(text) {
   }, 4500);
 }
 
-function ocBuildObsidianNewUri(cfg) {
-  var vault = encodeURIComponent(cfg.vault_name || 'OpenChawn');
-  var folder = String(cfg.default_folder || 'COCO').replace(/^\/+|\/+$/g, '');
-  var stamp = new Date().toISOString().slice(0, 10);
-  var file = folder ? folder + '/COCO-' + stamp + '.md' : 'COCO-' + stamp + '.md';
-  return 'obsidian://new?vault=' + vault + '&file=' + encodeURIComponent(file);
+function ocBuildObsidianNoteMarkdown() {
+  var now = new Date();
+  var stamp = now.toISOString();
+  var title = 'COCO-' + stamp.slice(0, 10);
+  var lines = [
+    '# ' + title,
+    '',
+    '- **Date:** ' + stamp,
+    '- **Source:** OpenChawn / COCO',
+    '',
+    '## Conversation',
+    '',
+  ];
+  var wrote = false;
+  if (dom.messages) {
+    dom.messages.querySelectorAll('.msg.user, .msg.assistant').forEach(function (msg) {
+      if (msg.id === 'ocImagePipelineStatus' || msg.classList.contains('oc-obsidian-md-fallback')) return;
+      var role = msg.classList.contains('user') ? 'Utilisateur' : 'COCO';
+      var body = msg.querySelector('.msg-body');
+      var text = body ? body.textContent.trim() : '';
+      if (!text) return;
+      wrote = true;
+      lines.push('### ' + role);
+      lines.push('');
+      lines.push(text);
+      lines.push('');
+    });
+  }
+  if (!wrote) {
+    lines.push('_Aucun message visible dans cette session._');
+    lines.push('');
+  }
+  return { title: title, markdown: lines.join('\n') };
 }
 
-function ocPrepareObsidianMarkdownCopy() {
-  var stamp = new Date().toISOString();
-  var md = '# COCO\n\n' + stamp + '\n\n';
+function ocBuildObsidianNewUri(cfg, title, markdown) {
+  var vault = encodeURIComponent(cfg.vault_name || 'OpenChawn');
+  var folder = String(cfg.default_folder || 'COCO').replace(/^\/+|\/+$/g, '');
+  var name = folder ? folder + '/' + title : title;
+  return (
+    'obsidian://new?vault=' +
+    vault +
+    '&name=' +
+    encodeURIComponent(name) +
+    '&content=' +
+    encodeURIComponent(markdown)
+  );
+}
+
+function ocCopyObsidianMarkdown(md) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     return navigator.clipboard.writeText(md).catch(function () {});
   }
   return Promise.resolve();
 }
 
-function ocHandleObsidianSyncClick(btn) {
+function ocShowObsidianMarkdownFallback(md) {
+  document.getElementById('ocObsidianMdFallback')?.remove();
+  if (!dom.messages) return;
+  var div = document.createElement('div');
+  div.className = 'msg assistant oc-obsidian-md-fallback';
+  div.id = 'ocObsidianMdFallback';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = OC_OBSIDIAN_COPY_FALLBACK_FR;
+  var pre = document.createElement('pre');
+  pre.textContent = md;
+  body.appendChild(pre);
+  div.appendChild(body);
+  dom.messages.insertBefore(div, dom.typing);
+  scrollDown();
+}
+
+function ocOpenObsidianUri(uri) {
+  var opened = null;
+  try {
+    opened = window.open(uri, '_blank', 'noopener,noreferrer');
+  } catch (e) {}
+  if (!opened) {
+    try {
+      window.location.href = uri;
+      return true;
+    } catch (e2) {}
+    return false;
+  }
+  return true;
+}
+
+function ocSyncObsidian(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
   if (ocObsidianOpenInFlight) return;
   ocObsidianOpenInFlight = true;
   setTimeout(function () {
     ocObsidianOpenInFlight = false;
   }, 800);
 
+  ocShowComposerToast(OC_OBSIDIAN_PREPARING_FR);
+
   var finish = function () {
     var cfg = ocObsidianSyncConfig;
+    var note = ocBuildObsidianNoteMarkdown();
+    var md = note.markdown;
+
     if (!cfg.enabled || cfg.mode !== 'uri') {
       ocShowComposerToast(OC_OBSIDIAN_NOT_CONFIGURED_FR);
-      ocPrepareObsidianMarkdownCopy();
+      ocCopyObsidianMarkdown(md);
+      ocShowObsidianMarkdownFallback(md);
       return;
     }
-    if (!cfg.sync_enabled) {
-      try {
-        window.open(ocBuildObsidianNewUri(cfg), '_blank', 'noopener,noreferrer');
-      } catch (e) {}
-      ocShowComposerToast('Préparation d\u2019une note Obsidian\u2026');
-      return;
+
+    var uri = ocBuildObsidianNewUri(cfg, note.title, md);
+    var opened = ocOpenObsidianUri(uri);
+    ocCopyObsidianMarkdown(md);
+    if (opened) {
+      ocShowComposerToast(OC_OBSIDIAN_URI_OPENED_FR);
+    } else {
+      ocShowComposerToast(OC_OBSIDIAN_COPY_FALLBACK_FR);
+      ocShowObsidianMarkdownFallback(md);
     }
-    ocShowComposerToast(OC_OBSIDIAN_NOT_CONFIGURED_FR);
   };
 
   ocRefreshObsidianSyncConfig().then(finish).catch(finish);
@@ -6540,9 +6649,7 @@ document.addEventListener('click', function (e) {
   }
   var ob = e.target.closest('[data-coco-action="open-obsidian-sync"], .coco-obsidian-sync-btn');
   if (!ob) return;
-  e.preventDefault();
-  e.stopPropagation();
-  ocHandleObsidianSyncClick(ob);
+  ocSyncObsidian(e);
 }, true);
 
 document.getElementById('cocoPromptChips')?.addEventListener('click', function (e) {

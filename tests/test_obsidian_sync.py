@@ -14,28 +14,30 @@ def _html() -> str:
     return INDEX.read_text(encoding="utf-8")
 
 
-def test_obsidian_sync_defaults_disabled():
+def _obsidian_block() -> str:
+    html = _html()
+    return html.split("var ocObsidianSyncConfig")[1].split("document.getElementById('cocoPromptChips')")[0]
+
+
+def test_obsidian_sync_defaults_uri_enabled():
     from app.core.obsidian_sync import get_obsidian_sync_status
 
     st = get_obsidian_sync_status()
-    assert st["enabled"] is False
+    assert st["enabled"] is True
     assert st["sync_enabled"] is False
     assert st["mode"] == "uri"
     assert st["vault_name"] == "OpenChawn"
     assert st["default_folder"] == "COCO"
-    assert st["uri_open_available"] is False
+    assert st["uri_open_available"] is True
 
 
-def test_obsidian_sync_enabled_uri_without_deep_sync(monkeypatch):
+def test_obsidian_sync_can_be_disabled(monkeypatch):
     from app.core.obsidian_sync import get_obsidian_sync_status
 
-    monkeypatch.setenv("OBSIDIAN_ENABLED", "true")
-    monkeypatch.setenv("OBSIDIAN_SYNC_ENABLED", "false")
-    monkeypatch.setenv("OBSIDIAN_MODE", "uri")
+    monkeypatch.setenv("OBSIDIAN_ENABLED", "false")
     st = get_obsidian_sync_status()
-    assert st["enabled"] is True
-    assert st["sync_enabled"] is False
-    assert st["uri_open_available"] is True
+    assert st["enabled"] is False
+    assert st["uri_open_available"] is False
 
 
 def test_api_obsidian_sync_status_no_secrets():
@@ -54,10 +56,11 @@ def test_api_obsidian_sync_status_no_secrets():
         "configured",
         "uri_open_available",
     }
-    assert data["enabled"] is False
+    assert data["enabled"] is True
     assert data["sync_enabled"] is False
     assert "token" not in str(data).lower()
     assert "27124" not in str(data)
+    assert "OBSIDIAN_LOCAL_REST_API_TOKEN" not in _html()
 
 
 def test_ui_affine_and_obsidian_chips_separate():
@@ -70,16 +73,31 @@ def test_ui_affine_and_obsidian_chips_separate():
     assert "coco-second-brain-btn" in html
 
 
+def test_oc_sync_obsidian_builds_uri_with_encoded_content():
+    block = _obsidian_block()
+    assert "function ocSyncObsidian" in _html()
+    assert "obsidian://new?vault=" in block
+    assert "&name=" in block
+    assert "&content=" in block
+    assert "encodeURIComponent(markdown)" in block
+    assert "ocBuildObsidianNoteMarkdown" in block
+
+
 def test_ui_no_false_obsidian_sync_success_messages():
-    html = _html()
-    obsidian_fn = html.split("function ocHandleObsidianSyncClick")[1].split("document.addEventListener('click'")[0]
-    assert "note synchronisée" not in obsidian_fn
-    assert "écrit dans Obsidian" not in obsidian_fn
-    assert "sync réussie" not in obsidian_fn
-    assert "OC_OBSIDIAN_NOT_CONFIGURED_FR" in html
-    assert "pas encore configur" in html
-    assert "/api/obsidian-sync/status" in html
-    assert "obsidian://new" in html
+    block = _obsidian_block()
+    assert "note synchronisée" not in block
+    assert "écrit dans Obsidian" not in block
+    assert "sync réussie" not in block
+    assert "Synchronisation réussie" not in block
+    assert "Obsidian sync complete" not in block
+    assert "OC_OBSIDIAN_URI_OPENED_FR" in _html()
+    assert "/api/obsidian-sync/status" in _html()
+
+
+def test_oc_sync_obsidian_in_flight_guard():
+    block = _obsidian_block()
+    assert "ocObsidianOpenInFlight" in block
+    assert "800" in block
 
 
 def test_affine_open_path_unchanged():

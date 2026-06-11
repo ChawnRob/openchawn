@@ -17,7 +17,7 @@ def _env_bool(key: str, default: bool = False) -> bool:
 
 def get_obsidian_sync_status() -> dict[str, Any]:
     """Safe public status — no API token, no local REST URL."""
-    enabled = _env_bool("OBSIDIAN_ENABLED", default=False)
+    enabled = _env_bool("OBSIDIAN_ENABLED", default=True)
     sync_enabled = _env_bool("OBSIDIAN_SYNC_ENABLED", default=False)
     mode = (os.getenv("OBSIDIAN_MODE") or "uri").strip() or "uri"
     vault_name = (os.getenv("OBSIDIAN_VAULT_NAME") or "OpenChawn").strip() or "OpenChawn"

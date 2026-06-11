@@ -53,7 +53,7 @@ def test_affine_url_resolution_and_fallback():
 
 def test_affine_open_single_navigation_path():
     html = _html()
-    open_fn = html.split("function ocOpenAffineSecondBrain")[1].split("document.addEventListener('click'")[0]
+    open_fn = html.split("function ocOpenAffineSecondBrain")[1].split("var ocObsidianSyncConfig")[0]
     assert open_fn.count("window.open(affineUrl") == 1
     assert "window.location.href" not in open_fn
     assert "window.location.assign" not in open_fn
