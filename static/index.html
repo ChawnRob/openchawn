@@ -6399,21 +6399,37 @@ function ocDetectAffineOpenIntent(text) {
 }
 
 var OC_OBSIDIAN_URI_CONNECT_FR =
-  'Oui, je peux préparer une note Markdown et déclencher l\u2019ouverture d\u2019Obsidian via le bouton Sync Obsidian. En mode actuel, je ne peux pas confirmer une synchronisation profonde dans le vault, mais je peux générer le contenu et demander l\u2019ouverture d\u2019Obsidian.';
+  'Oui, je peux préparer une note Markdown depuis cette conversation et déclencher l\u2019ouverture d\u2019Obsidian via le bouton Sync Obsidian. En mode actuel, je ne peux pas confirmer une synchronisation profonde dans le vault : j\u2019utilise obsidian://new pour ouvrir Obsidian avec le contenu préparé.';
 
 function ocDetectObsidianConnectIntent(text) {
   var t = ocNormalizeAffineIntentText(text).trim();
   if (!t || !/\bobsidian\b/.test(t)) return false;
   if (/\baffine\b/.test(t) && !/\bobsidian\b/.test(t.replace(/\baffine\b/g, ''))) return false;
-  var connectVerb = /\b(connect|connec|sync|synchron|envoy|envoi|envie|ouvr|open|lier|link|relier|acces)\w*/.test(t);
-  var askConnect =
-    /\b(peux|peut|possible|capable|tu)\b/.test(t) &&
-    (/\b(connect|connec|sync|obsidian)\w*/.test(t) || /\bse connecter\b/.test(t));
-  return (
-    connectVerb ||
-    askConnect ||
-    /\b(sync obsidian|connecte[- ]?toi|se connecter a obsidian)\b/.test(t)
-  );
+  var phrasePatterns = [
+    /\bsync\s+(avec|to)\s+obsidian\b/,
+    /\bfaire\s+le\s+sync\s+avec\s+obsidian\b/,
+    /\bfaire\s+la\s+sync\s+avec\s+obsidian\b/,
+    /\bsynchronis\w*\s+avec\s+obsidian\b/,
+    /\bconnexion\s+obsidian\b/,
+    /\bconnect\w*\s+a\s+obsidian\b/,
+    /\bconnecte[- ]?toi\s+a\s+obsidian\b/,
+    /\benvoy\w*\s+(ca\s+)?dans\s+obsidian\b/,
+    /\bsend\s+to\s+obsidian\b/,
+    /\bsync\s+obsidian\b/,
+    /\b(sync|connect|connec|synchron|envoy|envoi|ouvr|open|lier|link|relier|acces)\w*.*\bobsidian\b/,
+    /\bobsidian\b.*\b(sync|connect|connec|synchron|envoy|envoi|ouvr|open)\w*/,
+    /\b(sync obsidian|connecte[- ]?toi|se connecter a obsidian)\b/,
+  ];
+  for (var i = 0; i < phrasePatterns.length; i++) {
+    if (phrasePatterns[i].test(t)) return true;
+  }
+  if (
+    /\b(peux|peut|possible|capable|tu|est-ce)\b/.test(t) &&
+    (/\b(sync|connect|connec|synchron)\w*/.test(t) || /\bse connecter\b/.test(t))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function ocAddObsidianConnectAssistantMessage() {
