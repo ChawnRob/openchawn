@@ -1,89 +1,73 @@
-"""Optional Obsidian Markdown sync — separate from AFFiNE Second Brain."""
+"""Optional Obsidian Markdown sync — thin facade over app.integrations.obsidian."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-OBSIDIAN_SYNC_MARKER = "obsidian_sync_runtime_v1"
+from app.integrations.obsidian.connector import get_obsidian_connector_status, resolve_obsidian_sync_mode
 
-
-def _env_bool(key: str, default: bool = False) -> bool:
-    raw = os.environ.get(key)
-    if raw is None or str(raw).strip() == "":
-        return default
-    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+OBSIDIAN_SYNC_MARKER = "obsidian_sync_runtime_v2"
 
 
 def get_obsidian_sync_status() -> dict[str, Any]:
     """Safe public status — no API token, no local REST URL."""
-    enabled = _env_bool("OBSIDIAN_ENABLED", default=True)
-    sync_enabled = _env_bool("OBSIDIAN_SYNC_ENABLED", default=False)
-    mode = (os.getenv("OBSIDIAN_MODE") or "uri").strip() or "uri"
-    vault_name = (os.getenv("OBSIDIAN_VAULT_NAME") or "OpenChawn").strip() or "OpenChawn"
-    default_folder = (os.getenv("OBSIDIAN_DEFAULT_FOLDER") or "COCO").strip() or "COCO"
+    st = get_obsidian_connector_status()
+    mode = st["mode"]
+    legacy_mode = "uri" if mode == "uri_handoff" else mode
     return {
         "marker": OBSIDIAN_SYNC_MARKER,
-        "enabled": enabled,
-        "mode": mode,
-        "vault_name": vault_name,
-        "default_folder": default_folder,
-        "sync_enabled": sync_enabled,
-        "configured": enabled,
-        "uri_open_available": enabled and mode == "uri",
+        "enabled": st["enabled"],
+        "mode": legacy_mode,
+        "sync_mode": mode,
+        "vault_name": st["vault_name"],
+        "default_folder": st["default_folder"],
+        "sync_enabled": mode == "local_rest" and st.get("local_rest_configured"),
+        "configured": st["configured"],
+        "uri_open_available": st["uri_open_available"],
+        "can_write_directly": st.get("can_write_directly", False),
     }
 
 
 def build_obsidian_sync_context() -> str:
     """English system-prompt block for COCO (model answers in user language)."""
     st = get_obsidian_sync_status()
-    if not st["enabled"]:
+    mode = st["sync_mode"]
+    if mode == "disabled" or not st["enabled"]:
         return (
             f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
             "Obsidian optional Markdown export (separate from AFFiNE Second Brain):\n"
-            "- OBSIDIAN_ENABLED=false — Obsidian Sync is not configured.\n"
-            "- If asked to connect, sync, or send to Obsidian, say Obsidian Sync is not configured.\n"
+            "- Obsidian connector mode: disabled — Obsidian Sync is not configured.\n"
+            "- If asked to connect, sync, or send to Obsidian, say the connector is not configured.\n"
             "- Never claim sync succeeded or that a note was written inside Obsidian.\n"
         )
-    if st["mode"] == "uri" and not st["sync_enabled"]:
+    if mode == "local_rest" and st.get("can_write_directly"):
         return (
             f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
-            "Obsidian URI mode (optional Markdown export — AFFiNE remains the primary Second Brain):\n"
-            f"- OBSIDIAN_ENABLED=true; OBSIDIAN_MODE=uri; vault={st['vault_name']}; folder={st['default_folder']}.\n"
-            "- URI mode is a local device handoff (obsidian://new?vault=&name=&content= on user tap), "
-            "not direct API read/write into the vault.\n"
-            "- COCO can prepare Markdown notes (title, date, source, user request, COCO response) and trigger "
-            "Obsidian via the Sync Obsidian UI chip with encoded name and content.\n"
-            "- The user validates final save/opening on their device; never claim sync succeeded before that tap.\n"
-            "- Do NOT deny Obsidian connectivity. Forbidden when URI mode is active: "
-            "« Non, je ne peux pas synchroniser avec Obsidian », « je ne peux pas vous connecter à Obsidian », "
-            "« aucune synchronisation », « aucune capacité Obsidian », « pas de connecteur Obsidian », "
-            "« aucun connecteur Obsidian actif », « Obsidian indisponible », « API Obsidian n'est pas active », "
-            "« no Obsidian connector », « je ne peux pas me connecter à Obsidian ».\n"
-            "- Connect/sync intent (FR/EN examples): « Peux tu me synchroniser à Obsidian ? », "
-            "« Es ce que tu peux me connecter à Obsidian ? », « Connecte moi à Obsidian », "
-            "« synchroniser avec Obsidian », « sync to Obsidian » — answer YES equivalent to:\n"
-            "  « Oui. COCO peut préparer une note Markdown et utiliser le bouton Sync Obsidian pour l'envoyer "
-            "vers Obsidian sur votre appareil. »\n"
-            "- Forbidden denial phrases also include: « I cannot sync », « cannot be triggered automatically », "
-            "« press the button yourself ».\n"
-            "- Note/save intent (FR examples): « note ça dans Obsidian », « sauvegarde dans Obsidian », "
-            "« crée une note Obsidian », « travaille dans Obsidian » — answer YES equivalent to:\n"
-            "  « Oui. J'ai préparé une note Markdown pour Obsidian. Appuie sur Sync Obsidian pour l'ouvrir dans "
-            "Obsidian et valider l'enregistrement depuis ton appareil. »\n"
-            "- Never claim from chat alone: « sync réussie », « note écrite dans Obsidian », "
-            "« enregistrement réussi », « connexion profonde active ».\n"
-            "- Direct the user to tap Sync Obsidian for the actual obsidian://new handoff.\n"
-        )
-    if st["sync_enabled"] and st["mode"] == "local_rest":
-        return (
-            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
-            "Obsidian local REST mode is flagged enabled, but COCO must only claim direct vault write/sync "
-            "after explicit connector confirmation. Until confirmed, describe URI/chip flow only and do not say "
-            "« sync réussie » or « note écrite dans Obsidian ».\n"
+            "Obsidian local REST mode (direct vault write when API succeeds):\n"
+            f"- vault={st['vault_name']}; folder={st['default_folder']}.\n"
+            "- COCO may create notes via POST /api/integrations/obsidian/notes when the user asks "
+            "to note/save/sync content to Obsidian.\n"
+            "- Only say « C'est noté dans Obsidian » or equivalent AFTER the connector API returns success.\n"
+            "- If the API falls back to uri_handoff, use the Sync Obsidian button flow and do not claim write success.\n"
+            "- Note intent examples: « note ça dans Obsidian », « synchronise ça dans Obsidian », "
+            "« enregistre cette conversation dans Obsidian », « ajoute ce résumé à Obsidian ».\n"
         )
     return (
         f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
-        f"Obsidian export enabled (mode={st['mode']}); use Sync Obsidian chip for user-triggered actions. "
-        "Do not claim deep sync or vault write without connector confirmation.\n"
+        "Obsidian URI handoff mode (optional Markdown export — AFFiNE remains the primary Second Brain):\n"
+        f"- vault={st['vault_name']}; folder={st['default_folder']}.\n"
+        "- URI mode is a local device handoff (obsidian://new on user tap), not direct API read/write.\n"
+        "- COCO prepares Markdown and the Sync Obsidian button triggers obsidian://new with encoded name/content.\n"
+        "- Never claim sync succeeded before the user taps Sync Obsidian.\n"
+        "- Do NOT deny Obsidian connectivity when uri_handoff is active.\n"
+        "- Note intent examples: « note ça dans Obsidian », « synchronise ça dans Obsidian », "
+        "« enregistre cette conversation dans Obsidian », « ajoute ce résumé à Obsidian ».\n"
     )
+
+
+__all__ = [
+    "OBSIDIAN_SYNC_MARKER",
+    "build_obsidian_sync_context",
+    "get_obsidian_sync_status",
+    "resolve_obsidian_sync_mode",
+]
