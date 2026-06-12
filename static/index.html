@@ -1494,6 +1494,8 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     width: 44px !important;
     height: 44px !important;
     min-width: 44px;
+    position: relative;
+    z-index: 5;
   }
 
   html.ux-chat-clean .input-area.oc-composer-centered {
@@ -3025,6 +3027,7 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
   width: 20px;
   height: 20px;
   fill: white;
+  pointer-events: none;
 }
 
 /* Scanline soft */
@@ -4220,9 +4223,16 @@ function ocUxSetInputPlaceholder() {
 }
 
 function ocChatCleanMobileComposer() {
-  return document.documentElement.classList.contains('ux-chat-clean')
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(max-width: 640px)').matches;
+  if (!document.documentElement.classList.contains('ux-chat-clean')) return false;
+  if (typeof window.matchMedia !== 'function') return false;
+  if (window.matchMedia('(max-width: 640px)').matches) return true;
+  if (
+    window.matchMedia('(pointer: coarse)').matches
+    && window.matchMedia('(max-width: 1024px)').matches
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function ocComposerInputHasSendAction() {
@@ -6161,24 +6171,59 @@ checkHealth();
 setInterval(checkHealth, 15000);
 
 // ── Textarea auto-resize ────────────────────────────
+function ocBindComposerTap(el, handler) {
+  if (!el || typeof handler !== 'function') return;
+  var lastAt = 0;
+  function run(ev) {
+    var now = Date.now();
+    if (now - lastAt < 450) return;
+    lastAt = now;
+    if (ev) {
+      if (ev.cancelable) ev.preventDefault();
+      ev.stopPropagation();
+    }
+    handler(ev);
+  }
+  el.addEventListener('click', run);
+  el.addEventListener('pointerup', function (ev) {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    run(ev);
+  });
+  el.addEventListener('touchend', function (ev) {
+    run(ev);
+  }, { passive: false });
+}
+
 function ocHandleSendButtonClick() {
-  if (!dom.send || dom.send.disabled || sending) return;
-  ocSyncMobileComposerActionButton();
+  if (!dom.send) return;
+  const inputText = dom.input ? dom.input.value : '';
   const hasAttachment =
     typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
-  const hasSendAction = ocComposerInputHasSendAction();
+  const hasSendAction = Boolean(String(inputText || '').trim() || hasAttachment);
   const isMicMode = dom.send.classList.contains('oc-composer-action-mic');
   const isSendMode = dom.send.classList.contains('oc-composer-action-send');
   console.info('[COCO] sendBtn clicked', {
-    text: dom.input ? dom.input.value : '',
+    text: inputText,
     hasAttachment: Boolean(hasAttachment),
     isMicMode: isMicMode,
     isSendMode: isSendMode,
+    disabled: Boolean(dom.send.disabled),
+    sending: sending,
   });
-  if (ocChatCleanMobileComposer() && !hasSendAction && isMicMode) {
+  if (dom.send.disabled) {
+    console.info('[COCO] sendBtn ignored: disabled');
+    return;
+  }
+  if (sending) {
+    console.info('[COCO] sendBtn ignored: sending in progress');
+    return;
+  }
+  if (ocChatCleanMobileComposer() && !hasSendAction) {
+    ocSyncMobileComposerActionButton();
     dom.btnSpeech?.click?.();
     return;
   }
+  ocSyncMobileComposerActionButton();
   console.info('[COCO] normal send path reached');
   send();
 }
@@ -6197,11 +6242,15 @@ dom.input.addEventListener('compositionend', () => {
   ocSyncMobileComposerActionButton();
 });
 
+dom.input.addEventListener('keyup', () => {
+  ocSyncMobileComposerActionButton();
+});
+
 dom.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
-dom.send?.addEventListener('click', ocHandleSendButtonClick);
+ocBindComposerTap(dom.send, ocHandleSendButtonClick);
 
 ocSyncMobileComposerActionButton();
 
@@ -6467,7 +6516,14 @@ function ocFriendlyVisionErrorMessage(err) {
 async function send() {
   const text = dom.input.value.trim();
   const hasAttachment = ocHasPendingImageAttachment();
-  if ((!text && !hasAttachment) || sending) return;
+  if ((!text && !hasAttachment) || sending) {
+    console.info('[COCO] send() skipped', {
+      text: text,
+      hasAttachment: Boolean(hasAttachment),
+      sending: sending,
+    });
+    return;
+  }
 
   if (!hasAttachment && ocDetectLanguageComplaintIntent(text)) {
     dom.input.value = '';
