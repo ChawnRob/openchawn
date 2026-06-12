@@ -77,7 +77,7 @@ def test_obsidian_intercept_does_not_run_for_salut():
     send_fn = _send_fn()
     before_chat = send_fn.split("console.info('[COCO:CHAT_POST_START]')")[0]
     assert "ocDetectObsidianConnectIntent(text)" in before_chat
-    assert "ocAddObsidianConnectAssistantMessage(text)" in before_chat
+    assert "await ocHandleObsidianChatIntent(text, 'connect')" in before_chat
 
 
 def test_empty_text_shows_blocked_ui_not_chat():

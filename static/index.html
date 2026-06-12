@@ -6566,7 +6566,7 @@ async function send() {
     dom.input.value = '';
     dom.input.style.height = 'auto';
     addMsg('user', text);
-    ocAddObsidianNoteAssistantMessage(text);
+    await ocHandleObsidianChatIntent(text, 'note');
     ocSetCocoState('ready', 'Ready');
     scrollDown();
     dom.input.focus();
@@ -6578,7 +6578,7 @@ async function send() {
     dom.input.value = '';
     dom.input.style.height = 'auto';
     addMsg('user', text);
-    ocAddObsidianConnectAssistantMessage(text);
+    await ocHandleObsidianChatIntent(text, 'connect');
     ocSetCocoState('ready', 'Ready');
     scrollDown();
     dom.input.focus();
@@ -6737,6 +6737,10 @@ function ocDetectObsidianNoteIntent(text) {
     /\bcree\w*\s+une\s+note\s+obsidian\b/,
     /\bmet\w*\s+(ca\s+)?dans\s+obsidian\b/,
     /\benregistr\w*\s+dans\s+obsidian\b/,
+    /\benregistr\w*\s+(cette\s+)?conversation\s+dans\s+obsidian\b/,
+    /\bsynchronis\w*\s+(ca|cela|ça)\s+dans\s+obsidian\b/,
+    /\bajout\w*\s+(ce\s+)?resume\s+(a|à)\s+obsidian\b/,
+    /\bajout\w*\s+(ce\s+)?resumé\s+(a|à)\s+obsidian\b/,
     /\btravaill\w*\s+dans\s+obsidian\b/,
   ];
   for (var i = 0; i < notePatterns.length; i++) {
@@ -6875,7 +6879,7 @@ function ocBuildObsidianUriHandoff(userText) {
   });
   var cfg = ocObsidianSyncConfig;
   var uri = '';
-  if (cfg.enabled && cfg.mode === 'uri') {
+  if (cfg.enabled && ocObsidianUriHandoffEnabled(cfg)) {
     uri = ocBuildObsidianNewNoteUri({
       vault: cfg.vault_name || '',
       title: ocObsidianNoteTitlePath(cfg, note.title),
@@ -6885,15 +6889,50 @@ function ocBuildObsidianUriHandoff(userText) {
   return { note: note, uri: uri };
 }
 
-function ocRenderObsidianUriAssistantMessage(userText, bodyText) {
+function ocObsidianUriHandoffEnabled(cfg) {
+  cfg = cfg || ocObsidianSyncConfig;
+  if (!cfg || !cfg.enabled) return false;
+  var mode = cfg.sync_mode || cfg.mode || 'uri';
+  return mode === 'uri_handoff' || mode === 'uri' || mode === 'local_rest';
+}
+
+function ocRenderObsidianAssistantPlain(replyText) {
+  if (dom.welcome) dom.welcome.remove();
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = replyText;
+  div.appendChild(body);
+  div.appendChild(ocBuildAssistantMsgActions());
+  dom.messages.insertBefore(div, dom.typing);
+  lastAssistantPlain = replyText;
+  refreshExportButtons();
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
+
+function ocRenderObsidianLocalRestSuccess(notePath) {
+  var reply = OC_OBSIDIAN_LOCAL_REST_SUCCESS_FR;
+  if (notePath) reply += ' (' + notePath + ')';
+  ocRenderObsidianAssistantPlain(reply);
+}
+
+function ocRenderObsidianUriAssistantMessage(userText, bodyText, apiHandoff) {
   if (dom.welcome) dom.welcome.remove();
   var cfg = ocObsidianSyncConfig;
   var reply =
     bodyText ||
-    (cfg.enabled && cfg.mode === 'uri'
+    (cfg.enabled && ocObsidianUriHandoffEnabled(cfg)
       ? OC_OBSIDIAN_URI_CONNECT_FR
       : OC_OBSIDIAN_NOT_CONFIGURED_FR);
-  var handoff = ocBuildObsidianUriHandoff(userText);
+  var handoff = apiHandoff && apiHandoff.uri
+    ? { uri: apiHandoff.uri, note: { markdown: apiHandoff.markdown || '' } }
+    : ocBuildObsidianUriHandoff(userText);
   var div = document.createElement('div');
   div.className = 'msg assistant';
   var roleLabel = document.createElement('span');
@@ -6904,7 +6943,7 @@ function ocRenderObsidianUriAssistantMessage(userText, bodyText) {
   body.className = 'msg-body';
   body.textContent = reply;
   div.appendChild(body);
-  if (cfg.enabled && cfg.mode === 'uri') {
+  if (cfg.enabled && ocObsidianUriHandoffEnabled(cfg) && handoff.uri) {
     var actions = document.createElement('div');
     actions.className = 'oc-affine-chat-action';
     actions.appendChild(ocBuildObsidianSyncButton(handoff.uri, handoff.note.markdown));
@@ -6918,17 +6957,64 @@ function ocRenderObsidianUriAssistantMessage(userText, bodyText) {
   scrollDown();
 }
 
+async function ocHandleObsidianChatIntent(userText, kind) {
+  await ocRefreshObsidianSyncConfig();
+  var cfg = ocObsidianSyncConfig;
+  var defaultReply = kind === 'note' ? OC_OBSIDIAN_URI_NOTE_FR : OC_OBSIDIAN_URI_CONNECT_FR;
+  var handoff = ocBuildObsidianUriHandoff(userText);
+
+  if (!cfg.enabled || cfg.sync_mode === 'disabled') {
+    ocRenderObsidianAssistantPlain(OC_OBSIDIAN_NOT_CONFIGURED_FR);
+    return;
+  }
+
+  try {
+    var r = await fetch(API + '/api/integrations/obsidian/notes', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify({
+        title: handoff.note.title,
+        markdown: handoff.note.markdown,
+        folder: cfg.default_folder || 'COCO',
+        source: 'chat',
+        user_text: userText,
+        assistant_text: ocGetObsidianHandoffAssistantText(),
+      }),
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+
+    if (d.mode === 'local_rest' && d.ok && d.note_path) {
+      ocRenderObsidianLocalRestSuccess(d.note_path);
+      return;
+    }
+    if (d.mode === 'disabled' || d.ok === false) {
+      ocRenderObsidianAssistantPlain(OC_OBSIDIAN_NOT_CONFIGURED_FR);
+      return;
+    }
+    if (d.mode === 'uri_handoff' && d.ok) {
+      ocRenderObsidianUriAssistantMessage(userText, defaultReply, {
+        uri: d.uri || handoff.uri,
+        markdown: d.markdown || handoff.note.markdown,
+      });
+      return;
+    }
+  } catch (err) {
+    console.warn('[COCO:Obsidian] connector failed, URI fallback', err);
+  }
+
+  ocRenderObsidianUriAssistantMessage(userText, defaultReply, {
+    uri: handoff.uri,
+    markdown: handoff.note.markdown,
+  });
+}
+
 function ocAddObsidianConnectAssistantMessage(userText) {
-  ocRenderObsidianUriAssistantMessage(userText, null);
+  ocHandleObsidianChatIntent(userText, 'connect');
 }
 
 function ocAddObsidianNoteAssistantMessage(userText) {
-  var cfg = ocObsidianSyncConfig;
-  var bodyText =
-    cfg.enabled && cfg.mode === 'uri'
-      ? OC_OBSIDIAN_URI_NOTE_FR
-      : OC_OBSIDIAN_NOT_CONFIGURED_FR;
-  ocRenderObsidianUriAssistantMessage(userText, bodyText);
+  ocHandleObsidianChatIntent(userText, 'note');
 }
 
 function ocAddAffineOpenAssistantMessage() {
@@ -7002,12 +7088,15 @@ function ocOpenAffineSecondBrain(btn) {
 var ocObsidianSyncConfig = {
   enabled: true,
   mode: 'uri',
+  sync_mode: 'uri_handoff',
   vault_name: 'OpenChawn',
   default_folder: 'COCO',
   sync_enabled: false,
+  can_write_directly: false,
 };
 var OC_OBSIDIAN_NOT_CONFIGURED_FR =
   'Obsidian Sync n\u2019est pas encore configuré. Je peux préparer une note Markdown à copier.';
+var OC_OBSIDIAN_LOCAL_REST_SUCCESS_FR = 'C\u2019est not\u00e9 dans Obsidian.';
 var OC_OBSIDIAN_PREPARING_FR = 'Pr\u00e9paration de la note Obsidian\u2026';
 var OC_OBSIDIAN_URI_OPENED_FR =
   'Ouverture d\u2019Obsidian demand\u00e9e. Si la note ne s\u2019ouvre pas, copie le Markdown g\u00e9n\u00e9r\u00e9.';
@@ -7024,9 +7113,12 @@ function ocRefreshObsidianSyncConfig() {
       if (!d || typeof d !== 'object') return;
       ocObsidianSyncConfig.enabled = !!d.enabled;
       ocObsidianSyncConfig.mode = d.mode || 'uri';
+      ocObsidianSyncConfig.sync_mode = d.sync_mode || d.mode || 'uri_handoff';
+      if (ocObsidianSyncConfig.sync_mode === 'uri') ocObsidianSyncConfig.sync_mode = 'uri_handoff';
       ocObsidianSyncConfig.vault_name = d.vault_name || 'OpenChawn';
       ocObsidianSyncConfig.default_folder = d.default_folder || 'COCO';
       ocObsidianSyncConfig.sync_enabled = !!d.sync_enabled;
+      ocObsidianSyncConfig.can_write_directly = !!d.can_write_directly;
     })
     .catch(function () {});
 }
@@ -7201,7 +7293,7 @@ function ocSyncObsidian(event) {
     var note = presetMd ? { title: '', markdown: presetMd } : ocBuildObsidianNoteMarkdown();
     var md = note.markdown;
 
-    if (!cfg.enabled || cfg.mode !== 'uri') {
+    if (!cfg.enabled || !ocObsidianUriHandoffEnabled(cfg)) {
       ocShowComposerToast(OC_OBSIDIAN_NOT_CONFIGURED_FR);
       ocCopyObsidianMarkdown(md);
       ocShowObsidianMarkdownFallback(md);

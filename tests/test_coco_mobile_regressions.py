@@ -180,7 +180,7 @@ def test_obsidian_connect_phrases_short_circuit_list():
         assert denial not in reply
 
     send_fn = _html().split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
-    assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+    assert "await ocHandleObsidianChatIntent(text, 'connect')" in send_fn
     connect_fn = _html().split("function ocRenderObsidianUriAssistantMessage")[1].split(
         "function ocAddObsidianConnectAssistantMessage"
     )[0]
@@ -227,6 +227,6 @@ def test_obsidian_intercept_does_not_block_normal_send():
     html = _html()
     send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
     obsidian_block = send_fn.split("ocDetectObsidianConnectIntent(text)")[1].split("sending = true")[0]
-    assert "ocAddObsidianConnectAssistantMessage(text)" in obsidian_block
+    assert "await ocHandleObsidianChatIntent(text, 'connect')" in obsidian_block
     assert "return" in obsidian_block
     assert "apiFetch('/chat'" in send_fn.split("ocDetectObsidianConnectIntent(text)")[1]

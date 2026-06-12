@@ -46,6 +46,7 @@ from app.settings import get_settings
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
 from app.api.chat import router as chat_router
 from app.api.files_intake import router as files_intake_router
+from app.api.obsidian import router as obsidian_router
 
 
 logging.basicConfig(
@@ -83,6 +84,7 @@ app.add_exception_handler(Exception, global_error_handler)
 init_db()
 app.include_router(chat_router)
 app.include_router(files_intake_router)
+app.include_router(obsidian_router)
 
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
@@ -313,11 +315,13 @@ def obsidian_sync_status():
     return {
         "enabled": st["enabled"],
         "mode": st["mode"],
+        "sync_mode": st.get("sync_mode", st["mode"]),
         "vault_name": st["vault_name"],
         "default_folder": st["default_folder"],
         "sync_enabled": st["sync_enabled"],
         "configured": st["configured"],
         "uri_open_available": st["uri_open_available"],
+        "can_write_directly": st.get("can_write_directly", False),
     }
 
 

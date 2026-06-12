@@ -135,7 +135,7 @@ def test_obsidian_sync_intent_synchroniser_a_obsidian_with_prebuilt_uri():
     html = _html()
     send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
     assert "ocDetectObsidianConnectIntent(text)" in send_fn
-    assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+    assert "await ocHandleObsidianChatIntent(text, 'connect')" in send_fn
     assert "[COCO] Obsidian intent intercepted before /chat" in send_fn
 
     handoff_fn = html.split("function ocBuildObsidianUriHandoff")[1].split(
@@ -146,7 +146,7 @@ def test_obsidian_sync_intent_synchroniser_a_obsidian_with_prebuilt_uri():
     assert "userText: userText" in handoff_fn
 
     render_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
-        "function ocAddObsidianConnectAssistantMessage"
+        "async function ocHandleObsidianChatIntent"
     )[0]
     assert "ocBuildObsidianSyncButton(handoff.uri" in render_fn
     sync_btn_fn = html.split("function ocBuildObsidianSyncButton")[1].split(
@@ -200,11 +200,13 @@ def test_api_obsidian_sync_status_no_secrets():
     assert set(data.keys()) == {
         "enabled",
         "mode",
+        "sync_mode",
         "vault_name",
         "default_folder",
         "sync_enabled",
         "configured",
         "uri_open_available",
+        "can_write_directly",
     }
     assert data["enabled"] is True
     assert data["sync_enabled"] is False
@@ -285,21 +287,14 @@ def test_build_obsidian_sync_context_uri_mode_default():
 
     ctx = build_obsidian_sync_context()
     low = ctx.lower()
-    assert "obsidian uri mode" in low
+    assert "uri handoff mode" in low
     assert "sync obsidian" in low
     assert "markdown" in low
     assert "obsidian://new" in low
-    assert "name=" in low or "name and content" in low
     assert "do not deny obsidian connectivity" in low
-    assert "forbidden when uri mode is active" in low
     assert "local device handoff" in low
-    assert "user validates final save" in low
-    assert "note/save intent" in low
-    assert "travaille dans obsidian" in low
-    assert "je ne peux pas vous connecter à obsidian" in low
-    assert "obsidian indisponible" in low
-    assert "pas de connecteur obsidian" in low
-    assert "never claim from chat alone" in low
+    assert "never claim sync succeeded" in low
+    assert "note ça dans obsidian" in low
 
 
 def test_build_obsidian_sync_context_uri_mode_explicit(monkeypatch):
@@ -309,9 +304,9 @@ def test_build_obsidian_sync_context_uri_mode_explicit(monkeypatch):
     monkeypatch.setenv("OBSIDIAN_MODE", "uri")
     monkeypatch.setenv("OBSIDIAN_SYNC_ENABLED", "false")
     ctx = build_obsidian_sync_context()
-    assert "OBSIDIAN_MODE=uri" in ctx
+    assert "URI handoff mode" in ctx
     assert "Sync Obsidian" in ctx
-    assert "answer YES equivalent to" in ctx
+    assert "note ça dans Obsidian" in ctx
 
 
 def test_build_obsidian_sync_context_disabled(monkeypatch):
@@ -324,16 +319,17 @@ def test_build_obsidian_sync_context_disabled(monkeypatch):
     assert "obsidian uri mode" not in low
 
 
-def test_build_obsidian_sync_context_local_rest_conservative(monkeypatch):
+def test_build_obsidian_sync_context_local_rest_when_configured(monkeypatch):
     from app.core.obsidian_sync import build_obsidian_sync_context
 
-    monkeypatch.setenv("OBSIDIAN_ENABLED", "true")
-    monkeypatch.setenv("OBSIDIAN_MODE", "local_rest")
-    monkeypatch.setenv("OBSIDIAN_SYNC_ENABLED", "true")
+    monkeypatch.setenv("OBSIDIAN_SYNC_MODE", "local_rest")
+    monkeypatch.setenv("OBSIDIAN_LOCAL_REST_URL", "http://127.0.0.1:27124")
+    monkeypatch.setenv("OBSIDIAN_LOCAL_REST_TOKEN", "secret-token")
     ctx = build_obsidian_sync_context()
-    assert "connector confirmation" in ctx.lower()
-    assert "sync réussie" in ctx
-    assert "note écrite dans Obsidian" in ctx
+    low = ctx.lower()
+    assert "local rest mode" in low
+    assert "c'est noté dans obsidian" in low
+    assert "/api/integrations/obsidian/notes" in ctx
 
 
 def test_coco_system_prompt_includes_obsidian_sync():
@@ -341,7 +337,7 @@ def test_coco_system_prompt_includes_obsidian_sync():
 
     prompt = build_openchawn_base_system_prompt()
     assert "OBSIDIAN_SYNC_RUNTIME_MARKER" in prompt
-    assert "Obsidian URI mode" in prompt
+    assert "Obsidian URI handoff mode" in prompt or "Obsidian local REST mode" in prompt
     assert "Sync Obsidian" in prompt
 
 
@@ -374,7 +370,7 @@ def test_obsidian_note_intent_reply_contract():
         "function ocRenderObsidianUriAssistantMessage"
     )[0]
     render_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
-        "function ocAddObsidianConnectAssistantMessage"
+        "async function ocHandleObsidianChatIntent"
     )[0]
     assert "ocBuildObsidianNewNoteUri" in handoff_fn
     assert "ocBuildObsidianSyncButton(handoff.uri" in render_fn
@@ -396,9 +392,9 @@ def test_obsidian_connect_intent_uri_aware_in_ui():
     assert "send\\s+to\\s+obsidian" in html
     send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
     assert "ocDetectObsidianNoteIntent(text)" in send_fn
-    assert "ocAddObsidianNoteAssistantMessage(text)" in send_fn
+    assert "await ocHandleObsidianChatIntent(text, 'note')" in send_fn
     assert "ocDetectObsidianConnectIntent(text)" in send_fn
-    assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+    assert "await ocHandleObsidianChatIntent(text, 'connect')" in send_fn
     connect_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
         "function ocAddObsidianConnectAssistantMessage"
     )[0]
