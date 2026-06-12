@@ -42,8 +42,9 @@ def test_mobile_action_button_toggles_mic_and_send():
     fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
     assert "oc-composer-action-mic" in fn
     assert "oc-composer-action-send" in fn
-    click = html.split("dom.send.addEventListener('click'")[1].split("ocSyncMobileComposerActionButton();")[0]
-    assert "ocComposerActionIsMicMode()" in click
+    click = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
+    assert "ocComposerInputHasSendAction()" in click
+    assert "dom.send?.addEventListener('click', ocHandleSendButtonClick)" in html
 
 
 def test_second_brain_single_access_on_mobile():

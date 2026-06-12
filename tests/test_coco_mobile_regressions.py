@@ -89,8 +89,9 @@ def test_mobile_composer_action_toggle_contract():
     )[0]
     assert "oc-composer-action-mic" in toggle_fn
     assert "oc-composer-action-send" in toggle_fn
-    click_block = html.split("dom.send.addEventListener('click'")[1].split("ocSyncMobileComposerActionButton();")[0]
-    assert "ocComposerActionIsMicMode()" in click_block
+    click_block = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
+    assert "ocComposerInputHasSendAction()" in click_block
+    assert "!hasSendAction && isMicMode" in click_block
     assert "dom.btnSpeech?.click?.()" in click_block
     input_block = html.split("dom.input.addEventListener('input'")[1].split("dom.input.addEventListener('keydown'")[0]
     assert "ocSyncMobileComposerActionButton()" in input_block
@@ -220,3 +221,53 @@ def test_assistant_markdown_bold_rendered():
     add_fn = html.split("function addMsg(role, text, meta)")[1].split("let ocImagePipelineStatusEl")[0]
     assert "ocFormatAssistantMessageHtml(text)" in add_fn
     assert "<strong>$1</strong>" in html
+
+
+def test_mobile_send_button_sends_plain_text_after_pr20():
+    html = _html()
+    handler = html.split("function ocHandleSendButtonClick")[1].split(
+        "dom.input.addEventListener('input'"
+    )[0]
+    assert "function ocHandleSendButtonClick" in html
+    assert "dom.send?.addEventListener('click', ocHandleSendButtonClick)" in html
+    assert "ocComposerInputHasSendAction()" in handler
+    assert "console.info('[COCO] normal send path reached')" in handler
+    assert "send()" in handler
+    assert "!hasSendAction && isMicMode" in handler
+    assert "dom.btnSpeech?.click?.()" in handler
+
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "apiFetch('/chat'" in send_fn
+    assert "ocDetectObsidianConnectIntent(text)" in send_fn
+    assert "console.info('[COCO] normal send path reached')" in send_fn
+
+    phrase = "Salut"
+    assert not _detect_obsidian_connect_intent(phrase)
+
+
+def test_mobile_send_button_mic_only_when_empty():
+    html = _html()
+    handler = html.split("function ocHandleSendButtonClick")[1].split(
+        "dom.input.addEventListener('input'"
+    )[0]
+    assert "ocChatCleanMobileComposer() && !hasSendAction && isMicMode" in handler
+    assert "dom.btnSpeech?.click?.()" in handler
+    assert "ocSyncMobileComposerActionButton()" in handler
+    mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split(
+        "function ocSyncMobileComposerActionButton"
+    )[0]
+    assert "!ocComposerInputHasSendAction()" in mic_mode_fn
+    assert "dom.input.addEventListener('compositionend'" in html
+    assert "dom.input.addEventListener('change'" in html
+
+
+def test_obsidian_intercept_does_not_block_normal_send():
+    phrase = "Salut"
+    assert not _detect_obsidian_connect_intent(phrase)
+
+    html = _html()
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    obsidian_block = send_fn.split("ocDetectObsidianConnectIntent(text)")[1].split("sending = true")[0]
+    assert "ocAddObsidianConnectAssistantMessage(text)" in obsidian_block
+    assert "return" in obsidian_block
+    assert "apiFetch('/chat'" in send_fn.split("ocDetectObsidianConnectIntent(text)")[1]

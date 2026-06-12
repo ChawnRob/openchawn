@@ -6161,9 +6161,39 @@ checkHealth();
 setInterval(checkHealth, 15000);
 
 // ── Textarea auto-resize ────────────────────────────
+function ocHandleSendButtonClick() {
+  if (!dom.send || dom.send.disabled || sending) return;
+  ocSyncMobileComposerActionButton();
+  const hasAttachment =
+    typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
+  const hasSendAction = ocComposerInputHasSendAction();
+  const isMicMode = dom.send.classList.contains('oc-composer-action-mic');
+  const isSendMode = dom.send.classList.contains('oc-composer-action-send');
+  console.info('[COCO] sendBtn clicked', {
+    text: dom.input ? dom.input.value : '',
+    hasAttachment: Boolean(hasAttachment),
+    isMicMode: isMicMode,
+    isSendMode: isSendMode,
+  });
+  if (ocChatCleanMobileComposer() && !hasSendAction && isMicMode) {
+    dom.btnSpeech?.click?.();
+    return;
+  }
+  console.info('[COCO] normal send path reached');
+  send();
+}
+
 dom.input.addEventListener('input', () => {
   dom.input.style.height = 'auto';
   dom.input.style.height = Math.min(dom.input.scrollHeight, 120) + 'px';
+  ocSyncMobileComposerActionButton();
+});
+
+dom.input.addEventListener('change', () => {
+  ocSyncMobileComposerActionButton();
+});
+
+dom.input.addEventListener('compositionend', () => {
   ocSyncMobileComposerActionButton();
 });
 
@@ -6171,13 +6201,7 @@ dom.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
-dom.send.addEventListener('click', () => {
-  if (ocComposerActionIsMicMode()) {
-    dom.btnSpeech?.click?.();
-    return;
-  }
-  send();
-});
+dom.send?.addEventListener('click', ocHandleSendButtonClick);
 
 ocSyncMobileComposerActionButton();
 
@@ -6490,6 +6514,7 @@ async function send() {
     return;
   }
 
+  console.info('[COCO] normal send path reached');
   sending = true;
   dom.send.disabled = true;
 
