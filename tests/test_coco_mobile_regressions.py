@@ -28,8 +28,10 @@ def _detect_obsidian_connect_intent(text: str) -> bool:
     if not t or not re.search(r"\bobsidian\b", t):
         return False
     phrase_patterns = [
+        r"\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+(a|avec|to)\s+obsidian\b",
         r"\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+obsidian\b",
         r"\b(peux|peut)\s+tu\s+me\s+connect\w*\s+a\s+obsidian\b",
+        r"\bsynchronis\w*\s+(a|avec|to)\s+obsidian\b",
         r"\bsynchronis\w*\s+obsidian\b",
         r"\bsynchronis\w*\s+avec\s+obsidian\b",
         r"\bconnecte[- ]?moi\s+a\s+obsidian\b",
@@ -173,6 +175,7 @@ def test_language_complaint_short_circuit_and_backend_meta():
 
 def test_obsidian_connect_phrases_short_circuit_list():
     phrases = [
+        "Peux tu me synchroniser à Obsidian ?",
         "Peux tu me synchroniser Obsidian",
         "Peux tu me connecter à Obsidian",
         "Connecte moi à Obsidian",
@@ -197,6 +200,18 @@ def test_obsidian_connect_phrases_short_circuit_list():
     assert "votre appareil" in reply
     for denial in OC_OBSIDIAN_DENIAL_EN:
         assert denial not in reply
+
+    send_fn = _html().split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+    connect_fn = _html().split("function ocRenderObsidianUriAssistantMessage")[1].split(
+        "function ocAddObsidianConnectAssistantMessage"
+    )[0]
+    assert "ocBuildObsidianSyncButton(handoff.uri" in connect_fn
+    sync_btn_fn = _html().split("function ocBuildObsidianSyncButton")[1].split(
+        "function ocObsidianNoteTitlePath"
+    )[0]
+    assert "data-obsidian-uri" in sync_btn_fn
+    assert "obsidian://new" in sync_btn_fn or "obsidian://new" in _html()
 
 
 def test_assistant_markdown_bold_rendered():

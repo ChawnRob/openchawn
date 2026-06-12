@@ -6482,7 +6482,7 @@ async function send() {
     dom.input.value = '';
     dom.input.style.height = 'auto';
     addMsg('user', text);
-    ocAddObsidianConnectAssistantMessage();
+    ocAddObsidianConnectAssistantMessage(text);
     ocSetCocoState('ready', 'Ready');
     scrollDown();
     dom.input.focus();
@@ -6692,9 +6692,12 @@ function ocDetectObsidianConnectIntent(text) {
   if (!t || !/\bobsidian\b/.test(t)) return false;
   if (/\baffine\b/.test(t) && !/\bobsidian\b/.test(t.replace(/\baffine\b/g, ''))) return false;
   var phrasePatterns = [
+    /\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+(a|avec|to)\s+obsidian\b/,
     /\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+obsidian\b/,
     /\b(peux|peut)\s+tu\s+me\s+connect\w*\s+a\s+obsidian\b/,
+    /\bsynchronis\w*\s+(a|avec|to)\s+obsidian\b/,
     /\bsynchronis\w*\s+obsidian\b/,
+    /\bconnect\s+to\s+obsidian\b/,
     /\bsync\s+(avec|to)\s+obsidian\b/,
     /\bsync\s+obsidian\b/,
     /\bfaire\s+le\s+sync\s+avec\s+obsidian\b/,
@@ -6746,49 +6749,33 @@ function ocObsidianNoteTitlePath(cfg, title) {
   return folder ? folder + '/' + title : title;
 }
 
-function ocAddObsidianConnectAssistantMessage() {
-  if (dom.welcome) dom.welcome.remove();
-  var cfg = ocObsidianSyncConfig;
-  var bodyText =
-    cfg.enabled && cfg.mode === 'uri'
-      ? OC_OBSIDIAN_URI_CONNECT_FR
-      : OC_OBSIDIAN_NOT_CONFIGURED_FR;
-  var div = document.createElement('div');
-  div.className = 'msg assistant';
-  var roleLabel = document.createElement('span');
-  roleLabel.className = 'msg-role-label';
-  roleLabel.textContent = ocMsgRoleLabel('assistant');
-  div.appendChild(roleLabel);
-  var body = document.createElement('div');
-  body.className = 'msg-body';
-  body.textContent = bodyText;
-  div.appendChild(body);
-  if (cfg.enabled && cfg.mode === 'uri') {
-    var actions = document.createElement('div');
-    actions.className = 'oc-affine-chat-action';
-    actions.appendChild(ocBuildObsidianSyncButton('', ''));
-    div.appendChild(actions);
-  }
-  div.appendChild(ocBuildAssistantMsgActions());
-  dom.messages.insertBefore(div, dom.typing);
-  lastAssistantPlain = bodyText;
-  refreshExportButtons();
-  ocSyncChatCleanLayout();
-  scrollDown();
+function ocGetObsidianHandoffAssistantText() {
+  if (lastAssistantPlain) return String(lastAssistantPlain).trim();
+  if (!dom.messages) return '';
+  var nodes = dom.messages.querySelectorAll('.msg.assistant .msg-body');
+  if (!nodes.length) return '';
+  return String(nodes[nodes.length - 1].textContent || '').trim();
 }
 
-function ocAddObsidianNoteAssistantMessage(userText) {
-  if (dom.welcome) dom.welcome.remove();
-  var cfg = ocObsidianSyncConfig;
-  var bodyText =
-    cfg.enabled && cfg.mode === 'uri'
-      ? OC_OBSIDIAN_URI_NOTE_FR
-      : OC_OBSIDIAN_NOT_CONFIGURED_FR;
+function ocDeriveObsidianNoteTitle(userText, createdAt) {
+  var stamp = String(createdAt || new Date().toISOString()).slice(0, 10);
+  var slug = ocNormalizeObsidianIntentText(userText)
+    .replace(/\bobsidian\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return slug ? 'COCO-' + stamp + '-' + slug : 'COCO-' + stamp;
+}
+
+function ocBuildObsidianUriHandoff(userText) {
+  var createdAt = new Date().toISOString();
+  var assistantText = ocGetObsidianHandoffAssistantText();
   var note = ocBuildObsidianMarkdownNote({
     userText: userText,
-    assistantText: '',
-    createdAt: new Date().toISOString(),
+    assistantText: assistantText,
+    createdAt: createdAt,
   });
+  var cfg = ocObsidianSyncConfig;
   var uri = '';
   if (cfg.enabled && cfg.mode === 'uri') {
     uri = ocBuildObsidianNewNoteUri({
@@ -6797,6 +6784,18 @@ function ocAddObsidianNoteAssistantMessage(userText) {
       markdown: note.markdown,
     });
   }
+  return { note: note, uri: uri };
+}
+
+function ocRenderObsidianUriAssistantMessage(userText, bodyText) {
+  if (dom.welcome) dom.welcome.remove();
+  var cfg = ocObsidianSyncConfig;
+  var reply =
+    bodyText ||
+    (cfg.enabled && cfg.mode === 'uri'
+      ? OC_OBSIDIAN_URI_CONNECT_FR
+      : OC_OBSIDIAN_NOT_CONFIGURED_FR);
+  var handoff = ocBuildObsidianUriHandoff(userText);
   var div = document.createElement('div');
   div.className = 'msg assistant';
   var roleLabel = document.createElement('span');
@@ -6805,20 +6804,33 @@ function ocAddObsidianNoteAssistantMessage(userText) {
   div.appendChild(roleLabel);
   var body = document.createElement('div');
   body.className = 'msg-body';
-  body.textContent = bodyText;
+  body.textContent = reply;
   div.appendChild(body);
   if (cfg.enabled && cfg.mode === 'uri') {
     var actions = document.createElement('div');
     actions.className = 'oc-affine-chat-action';
-    actions.appendChild(ocBuildObsidianSyncButton(uri, note.markdown));
+    actions.appendChild(ocBuildObsidianSyncButton(handoff.uri, handoff.note.markdown));
     div.appendChild(actions);
   }
   div.appendChild(ocBuildAssistantMsgActions());
   dom.messages.insertBefore(div, dom.typing);
-  lastAssistantPlain = bodyText;
+  lastAssistantPlain = reply;
   refreshExportButtons();
   ocSyncChatCleanLayout();
   scrollDown();
+}
+
+function ocAddObsidianConnectAssistantMessage(userText) {
+  ocRenderObsidianUriAssistantMessage(userText, null);
+}
+
+function ocAddObsidianNoteAssistantMessage(userText) {
+  var cfg = ocObsidianSyncConfig;
+  var bodyText =
+    cfg.enabled && cfg.mode === 'uri'
+      ? OC_OBSIDIAN_URI_NOTE_FR
+      : OC_OBSIDIAN_NOT_CONFIGURED_FR;
+  ocRenderObsidianUriAssistantMessage(userText, bodyText);
 }
 
 function ocAddAffineOpenAssistantMessage() {
@@ -6945,9 +6957,10 @@ function ocShowComposerToast(text) {
 function ocBuildObsidianMarkdownNote(opts) {
   opts = opts || {};
   var createdAt = opts.createdAt || new Date().toISOString();
-  var title = 'COCO-' + String(createdAt).slice(0, 10);
   var userText = String(opts.userText || '').trim() || '_Aucune demande._';
-  var assistantText = String(opts.assistantText || '').trim() || '_Aucune réponse._';
+  var assistantText = String(opts.assistantText || '').trim();
+  if (!assistantText) assistantText = '_Aucune réponse disponible pour cette demande._';
+  var title = ocDeriveObsidianNoteTitle(userText, createdAt);
   var markdown = [
     '# ' + title,
     '',

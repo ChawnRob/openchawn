@@ -67,8 +67,10 @@ def _detect_obsidian_connect_intent(text: str) -> bool:
         r"\bsync\s+obsidian\b",
         r"\bfaire\s+le\s+sync\s+avec\s+obsidian\b",
         r"\bfaire\s+la\s+sync\s+avec\s+obsidian\b",
+        r"\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+(a|avec|to)\s+obsidian\b",
         r"\b(peux|peut)\s+tu\s+me\s+synchronis\w*\s+obsidian\b",
         r"\b(peux|peut)\s+tu\s+me\s+connect\w*\s+a\s+obsidian\b",
+        r"\bsynchronis\w*\s+(a|avec|to)\s+obsidian\b",
         r"\bsynchronis\w*\s+obsidian\b",
         r"\bsynchronis\w*\s+avec\s+obsidian\b",
         r"\bje\s+veux\s+synchronis\w*\s+avec\s+obsidian\b",
@@ -120,7 +122,50 @@ OC_OBSIDIAN_URI_DENIAL_PHRASES = (
     "aucun connecteur Obsidian actif",
     "Obsidian indisponible",
     "API Obsidian n'est pas active",
+    "I cannot sync",
+    "cannot be triggered automatically",
+    "press the button yourself",
 )
+
+
+def test_obsidian_sync_intent_synchroniser_a_obsidian_with_prebuilt_uri():
+    phrase = "Peux tu me synchroniser à Obsidian ?"
+    assert _detect_obsidian_connect_intent(phrase)
+
+    html = _html()
+    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
+    assert "ocDetectObsidianConnectIntent(text)" in send_fn
+    assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+
+    handoff_fn = html.split("function ocBuildObsidianUriHandoff")[1].split(
+        "function ocRenderObsidianUriAssistantMessage"
+    )[0]
+    assert "ocBuildObsidianNewNoteUri" in handoff_fn
+    assert "ocGetObsidianHandoffAssistantText" in handoff_fn
+    assert "userText: userText" in handoff_fn
+
+    render_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
+        "function ocAddObsidianConnectAssistantMessage"
+    )[0]
+    assert "ocBuildObsidianSyncButton(handoff.uri" in render_fn
+    sync_btn_fn = html.split("function ocBuildObsidianSyncButton")[1].split(
+        "function ocObsidianNoteTitlePath"
+    )[0]
+    assert "data-obsidian-uri" in sync_btn_fn
+    assert "obsidian://new" in html
+
+    uri_fn = html.split("function ocBuildObsidianNewNoteUri")[1].split(
+        "function ocCopyObsidianMarkdown"
+    )[0]
+    assert "params.set('vault'" in uri_fn
+    assert "params.set('name'" in uri_fn
+    assert "params.set('content'" in uri_fn
+
+    reply = _uri_connect_reply_from_html()
+    assert "Sync Obsidian" in reply
+    assert "Markdown" in reply
+    for denial in OC_OBSIDIAN_URI_DENIAL_PHRASES:
+        assert denial not in reply
 
 
 def test_obsidian_sync_defaults_uri_enabled():
@@ -324,14 +369,14 @@ def test_obsidian_note_intent_reply_contract():
         assert denial not in reply
 
     html = _html()
-    note_fn = html.split("function ocAddObsidianNoteAssistantMessage")[1].split(
-        "function ocAddAffineOpenAssistantMessage"
+    handoff_fn = html.split("function ocBuildObsidianUriHandoff")[1].split(
+        "function ocRenderObsidianUriAssistantMessage"
     )[0]
-    btn_fn = html.split("function ocBuildObsidianSyncButton")[1].split(
-        "function ocObsidianNoteTitlePath"
+    render_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
+        "function ocAddObsidianConnectAssistantMessage"
     )[0]
-    assert "data-obsidian-uri" in btn_fn
-    assert "ocBuildObsidianNewNoteUri" in note_fn
+    assert "ocBuildObsidianNewNoteUri" in handoff_fn
+    assert "ocBuildObsidianSyncButton(handoff.uri" in render_fn
 
 
 def test_obsidian_connect_intent_uri_aware_in_ui():
@@ -352,13 +397,14 @@ def test_obsidian_connect_intent_uri_aware_in_ui():
     assert "ocDetectObsidianNoteIntent(text)" in send_fn
     assert "ocAddObsidianNoteAssistantMessage(text)" in send_fn
     assert "ocDetectObsidianConnectIntent(text)" in send_fn
-    assert "ocAddObsidianConnectAssistantMessage()" in send_fn
-    connect_fn = html.split("function ocAddObsidianConnectAssistantMessage")[1].split(
-        "function ocAddObsidianNoteAssistantMessage"
+    assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+    connect_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
+        "function ocAddObsidianConnectAssistantMessage"
     )[0]
     assert "sync réussie" not in connect_fn
     assert "note écrite" not in connect_fn
-    assert "ocBuildObsidianSyncButton" in connect_fn
+    assert "ocBuildObsidianSyncButton(handoff.uri" in connect_fn
+    assert "data-obsidian-uri" in html
     for phrase in OC_OBSIDIAN_URI_DENIAL_PHRASES:
         assert phrase not in connect_fn
 
