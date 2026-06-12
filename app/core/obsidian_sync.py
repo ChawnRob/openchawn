@@ -32,3 +32,58 @@ def get_obsidian_sync_status() -> dict[str, Any]:
         "configured": enabled,
         "uri_open_available": enabled and mode == "uri",
     }
+
+
+def build_obsidian_sync_context() -> str:
+    """English system-prompt block for COCO (model answers in user language)."""
+    st = get_obsidian_sync_status()
+    if not st["enabled"]:
+        return (
+            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+            "Obsidian optional Markdown export (separate from AFFiNE Second Brain):\n"
+            "- OBSIDIAN_ENABLED=false — Obsidian Sync is not configured.\n"
+            "- If asked to connect, sync, or send to Obsidian, say Obsidian Sync is not configured.\n"
+            "- Never claim sync succeeded or that a note was written inside Obsidian.\n"
+        )
+    if st["mode"] == "uri" and not st["sync_enabled"]:
+        return (
+            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+            "Obsidian URI mode (optional Markdown export — AFFiNE remains the primary Second Brain):\n"
+            f"- OBSIDIAN_ENABLED=true; OBSIDIAN_MODE=uri; vault={st['vault_name']}; folder={st['default_folder']}.\n"
+            "- URI mode is a local device handoff (obsidian://new?vault=&name=&content= on user tap), "
+            "not direct API read/write into the vault.\n"
+            "- COCO can prepare Markdown notes (title, date, source, user request, COCO response) and trigger "
+            "Obsidian via the Sync Obsidian UI chip with encoded name and content.\n"
+            "- The user validates final save/opening on their device; never claim sync succeeded before that tap.\n"
+            "- Do NOT deny Obsidian connectivity. Forbidden when URI mode is active: "
+            "« Non, je ne peux pas synchroniser avec Obsidian », « je ne peux pas vous connecter à Obsidian », "
+            "« aucune synchronisation », « aucune capacité Obsidian », « pas de connecteur Obsidian », "
+            "« aucun connecteur Obsidian actif », « Obsidian indisponible », « API Obsidian n'est pas active », "
+            "« no Obsidian connector », « je ne peux pas me connecter à Obsidian ».\n"
+            "- Connect/sync intent (FR/EN examples): « Peux tu me synchroniser à Obsidian ? », "
+            "« Es ce que tu peux me connecter à Obsidian ? », « Connecte moi à Obsidian », "
+            "« synchroniser avec Obsidian », « sync to Obsidian » — answer YES equivalent to:\n"
+            "  « Oui. COCO peut préparer une note Markdown et utiliser le bouton Sync Obsidian pour l'envoyer "
+            "vers Obsidian sur votre appareil. »\n"
+            "- Forbidden denial phrases also include: « I cannot sync », « cannot be triggered automatically », "
+            "« press the button yourself ».\n"
+            "- Note/save intent (FR examples): « note ça dans Obsidian », « sauvegarde dans Obsidian », "
+            "« crée une note Obsidian », « travaille dans Obsidian » — answer YES equivalent to:\n"
+            "  « Oui. J'ai préparé une note Markdown pour Obsidian. Appuie sur Sync Obsidian pour l'ouvrir dans "
+            "Obsidian et valider l'enregistrement depuis ton appareil. »\n"
+            "- Never claim from chat alone: « sync réussie », « note écrite dans Obsidian », "
+            "« enregistrement réussi », « connexion profonde active ».\n"
+            "- Direct the user to tap Sync Obsidian for the actual obsidian://new handoff.\n"
+        )
+    if st["sync_enabled"] and st["mode"] == "local_rest":
+        return (
+            f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+            "Obsidian local REST mode is flagged enabled, but COCO must only claim direct vault write/sync "
+            "after explicit connector confirmation. Until confirmed, describe URI/chip flow only and do not say "
+            "« sync réussie » or « note écrite dans Obsidian ».\n"
+        )
+    return (
+        f"OBSIDIAN_SYNC_RUNTIME_MARKER: {OBSIDIAN_SYNC_MARKER}\n\n"
+        f"Obsidian export enabled (mode={st['mode']}); use Sync Obsidian chip for user-triggered actions. "
+        "Do not claim deep sync or vault write without connector confirmation.\n"
+    )

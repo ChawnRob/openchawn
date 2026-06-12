@@ -20,7 +20,7 @@ def test_mobile_attach_button_visible_in_composer():
     assert "oc-file-intake-desktop-only" not in html
     assert "oc-file-intake-mobile-only" not in html
     assert "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake" in html
-    assert "display: grid !important" in html
+    assert "display: inline-flex !important" in html
     assert "html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus" in html
     mobile_block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
     assert "oc-mobile-composer-plus-wrap" in mobile_block
@@ -238,15 +238,31 @@ def test_file_intake_sheet_portaled_to_body_on_open():
 def test_attach_button_not_desktop_only():
     """The attach button is visible by default (desktop) and forced visible on mobile."""
     html = _html()
-    base = html.split(".oc-file-attach-btn {")[1].split("}")[0]
-    assert "display: grid" in base
-    assert "display: none" not in base
-    assert "width: 44px" in base
+    base = html.split(".oc-file-attach-btn {")[0]
+    attach_rule = html.split("#btnFileIntake,")[1].split("body.oc-night-mode #btnFileIntake")[0]
+    assert "display: inline-flex" in attach_rule
+    assert "width: 44px" in attach_rule
+    assert "min-width: 44px" in attach_rule
+    assert "oc-attach-btn" in html
     assert 'aria-label="Ajouter photo ou fichier"' in html
     mobile_rule = html.split(
         "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake"
     )[1].split("}")[0]
-    assert "display: grid !important" in mobile_rule
+    assert "display: inline-flex !important" in mobile_rule
+    assert "44px" in mobile_rule
+
+
+def test_attach_button_night_mode_visible_styles():
+    html = _html()
+    assert "html.oc-theme-night #btnFileIntake" in html
+    assert "body.oc-night-mode #btnFileIntake" in html
+    assert '[data-theme="night"] #btnFileIntake' in html
+    assert "rgba(3, 18, 31, 0.96)" in html
+    assert "rgba(89, 226, 255, 0.7)" in html
+    mobile_icon = html.split(
+        "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-attach-icon"
+    )[1].split("html.ux-chat-clean .clean-input-shell .input-wrapper {")[0]
+    assert "display: block" in mobile_icon
 
 
 def test_file_input_accepts_required_types():

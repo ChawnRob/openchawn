@@ -268,8 +268,23 @@ def normalize_language_code(code: str | None) -> str:
     return "und"
 
 
+def _is_language_meta_complaint(text: str) -> bool:
+    """Questions sur la langue de réponse — pas une demande explicite de changer de langue."""
+    lower = (text or "").strip().lower()
+    if not lower:
+        return False
+    meta_patterns = (
+        r"\bpourquoi\b.+\b(en anglais|anglais|in english|english)\b",
+        r"\bwhy\b.+\b(in english|english|en anglais)\b",
+        r"\bpourquoi\b.+\b(repond|reply|parle|speak|ecri)\w*",
+    )
+    return any(re.search(p, lower, flags=re.IGNORECASE) for p in meta_patterns)
+
+
 def _explicit_language_override(text: str) -> str | None:
     """Si plusieurs formulations explicites, la **dernière** occurrence dans le texte l'emporte."""
+    if _is_language_meta_complaint(text):
+        return None
     lower = text.lower()
     best_lang: str | None = None
     best_start = -1
@@ -305,6 +320,8 @@ def detect_explicit_language_request(text: str) -> dict[str, str] | None:
     """
     raw = (text or "").strip()
     if not raw:
+        return None
+    if _is_language_meta_complaint(raw):
         return None
     target = _explicit_translation_target(raw)
     if target:
