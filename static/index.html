@@ -6479,6 +6479,7 @@ async function send() {
   }
 
   if (!hasAttachment && ocDetectObsidianConnectIntent(text)) {
+    console.info('[COCO] Obsidian intent intercepted before /chat', text);
     dom.input.value = '';
     dom.input.style.height = 'auto';
     addMsg('user', text);

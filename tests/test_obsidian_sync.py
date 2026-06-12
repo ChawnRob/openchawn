@@ -136,6 +136,7 @@ def test_obsidian_sync_intent_synchroniser_a_obsidian_with_prebuilt_uri():
     send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
     assert "ocDetectObsidianConnectIntent(text)" in send_fn
     assert "ocAddObsidianConnectAssistantMessage(text)" in send_fn
+    assert "[COCO] Obsidian intent intercepted before /chat" in send_fn
 
     handoff_fn = html.split("function ocBuildObsidianUriHandoff")[1].split(
         "function ocRenderObsidianUriAssistantMessage"
