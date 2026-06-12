@@ -40,11 +40,11 @@ def test_mic_not_separate_slot_on_mobile():
 def test_mobile_action_button_toggles_mic_and_send():
     html = _html()
     fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
-    assert "oc-composer-action-mic" in fn
     assert "oc-composer-action-send" in fn
+    assert "remove('oc-composer-action-mic'" in fn
     click = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
-    assert "hasSendAction" in click
-    assert "ocBindComposerTap(dom.send, ocHandleSendButtonClick)" in html
+    assert "ocComposerHasSendPayload()" in click
+    assert "ocBindSendButtonTap(dom.send, ocHandleSendButtonClick)" in html
 
 
 def test_second_brain_single_access_on_mobile():

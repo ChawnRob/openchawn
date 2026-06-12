@@ -4242,31 +4242,39 @@ function ocComposerInputHasSendAction() {
 }
 
 function ocComposerActionIsMicMode() {
-  return ocChatCleanMobileComposer() && !ocComposerInputHasSendAction();
+  return false;
+}
+
+function ocComposerHasSendPayload() {
+  const text = dom.input ? String(dom.input.value || '').trim() : '';
+  if (text) return true;
+  return typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
+}
+
+function ocResetComposerSendEmergency() {
+  sending = false;
+  if (!dom.send) return;
+  dom.send.disabled = false;
+  dom.send.classList.remove('oc-composer-action-mic', 'recording');
+  dom.send.classList.add('oc-composer-action-send');
+  dom.send.setAttribute('title', 'Envoyer à OpenChawn');
+  dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
+  dom.send.removeAttribute('aria-pressed');
+}
+
+function ocNotifySendBlockedUi(reason) {
+  console.warn('[COCO:SEND_BLOCKED]', reason);
+  addMsg('assistant', 'Envoi bloqué côté interface. Rechargez la page.');
+  scrollDown();
 }
 
 function ocSyncMobileComposerActionButton() {
   if (!dom.send) return;
-  if (!ocChatCleanMobileComposer()) {
-    dom.send.classList.remove('oc-composer-action-mic', 'recording');
-    dom.send.classList.add('oc-composer-action-send');
-    dom.send.setAttribute('title', 'Envoyer à OpenChawn');
-    dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
-    dom.send.removeAttribute('aria-pressed');
-    return;
-  }
-  if (ocComposerActionIsMicMode()) {
-    dom.send.classList.add('oc-composer-action-mic');
-    dom.send.classList.remove('oc-composer-action-send');
-    dom.send.setAttribute('title', 'Dictée navigateur — ne envoie pas automatiquement');
-    dom.send.setAttribute('aria-label', 'Micro dictée');
-  } else {
-    dom.send.classList.remove('oc-composer-action-mic', 'recording');
-    dom.send.classList.add('oc-composer-action-send');
-    dom.send.setAttribute('title', 'Envoyer à OpenChawn');
-    dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
-    dom.send.removeAttribute('aria-pressed');
-  }
+  dom.send.classList.remove('oc-composer-action-mic', 'recording');
+  dom.send.classList.add('oc-composer-action-send');
+  dom.send.setAttribute('title', 'Envoyer à OpenChawn');
+  dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
+  dom.send.removeAttribute('aria-pressed');
 }
 
 function ocUpdateMobileComposerChrome() {
@@ -6171,7 +6179,7 @@ checkHealth();
 setInterval(checkHealth, 15000);
 
 // ── Textarea auto-resize ────────────────────────────
-function ocBindComposerTap(el, handler) {
+function ocBindSendButtonTap(el, handler) {
   if (!el || typeof handler !== 'function') return;
   var lastAt = 0;
   function run(ev) {
@@ -6196,35 +6204,32 @@ function ocBindComposerTap(el, handler) {
 
 function ocHandleSendButtonClick() {
   if (!dom.send) return;
-  const inputText = dom.input ? dom.input.value : '';
+  const text = dom.input ? dom.input.value : '';
   const hasAttachment =
     typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
-  const hasSendAction = Boolean(String(inputText || '').trim() || hasAttachment);
-  const isMicMode = dom.send.classList.contains('oc-composer-action-mic');
-  const isSendMode = dom.send.classList.contains('oc-composer-action-send');
-  console.info('[COCO] sendBtn clicked', {
-    text: inputText,
+  const hasSendAction = ocComposerHasSendPayload();
+  console.info('[COCO:SEND_TAP]', {
+    text: text,
     hasAttachment: Boolean(hasAttachment),
-    isMicMode: isMicMode,
-    isSendMode: isSendMode,
     disabled: Boolean(dom.send.disabled),
     sending: sending,
   });
-  if (dom.send.disabled) {
-    console.info('[COCO] sendBtn ignored: disabled');
+  if (!hasSendAction) {
+    ocNotifySendBlockedUi('empty_input');
     return;
   }
   if (sending) {
-    console.info('[COCO] sendBtn ignored: sending in progress');
+    ocNotifySendBlockedUi('sending_in_progress');
     return;
   }
-  if (ocChatCleanMobileComposer() && !hasSendAction) {
-    ocSyncMobileComposerActionButton();
-    dom.btnSpeech?.click?.();
-    return;
+  if (dom.send.disabled) {
+    ocResetComposerSendEmergency();
+    if (dom.send.disabled) {
+      ocNotifySendBlockedUi('send_button_disabled');
+      return;
+    }
   }
-  ocSyncMobileComposerActionButton();
-  console.info('[COCO] normal send path reached');
+  console.info('[COCO:SEND_CALL]');
   send();
 }
 
@@ -6250,8 +6255,8 @@ dom.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
-ocBindComposerTap(dom.send, ocHandleSendButtonClick);
-
+ocResetComposerSendEmergency();
+ocBindSendButtonTap(dom.send, ocHandleSendButtonClick);
 ocSyncMobileComposerActionButton();
 
 // ── Scan effect ─────────────────────────────────────
@@ -6516,13 +6521,23 @@ function ocFriendlyVisionErrorMessage(err) {
 async function send() {
   const text = dom.input.value.trim();
   const hasAttachment = ocHasPendingImageAttachment();
-  if ((!text && !hasAttachment) || sending) {
-    console.info('[COCO] send() skipped', {
-      text: text,
-      hasAttachment: Boolean(hasAttachment),
-      sending: sending,
-    });
+  if (!text && !hasAttachment) {
+    console.warn('[COCO:SEND_BLOCKED]', 'empty_payload');
+    ocNotifySendBlockedUi('empty_payload');
     return;
+  }
+  if (sending) {
+    console.warn('[COCO:SEND_BLOCKED]', 'sending_in_progress');
+    ocNotifySendBlockedUi('sending_in_progress');
+    return;
+  }
+  if (dom.send && dom.send.disabled) {
+    console.warn('[COCO:SEND_BLOCKED]', 'send_button_disabled');
+    ocResetComposerSendEmergency();
+    if (dom.send.disabled) {
+      ocNotifySendBlockedUi('send_button_disabled');
+      return;
+    }
   }
 
   if (!hasAttachment && ocDetectLanguageComplaintIntent(text)) {
@@ -6570,9 +6585,9 @@ async function send() {
     return;
   }
 
-  console.info('[COCO] normal send path reached');
+  console.info('[COCO:SEND_CALL]');
   sending = true;
-  dom.send.disabled = true;
+  if (dom.send) dom.send.disabled = true;
 
   let chatMessage = text;
   let mediaId = null;
@@ -6603,8 +6618,7 @@ async function send() {
       addMsg('error', 'FILE INTAKE FAILED — ' + fmsg);
       ocSetCocoState('retry', 'Retry available');
       dom.typing.classList.remove('visible');
-      sending = false;
-      dom.send.disabled = false;
+      ocResetComposerSendEmergency();
       dom.input.focus();
       return;
     }
@@ -6623,6 +6637,7 @@ async function send() {
   try {
     const chatBody = { message: ocSanitizeChatOutboundMessage(chatMessage) };
     if (mediaId) chatBody.media_id = mediaId;
+    console.info('[COCO:CHAT_POST_START]');
     const r = await apiFetch('/chat', {
       method: 'POST',
       body: JSON.stringify(chatBody),
@@ -6633,6 +6648,7 @@ async function send() {
       throw new Error(d.detail || 'HTTP ' + r.status);
     }
     const d = await r.json();
+    console.info('[COCO:CHAT_POST_DONE]');
 
     const raw = d.output || d.response || d.message || "...";
     const clean = (typeof raw === 'string') ? raw : JSON.stringify(raw, null, 2);
@@ -6660,7 +6676,7 @@ async function send() {
     }
     dom.typing.classList.remove('visible');
     sending = false;
-    dom.send.disabled = false;
+    ocResetComposerSendEmergency();
     dom.input.focus();
   }
 }

@@ -78,51 +78,27 @@ def test_mobile_composer_dual_control_layout():
 
 def test_mobile_composer_action_toggle_contract():
     html = _html()
-    assert "oc-composer-action-mic" in html
     assert "oc-composer-action-send" in html
-    assert "oc-composer-mic-icon" in html
-    assert "oc-composer-send-icon" in html
     assert "function ocSyncMobileComposerActionButton" in html
-    assert "function ocComposerActionIsMicMode" in html
-    toggle_fn = html.split("function ocSyncMobileComposerActionButton")[1].split(
-        "function ocUpdateMobileComposerChrome"
-    )[0]
-    assert "oc-composer-action-mic" in toggle_fn
-    assert "oc-composer-action-send" in toggle_fn
-    click_block = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
-    assert "hasSendAction" in click_block
-    assert "!hasSendAction" in click_block
-    assert "dom.btnSpeech?.click?.()" in click_block
-    assert "ocBindComposerTap(dom.send, ocHandleSendButtonClick)" in _html()
-    input_block = html.split("dom.input.addEventListener('input'")[1].split("dom.input.addEventListener('keydown'")[0]
-    assert "ocSyncMobileComposerActionButton()" in input_block
-    mic_css = html.split(".send-btn.oc-composer-action-mic .oc-composer-mic-icon")[1].split(
-        ".send-btn.oc-composer-action-mic .oc-composer-send-icon"
-    )[0]
-    assert "display: block" in mic_css
-    send_hide = html.split(".send-btn.oc-composer-action-mic .oc-composer-send-icon")[1].split(
-        "html.ux-chat-clean .send-btn.oc-composer-action-mic"
-    )[0]
-    assert "display: none" in send_hide
-
-
-def test_mobile_composer_empty_input_shows_mic_on_action_button():
-    html = _html()
-    mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split("function ocSyncMobileComposerActionButton")[0]
-    sync_fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
-    assert "!ocComposerInputHasSendAction()" in mic_mode_fn
-    assert "oc-composer-mic-icon" in html
-    assert "Micro dictée" in sync_fn
-
-
-def test_mobile_composer_non_empty_input_shows_send_and_clears_mic_mode():
-    html = _html()
     toggle_fn = html.split("function ocSyncMobileComposerActionButton")[1].split(
         "function ocUpdateMobileComposerChrome"
     )[0]
     assert "oc-composer-action-send" in toggle_fn
     assert "remove('oc-composer-action-mic'" in toggle_fn
     assert "Envoyer à OpenChawn" in toggle_fn
+    click_block = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
+    assert "ocComposerHasSendPayload()" in click_block
+    assert "dom.btnSpeech?.click" not in click_block
+    assert "ocBindSendButtonTap(dom.send, ocHandleSendButtonClick)" in _html()
+
+
+def test_mobile_composer_send_button_always_send_mode_baseline():
+    html = _html()
+    mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split("function ocComposerHasSendPayload")[0]
+    assert "return false" in mic_mode_fn
+    sync_fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
+    assert "Envoyer à OpenChawn" in sync_fn
+    assert "Micro dictée" not in sync_fn
 
 
 def test_attach_button_stays_visible_mobile_css():
@@ -229,44 +205,12 @@ def test_mobile_send_button_sends_plain_text_after_pr20():
     handler = html.split("function ocHandleSendButtonClick")[1].split(
         "dom.input.addEventListener('input'"
     )[0]
-    bind_fn = html.split("function ocBindComposerTap")[1].split(
-        "function ocHandleSendButtonClick"
-    )[0]
-    assert "function ocHandleSendButtonClick" in html
-    assert "function ocBindComposerTap" in html
-    assert "ocBindComposerTap(dom.send, ocHandleSendButtonClick)" in html
-    assert "addEventListener('pointerup'" in bind_fn
-    assert "addEventListener('touchend'" in bind_fn
-    assert "hasSendAction" in handler
-    assert "console.info('[COCO] normal send path reached')" in handler
+    assert "ocBindSendButtonTap(dom.send, ocHandleSendButtonClick)" in html
+    assert "console.info('[COCO:SEND_TAP]'" in handler
+    assert "console.info('[COCO:SEND_CALL]')" in handler
     assert "send()" in handler
-    assert "!hasSendAction" in handler
-    assert "dom.btnSpeech?.click?.()" in handler
-    assert "pointer-events: none" in html.split(".send-btn svg {")[1].split("}")[0]
-
-    send_fn = html.split("async function send()")[1].split("var COCO_AFFINE_FALLBACK_URL")[0]
-    assert "apiFetch('/chat'" in send_fn
-    assert "ocDetectObsidianConnectIntent(text)" in send_fn
-    assert "console.info('[COCO] normal send path reached')" in send_fn
-
-    phrase = "Salut"
-    assert not _detect_obsidian_connect_intent(phrase)
-
-
-def test_mobile_send_button_mic_only_when_empty():
-    html = _html()
-    handler = html.split("function ocHandleSendButtonClick")[1].split(
-        "dom.input.addEventListener('input'"
-    )[0]
-    assert "ocChatCleanMobileComposer() && !hasSendAction" in handler
-    assert "dom.btnSpeech?.click?.()" in handler
-    assert "ocSyncMobileComposerActionButton()" in handler
-    mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split(
-        "function ocSyncMobileComposerActionButton"
-    )[0]
-    assert "!ocComposerInputHasSendAction()" in mic_mode_fn
-    assert "dom.input.addEventListener('compositionend'" in html
-    assert "dom.input.addEventListener('change'" in html
+    assert "dom.btnSpeech?.click" not in handler
+    assert not _detect_obsidian_connect_intent("Salut")
 
 
 def test_mobile_composer_detects_coarse_pointer_tablets():
