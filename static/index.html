@@ -4236,6 +4236,7 @@ let token = sessionStorage.getItem('oc_token') || '';
 let currentUser = null;
 let sending = false;
 let pendingImageAttachment = null;
+let ocLastSentComposerText = '';
 let isGuestMode = false;
 
 const dom = {
@@ -6262,11 +6263,15 @@ let ocClearComposerDictationForSend = function () {};
 
   function ocSyncSpeechToComposer() {
     if (suppressSpeechSync || !dom.input) return;
-    dom.input.value = ocComposeSpeechValue(
+    const composed = ocComposeSpeechValue(
       dictationBaseText,
       dictationFinalTranscript,
       dictationInterimTranscript
     );
+    if (typeof ocShouldBlockComposerDraftRestore === 'function' && ocShouldBlockComposerDraftRestore(composed)) {
+      return;
+    }
+    dom.input.value = composed;
     dom.input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
@@ -6333,9 +6338,11 @@ let ocClearComposerDictationForSend = function () {};
       ocResetSpeechBuffers();
     };
     r.onend = () => {
-      ocSetDictationUiState(false);
+      const blocked = suppressSpeechSync;
       rec = null;
       ocResetSpeechBuffers();
+      if (blocked) return;
+      ocSetDictationUiState(false);
     };
   }
 
@@ -6450,6 +6457,11 @@ function ocHandleSendButtonClick() {
 }
 
 dom.input.addEventListener('input', () => {
+  const trimmed = dom.input ? dom.input.value.trim() : '';
+  if (ocLastSentComposerText && trimmed && trimmed !== ocLastSentComposerText) {
+    ocLastSentComposerText = '';
+  }
+  ocGuardComposerInputAgainstStaleDraft();
   dom.input.style.height = 'auto';
   dom.input.style.height = Math.min(dom.input.scrollHeight, 120) + 'px';
   ocSyncMobileComposerActionButton();
@@ -6737,7 +6749,39 @@ function ocFriendlyVisionErrorMessage(err) {
 }
 
 // ── Send ─────────────────────────────────────────────
-function ocClearComposerInputAfterSend() {
+function ocShouldBlockComposerDraftRestore(candidate) {
+  const draft = String(candidate || '').trim();
+  if (!draft || !ocLastSentComposerText) return false;
+  return draft === ocLastSentComposerText;
+}
+
+function ocGuardComposerInputAgainstStaleDraft() {
+  if (!dom.input || ocHasPendingImageAttachment()) return;
+  const val = dom.input.value.trim();
+  if (val && ocShouldBlockComposerDraftRestore(val)) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+    ocUxSetInputPlaceholder();
+    ocSyncMobileComposerActionButton();
+  }
+}
+
+function ocFinalizeComposerAfterChatTurn() {
+  if (typeof ocClearComposerDictationForSend === 'function') {
+    ocClearComposerDictationForSend();
+  }
+  if (dom.input && !ocHasPendingImageAttachment()) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+  }
+  ocUxSetInputPlaceholder();
+  ocGuardComposerInputAgainstStaleDraft();
+  ocSyncMobileComposerActionButton();
+}
+
+function ocClearComposerInputAfterSend(sentText) {
+  const consumed = sentText !== undefined ? sentText : (dom.input ? dom.input.value : '');
+  ocLastSentComposerText = String(consumed || '').trim();
   if (typeof ocClearComposerDictationForSend === 'function') {
     ocClearComposerDictationForSend();
   }
@@ -6767,7 +6811,7 @@ async function send() {
   }
 
   if (!hasAttachment && ocDetectLanguageComplaintIntent(text)) {
-    ocClearComposerInputAfterSend();
+    ocClearComposerInputAfterSend(text);
     addMsg('user', text);
     ocAddLanguageComplaintAssistantMessage();
     ocSetCocoState('ready', 'Ready');
@@ -6777,7 +6821,7 @@ async function send() {
   }
 
   if (!hasAttachment && ocDetectAffineOpenIntent(text)) {
-    ocClearComposerInputAfterSend();
+    ocClearComposerInputAfterSend(text);
     addMsg('user', text);
     ocAddAffineOpenAssistantMessage();
     ocSetCocoState('ready', 'Ready');
@@ -6787,7 +6831,7 @@ async function send() {
   }
 
   if (!hasAttachment && ocDetectObsidianNoteIntent(text)) {
-    ocClearComposerInputAfterSend();
+    ocClearComposerInputAfterSend(text);
     addMsg('user', text);
     await ocHandleObsidianChatIntent(text, 'note');
     ocSetCocoState('ready', 'Ready');
@@ -6798,7 +6842,7 @@ async function send() {
 
   if (!hasAttachment && ocDetectObsidianConnectIntent(text)) {
     console.info('[COCO] Obsidian intent intercepted before /chat', text);
-    ocClearComposerInputAfterSend();
+    ocClearComposerInputAfterSend(text);
     addMsg('user', text);
     await ocHandleObsidianChatIntent(text, 'connect');
     ocSetCocoState('ready', 'Ready');
@@ -6847,7 +6891,7 @@ async function send() {
     }
   }
 
-  ocClearComposerInputAfterSend();
+  ocClearComposerInputAfterSend(text);
 
   addMsg('user', userDisplay || chatMessage);
   dom.typing.classList.add('visible');
@@ -6897,6 +6941,7 @@ async function send() {
     }
     dom.typing.classList.remove('visible');
     sending = false;
+    ocFinalizeComposerAfterChatTurn();
     ocResetComposerSendEmergency();
     dom.input.focus();
   }
