@@ -169,4 +169,7 @@ def test_mobile_send_baseline_untouched():
     html = _html()
     assert "ocBindSendButtonTap(dom.send, ocHandleSendButtonClick)" in html
     mic_fn = html.split("function ocComposerActionIsMicMode")[1].split("function ocComposerHasSendPayload")[0]
-    assert "return false" in mic_fn
+    assert "ocComposerHasSendPayload" in mic_fn
+    handler = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
+    assert "ocComposerHasSendPayload()" in handler
+    assert "console.info('[COCO:SEND_CALL]')" in handler

@@ -54,7 +54,8 @@ def test_mobile_salut_calls_send_not_speech():
     assert "ocBindSendButtonTap(dom.send, ocHandleSendButtonClick)" in html
     assert "console.info('[COCO:SEND_CALL]')" in handler
     assert "send()" in handler
-    assert "dom.btnSpeech?.click" not in handler
+    assert "ocComposerActionIsMicMode()" in handler
+    assert "dom.btnSpeech?.click" in handler
     assert "ocComposerHasSendPayload()" in handler
 
 
@@ -80,12 +81,13 @@ def test_obsidian_intercept_does_not_run_for_salut():
     assert "await ocHandleObsidianChatIntent(text, 'connect')" in before_chat
 
 
-def test_empty_text_shows_blocked_ui_not_chat():
+def test_empty_composer_opens_mic_not_blocked_ui():
     handler = _handler_fn()
     send_fn = _send_fn()
-    assert "ocNotifySendBlockedUi('empty_input')" in handler
+    assert "ocComposerActionIsMicMode()" in handler
+    assert "dom.btnSpeech?.click" in handler
+    assert "[COCO:MIC_TAP]" in handler
     assert "ocNotifySendBlockedUi('empty_payload')" in send_fn
-    assert "Envoi bloqué côté interface. Rechargez la page." in _html()
 
 
 def test_stale_mic_class_cannot_prevent_text_send():
@@ -95,9 +97,9 @@ def test_stale_mic_class_cannot_prevent_text_send():
     )[0]
     handler = _handler_fn()
     assert "oc-composer-action-mic" in sync_fn
-    assert "remove('oc-composer-action-mic'" in sync_fn
+    assert "oc-composer-action-send" in sync_fn
     assert "ocComposerHasSendPayload()" in handler
-    assert "oc-composer-action-mic" not in handler or "dom.btnSpeech" not in handler
+    assert "ocComposerActionIsMicMode()" in handler
 
 
 def test_disabled_and_sending_cleared_after_failed_request():
@@ -119,9 +121,14 @@ def test_emergency_reset_on_page_load():
     assert html.count("ocResetComposerSendEmergency();") >= 2
 
 
-def test_mic_toggle_disabled_baseline():
+def test_mic_send_chatgpt_toggle_enabled():
     html = _html()
     mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split(
         "function ocComposerHasSendPayload"
     )[0]
-    assert "return false" in mic_mode_fn
+    assert "ocComposerHasSendPayload" in mic_mode_fn
+    sync_fn = html.split("function ocSyncMobileComposerActionButton")[1].split(
+        "function ocUpdateMobileComposerChrome"
+    )[0]
+    assert "oc-composer-action-mic" in sync_fn
+    assert "Micro dictée" in sync_fn
