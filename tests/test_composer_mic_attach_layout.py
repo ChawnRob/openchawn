@@ -15,13 +15,14 @@ def test_empty_composer_defaults_to_microphone_button():
     html = _html()
     send_tag = html.split('id="sendBtn"')[0].split("<button")[-1] + 'id="sendBtn"'
     assert "oc-composer-action-mic" in send_tag
+    assert "oc-composer-action-send" not in send_tag.split('id="sendBtn"')[0]
     sync_fn = html.split("function ocSyncMobileComposerActionButton")[1].split(
         "function ocUpdateMobileComposerChrome"
     )[0]
     assert "oc-composer-action-mic" in sync_fn
     assert "Micro dictée" in sync_fn
-    mic_fn = html.split("function ocComposerActionIsMicMode")[1].split("function ocComposerHasSendPayload")[0]
-    assert "ocComposerHasSendPayload" in mic_fn
+    assert "function ocBootComposerUi" in html
+    assert "requestAnimationFrame" in html
 
 
 def test_typed_text_switches_to_send_button():
@@ -39,18 +40,21 @@ def test_typed_text_switches_to_send_button():
 
 def test_photo_fichier_chip_in_toolbar_not_composer():
     html = _html()
+    assert "COCO_COMPOSER_UI: toolbar-row-v27" in html
+    assert 'id="ocComposerToolbarRow"' in html
     assert 'id="ocComposerMobileToolbar"' in html
     assert 'id="cocoComposerAttachSlot"' in html
     assert "📎 Photo/Fichier" in html
+    toolbar_css = html.split("html.ux-chat-clean .oc-composer-toolbar-row {")[1].split("}")[0]
+    assert "display: flex" in toolbar_css
+    assert "nowrap" in toolbar_css
+    chips_css = html.split("html.ux-chat-clean .oc-composer-mobile-toolbar .coco-prompt-chips {")[1].split("}")[0]
+    assert "width: auto" in chips_css
     mobile = html.split("/* Composer final: [ champ texte ] [ micro|envoyer ] */")[1].split(
         "html.ux-chat-clean .coco-mobile-mic-mount"
     )[0]
     assert "input-wrapper #btnFileIntake" in mobile
     assert "display: none !important" in mobile
-    base_toolbar = html.split("html.ux-chat-clean .oc-composer-mobile-toolbar {")[1].split("}")[0]
-    assert "display: flex" in base_toolbar
-    assert "max-height" not in base_toolbar
-    assert "overflow: hidden" not in base_toolbar
 
 
 def test_attach_handlers_remain_bound():
