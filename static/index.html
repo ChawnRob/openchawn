@@ -373,6 +373,7 @@ body[data-theme="night"] #sendBtn.oc-composer-action-mic,
   stroke: currentColor;
   fill: none;
   transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
 }
 
 .send-btn .oc-composer-send-icon {
@@ -381,33 +382,65 @@ body[data-theme="night"] #sendBtn.oc-composer-action-mic,
   height: 20px;
   fill: #fff;
   transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
 }
 
 .send-btn {
+  position: relative;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+
+.send-btn .oc-composer-send-icon,
+.send-btn .oc-composer-mic-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .send-btn.oc-composer-action-send .oc-composer-send-icon {
   fill: #fff;
+  opacity: 1;
+  visibility: visible;
 }
 
 .send-btn.oc-composer-action-mic .oc-composer-mic-icon {
   display: block;
+  opacity: 1;
+  visibility: visible;
+  fill: none;
+  stroke: currentColor;
 }
 
 .send-btn.oc-composer-action-mic .oc-composer-send-icon {
   display: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-mic .oc-composer-send-icon {
+  display: none !important;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-send .oc-composer-mic-icon {
+  display: none !important;
 }
 
 html.ux-chat-clean .send-btn.oc-composer-action-mic {
   border: 1px solid rgba(90, 220, 255, 0.55);
-  background: rgba(6, 28, 42, 0.92);
+  background: rgba(6, 28, 42, 0.92) !important;
   color: rgba(210, 245, 255, 0.98);
   box-shadow:
     0 0 0 1px rgba(90, 220, 255, 0.15),
     0 0 18px rgba(0, 210, 255, 0.18);
   -webkit-appearance: none;
   appearance: none;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-send {
+  background: linear-gradient(155deg, #4ae4fc 0%, #12b8d4 48%, #0891b2 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
 }
 
 html.ux-chat-clean .send-btn.oc-composer-action-mic.recording {
@@ -1383,21 +1416,40 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     gap: 4px;
   }
 
-  /* Slim mobile toolbar: AFFiNE + mic only (no duplicate row below) */
+  /* Slim mobile toolbar: AFFiNE + Obsidian + Photo/Fichier on one row */
   html.ux-chat-clean .oc-composer-mobile-toolbar {
+    margin-bottom: 8px;
+    padding: 0 2px;
+    overflow: visible;
+  }
+
+  html.ux-chat-clean .oc-composer-toolbar-row {
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    padding: 0 2px 2px;
-    min-height: 0;
-    max-height: 34px;
-    overflow: hidden;
+    flex-wrap: nowrap;
+    min-height: 32px;
   }
 
   html.ux-chat-clean .coco-future-controls {
     display: none !important;
+  }
+
+  html.ux-chat-clean .oc-composer-mobile-toolbar .coco-prompt-chips {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    overflow: hidden;
   }
 
   html.ux-chat-clean .coco-prompt-chips {
@@ -1426,9 +1478,11 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     white-space: nowrap;
   }
 
-  html.ux-chat-clean .coco-composer-attach-slot {
+  html.ux-chat-clean .oc-composer-mobile-toolbar .coco-composer-attach-slot {
     flex: 0 0 auto;
-    margin-left: auto;
+    flex-shrink: 0;
+    margin-left: 0;
+    align-self: center;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus {
@@ -3024,6 +3078,11 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
   pointer-events: none;
 }
 
+.send-btn svg.oc-composer-mic-icon {
+  fill: none;
+  stroke: currentColor;
+}
+
 /* Scanline soft */
 .scanline {
   position: fixed;
@@ -3359,22 +3418,48 @@ html.oc-theme-night .coco-prompt-chip {
 html.ux-chat-clean .oc-composer-mobile-toolbar {
   display: block;
   width: 100%;
+  margin-bottom: 8px;
+  padding: 0 2px;
+  position: relative;
+  z-index: 3;
+  box-sizing: border-box;
+}
+
+html.ux-chat-clean .oc-composer-toolbar-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  flex-wrap: nowrap;
 }
 
 html.ux-chat-clean .coco-mobile-mic-mount {
   display: none;
 }
 
-html.ux-chat-clean .coco-prompt-chips {
+html.ux-chat-clean .oc-composer-mobile-toolbar .coco-prompt-chips {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  justify-content: flex-start;
 }
 
-html.ux-chat-clean .coco-composer-attach-slot {
+html.ux-chat-clean .oc-composer-mobile-toolbar .coco-composer-attach-slot {
   flex: 0 0 auto;
-  margin-left: auto;
+  flex-shrink: 0;
+  margin-left: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  align-self: center;
 }
 
 html.ux-chat-clean #btnFileIntake.coco-file-intake-chip {
@@ -3500,8 +3585,10 @@ html.ux-legacy .coco-companion-presence {
     min-width: 44px;
   }
 
-  html.ux-chat-clean .oc-composer-mobile-toolbar {
-    max-height: 32px;
+  html.ux-chat-clean .clean-input-shell {
+    gap: 4px;
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -3671,10 +3758,12 @@ html.ux-legacy .coco-companion-presence {
   </div>
 
   <div class="input-area oc-composer-centered" id="inputArea">
+    <!-- COCO_COMPOSER_UI: toolbar-row-v27 -->
     <!-- COCO voice layer placeholder -->
     <!-- COCO second brain placeholder -->
     <!-- COCO prompt suggestions placeholder -->
     <div class="oc-composer-mobile-toolbar" id="ocComposerMobileToolbar">
+      <div class="oc-composer-toolbar-row" id="ocComposerToolbarRow">
       <div class="coco-prompt-chips" id="cocoPromptChips" role="group" aria-label="Prompt suggestions">
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Explain simply">Explain simply</button>
         <button type="button" class="coco-prompt-chip" data-coco-prompt="Summarize">Summarize</button>
@@ -3694,7 +3783,7 @@ html.ux-legacy .coco-companion-presence {
           </svg>
         </button>
       </div>
-      <span id="cocoMobileMicMount" class="coco-mobile-mic-mount" aria-hidden="true" aria-label="Voice dictation slot"></span>
+      </div>
     </div>
     <div class="coco-future-controls" role="group" aria-label="COCO capabilities (coming soon)">
       <button type="button" class="coco-future-btn coco-future-voice-placeholder" disabled aria-disabled="true" title="Voice (coming soon)">Voice</button>
@@ -3816,7 +3905,7 @@ html.ux-legacy .coco-companion-presence {
         </svg>
       </button>
       <textarea id="input" rows="1" placeholder="Transmettez votre requête… (Entrée pour envoyer)" autofocus></textarea>
-      <button type="button" class="send-btn oc-composer-action-send" id="sendBtn" title="Envoyer à OpenChawn" aria-label="Envoyer à OpenChawn">
+      <button type="button" class="send-btn oc-composer-action-mic" id="sendBtn" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée">
         <svg class="oc-composer-send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         <svg class="oc-composer-mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
@@ -4146,6 +4235,7 @@ console.log('[OpenChawn] device:', OC_DEVICE);
 let token = sessionStorage.getItem('oc_token') || '';
 let currentUser = null;
 let sending = false;
+let pendingImageAttachment = null;
 let isGuestMode = false;
 
 const dom = {
@@ -4288,7 +4378,12 @@ function ocComposerActionIsMicMode() {
 function ocComposerHasSendPayload() {
   const text = dom.input ? String(dom.input.value || '').trim() : '';
   if (text) return true;
-  return typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
+  if (typeof ocHasPendingImageAttachment !== 'function') return false;
+  try {
+    return ocHasPendingImageAttachment();
+  } catch (_) {
+    return false;
+  }
 }
 
 function ocResetComposerSendEmergency() {
@@ -4470,8 +4565,15 @@ function ocCloseSettingsDrawer() {
 
 ocUxPlaceTechnicalBundle();
 ocUxCleanMountHeaderControls();
-ocUxSetInputPlaceholder();
-ocUpdateMobileComposerChrome();
+function ocBootComposerUi() {
+  ocUxSetInputPlaceholder();
+  ocUpdateMobileComposerChrome();
+  ocSyncMobileComposerActionButton();
+}
+ocBootComposerUi();
+requestAnimationFrame(function () {
+  ocSyncMobileComposerActionButton();
+});
 window.addEventListener('resize', () => {
   ocUxSetInputPlaceholder();
   ocUpdateMobileComposerChrome();
@@ -4679,7 +4781,6 @@ function ocRenderSysAccessState() {
 const OC_IMPORT_MAX_BYTES = 100 * 1024;
 const OC_FILE_INTAKE_MAX_BYTES = 10 * 1024 * 1024;
 const OC_FILE_INTAKE_ACCEPT_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv'];
-let pendingImageAttachment = null;
 let ocFileIntakeDraft = null;
 let ocFileIntakeDraftReplaceSource = 'file';
 
@@ -6344,6 +6445,9 @@ dom.input.addEventListener('keydown', (e) => {
 ocResetComposerSendEmergency();
 ocBindSendButtonTap(dom.send, ocHandleSendButtonClick);
 ocSyncMobileComposerActionButton();
+window.addEventListener('load', function () {
+  ocSyncMobileComposerActionButton();
+}, { once: true });
 
 // ── Scan effect ─────────────────────────────────────
 function triggerScan() {
@@ -6712,7 +6816,8 @@ async function send() {
 
   dom.input.value = '';
   dom.input.style.height = 'auto';
-  dom.input.placeholder = 'Transmettez votre requête… (Entrée pour envoyer)';
+  ocUxSetInputPlaceholder();
+  ocSyncMobileComposerActionButton();
 
   addMsg('user', userDisplay || chatMessage);
   dom.typing.classList.add('visible');
