@@ -78,6 +78,13 @@ _TRANSLATION_TARGET_PATTERNS: Final[list[tuple[str, str]]] = [
     (r"\btranslate(?:\s+this|\s+it|\s+the\s+text)?\s+into\s+french\b", "fr"),
     (r"\btranslate(?:\s+this|\s+it|\s+the\s+text)?\s+into\s+spanish\b", "es"),
     (r"\btranslate(?:\s+this|\s+it|\s+the\s+text)?\s+into\s+portuguese\b", "pt"),
+    (r"\btranslate(?:\s+this)?(?:\s+image)?(?:\s+description)?\s+into\s+french\b", "fr"),
+    (r"\btranslate(?:\s+this)?(?:\s+image)?(?:\s+description)?\s+to\s+french\b", "fr"),
+    (r"\btranslate(?:\s+this)?(?:\s+image)?(?:\s+description)?\s+into\s+english\b", "en"),
+    (r"\btranslate(?:\s+this)?(?:\s+image)?(?:\s+description)?\s+to\s+english\b", "en"),
+    (r"\btraduis(?:-moi)?(?:\s+cette)?(?:\s+description)?(?:\s+d['']?image)?\s+en\s+français\b", "fr"),
+    (r"\btraduis(?:-moi)?(?:\s+cette)?(?:\s+description)?(?:\s+d['']?image)?\s+en\s+francais\b", "fr"),
+    (r"\btraduis(?:-moi)?(?:\s+cette)?(?:\s+description)?(?:\s+d['']?image)?\s+en\s+anglais\b", "en"),
     (r"\bmets?\s+ça\s+en\s+anglais\b", "en"),
     (r"\bmets?\s+ça\s+en\s+français\b", "fr"),
     (r"\bmets?\s+ça\s+en\s+francais\b", "fr"),
@@ -157,6 +164,33 @@ _FR_WORDS: Final[frozenset[str]] = frozenset(
         "sa",
         "mes",
         "tes",
+        "analyse",
+        "analyser",
+        "moi",
+        "cette",
+        "cet",
+        "ces",
+        "mon",
+        "ton",
+        "nos",
+        "vos",
+        "peux",
+        "peut",
+        "pouvez",
+        "pouvons",
+        "pourrais",
+        "décris",
+        "decris",
+        "décrire",
+        "decrire",
+        "vois",
+        "montre",
+        "regarde",
+        "envoie",
+        "envoyer",
+        "fichier",
+        "photo",
+        "image",
     }
 )
 
@@ -236,7 +270,53 @@ _EN_WORDS: Final[frozenset[str]] = frozenset(
         "its",
         "get",
         "got",
+        "analyze",
     }
+)
+
+_ES_WORDS: Final[frozenset[str]] = frozenset(
+    {
+        "el",
+        "la",
+        "los",
+        "las",
+        "un",
+        "una",
+        "unos",
+        "unas",
+        "que",
+        "por",
+        "para",
+        "con",
+        "sin",
+        "esta",
+        "este",
+        "estos",
+        "estas",
+        "imagen",
+        "foto",
+        "archivo",
+        "analiza",
+        "analizar",
+        "puedes",
+        "puedo",
+        "puede",
+        "describe",
+        "describir",
+        "muestra",
+        "mira",
+        "hola",
+        "gracias",
+        "como",
+        "porque",
+        "donde",
+        "cuando",
+    }
+)
+
+_FILE_METADATA_FOR_LANGUAGE_RE: Final[re.Pattern[str]] = re.compile(
+    r"\[(?:Image|File|Fichier|Photo)\s*:\s*[^\]]+\]",
+    re.IGNORECASE,
 )
 
 
@@ -332,6 +412,25 @@ def detect_explicit_language_request(text: str) -> dict[str, str] | None:
     return None
 
 
+def strip_file_metadata_for_language_detection(message: str) -> str:
+    """
+    Retire les métadonnées fichier/image du texte visible utilisateur avant détection de langue.
+
+    Les libellés du type ``[Image: photo.jpg]`` ne doivent pas influencer la langue cible.
+    """
+    text = (message or "").strip()
+    if not text:
+        return ""
+    text = _FILE_METADATA_FOR_LANGUAGE_RE.sub(" ", text)
+    text = re.sub(r"\s*—\s*", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def message_for_language_policy(message: str) -> str:
+    """Texte utilisateur normalisé pour politique de langue (sans métadonnées fichier)."""
+    return strip_file_metadata_for_language_detection(message)
+
+
 def detect_surface_language(text: str) -> str:
     """
     Langue probable du *fond* du message (scores lexicaux), **sans** appliquer
@@ -345,31 +444,39 @@ def detect_surface_language(text: str) -> str:
 
     norm = raw.replace("\u2019", " ").replace("'", " ").replace("`", " ")
     lower = norm.lower()
-    tokens = re.findall(r"[a-zàâäéèêëïîôùûç]+", lower, flags=re.IGNORECASE)
+    tokens = re.findall(r"[a-zàâäéèêëïîôùûçñáéíóúü]+", lower, flags=re.IGNORECASE)
     fr_score = 0
     en_score = 0
+    es_score = 0
     for tok in tokens:
         t = tok.lower()
         if t in _FR_WORDS:
             fr_score += 1
         if t in _EN_WORDS:
             en_score += 1
+        if t in _ES_WORDS:
+            es_score += 1
 
     fr_score += len(re.findall(r"[àâäéèêëïîôùûç]", raw)) * 2
+    es_score += len(re.findall(r"[ñáéíóúü]", raw)) * 2
 
-    if fr_score > en_score:
-        return "fr"
-    if en_score > fr_score:
-        return "en"
-    if en_score > 0 and fr_score > 0:
-        return "en"
-    if en_score == 0 and fr_score == 0:
+    scores = {"fr": fr_score, "en": en_score, "es": es_score}
+    best_lang = max(scores, key=lambda k: scores[k])
+    best_score = scores[best_lang]
+    if best_score == 0:
         if re.search(r"[àâäéèêëïîôùûç]", raw):
             return "fr"
+        if re.search(r"[ñáéíóúü]", raw):
+            return "es"
         return "en"
-    if en_score > 0:
+    tied = [lang for lang, score in scores.items() if score == best_score]
+    if len(tied) == 1:
+        return tied[0]
+    if "en" in tied:
         return "en"
-    return "fr"
+    if "fr" in tied:
+        return "fr"
+    return tied[0]
 
 
 def detect_user_language(text: str) -> str:
@@ -377,7 +484,7 @@ def detect_user_language(text: str) -> str:
     Détection pour la compat historique : explicites / traduction **avant**
     analyse de surface (`detect_surface_language`).
     """
-    raw = (text or "").strip()
+    raw = message_for_language_policy(text).strip()
     if not raw:
         return "und"
 
@@ -397,7 +504,7 @@ def derive_response_language_trace(message: str) -> dict[str, str]:
       - auto — aucune contrainte : ``final_language`` suit la surface (``und`` → ``en``) ;
       - fixed — léger override ops via ``OPENCHAWN_CHAT_FIXED_LANGUAGE`` (code ISO courte).
     """
-    raw = (message or "").strip()
+    raw = message_for_language_policy(message).strip()
     surf = detect_surface_language(raw)
     surf_n = normalize_language_code(surf)
     surf_final_auto = surf_n if surf_n != "und" else "en"
@@ -453,8 +560,9 @@ def build_language_instruction(user_message: str) -> str:
     entièrement en français amorçait les modèles vers des réponses en français malgré
     « langue détectée: anglais » en fin de phrase.
     """
-    req = detect_explicit_language_request(user_message)
-    code = normalize_language_code((req or {}).get("language") or detect_user_language(user_message))
+    policy_message = message_for_language_policy(user_message)
+    req = detect_explicit_language_request(policy_message)
+    code = normalize_language_code((req or {}).get("language") or detect_user_language(policy_message))
     label_fr = _LABELS.get(code) or _LABELS.get("und", "non déterminée")
     label_en = _ENGLISH_NAME.get(code, "the matching language")
 
@@ -518,4 +626,29 @@ def build_language_instruction(user_message: str) -> str:
     return (
         f"OUTPUT LANGUAGE: {label_en}. Follow the user's language. "
         "Do not default to French unless the user's message is clearly French."
+    )
+
+
+def build_vision_response_language_instruction(target_language: str) -> str:
+    """
+    Renfort près de la génération finale quand un résumé vision est injecté.
+
+    Le résumé vision peut être dans une autre langue ; la réponse assistant doit suivre
+    ``target_language`` (dérivé du dernier message utilisateur visible).
+    """
+    code = normalize_language_code(target_language)
+    label_en = _ENGLISH_NAME.get(code, code)
+    if code == "fr":
+        return (
+            "Réponds en français. Le résumé vision ci-dessus peut être dans une autre langue ; "
+            "traduis-le et adapte ta réponse pour l'utilisateur."
+        )
+    if code == "es":
+        return (
+            "Responde en español. El resumen de visión anterior puede estar en otro idioma; "
+            "tradúcelo y adáptalo en tu respuesta final."
+        )
+    return (
+        f"Respond in {label_en}. The vision summary above may be in another language; "
+        "translate and adapt it in your final answer."
     )
