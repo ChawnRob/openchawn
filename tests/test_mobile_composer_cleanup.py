@@ -41,9 +41,12 @@ def test_mobile_action_button_toggles_mic_and_send():
     html = _html()
     fn = html.split("function ocSyncMobileComposerActionButton")[1].split("function ocUpdateMobileComposerChrome")[0]
     assert "oc-composer-action-send" in fn
-    assert "remove('oc-composer-action-mic'" in fn
+    assert "oc-composer-action-mic" in fn
+    assert "Micro dictée" in fn
     click = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
     assert "ocComposerHasSendPayload()" in click
+    assert "ocComposerActionIsMicMode()" in click
+    assert "dom.btnSpeech?.click" in click
     assert "ocBindSendButtonTap(dom.send, ocHandleSendButtonClick)" in html
 
 
@@ -58,14 +61,14 @@ def test_second_brain_single_access_on_mobile():
     assert "display: none !important" in block.split(":not(.coco-obsidian-sync-btn)")[1][:120]
 
 
-def test_mobile_composer_three_slot_layout():
+def test_mobile_composer_two_slot_layout():
     html = _html()
     mobile = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
-    composer = mobile.split("/* Composer final: [ attach ] [ champ texte ] [ micro|envoyer ] */")[1]
-    assert "#btnFileIntake" in composer
+    composer = mobile.split("/* Composer final: [ champ texte ] [ micro|envoyer ] */")[1]
     assert "textarea" in composer
     assert ".send-btn" in composer
     assert "flex: 1 1 auto" in composer.split("textarea {")[1]
+    assert 'id="cocoComposerAttachSlot"' in html
     mic_hide = mobile.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnSpeech")[1].split(
         "/* Composer final"
     )[0]
@@ -86,8 +89,10 @@ def test_message_field_keeps_width_on_mobile():
     assert "flex: 1 1 auto" in ta
     assert "min-width: 0" in ta
     assert "width: 100%" in ta
-    bar = block.split("html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake {")[1].split(".oc-composer-plus-glyph")[0]
-    assert "flex: 0 0 44px" in bar
+    attach_chip = block.split("html.ux-chat-clean #btnFileIntake.coco-file-intake-chip {")[1].split(
+        "html.ux-chat-clean .coco-composer-attach-slot"
+    )[0]
+    assert "white-space: nowrap" in attach_chip
 
 
 def test_crop_success_uses_center_square_crop():

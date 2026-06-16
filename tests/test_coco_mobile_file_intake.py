@@ -11,20 +11,20 @@ def _html() -> str:
     return INDEX.read_text(encoding="utf-8")
 
 
-def test_mobile_attach_button_visible_in_composer():
+def test_mobile_attach_chip_in_toolbar():
     html = _html()
     assert 'id="btnFileIntake"' in html
     assert "oc-file-attach-btn" in html
-    assert "oc-composer-plus-glyph" in html
+    assert "coco-file-intake-chip" in html
+    assert "📎 Photo/Fichier" in html
+    assert 'id="cocoComposerAttachSlot"' in html
     assert 'id="btnMobileFileAttach"' not in html
     assert "oc-file-intake-desktop-only" not in html
     assert "oc-file-intake-mobile-only" not in html
-    assert "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake" in html
-    assert "display: inline-flex !important" in html
-    assert "html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus" in html
     mobile_block = html.split("/* V11.6.3 mobile composer vertical alignment fix */")[1].split("@media (max-width: 896px)")[0]
-    assert "oc-mobile-composer-plus-wrap" in mobile_block
-    assert "display: none !important" in mobile_block.split("oc-mobile-composer-plus-wrap")[1][:80]
+    assert "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake" in mobile_block
+    assert "display: none !important" in mobile_block.split("input-wrapper #btnFileIntake")[1][:80]
+    assert "html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus" in mobile_block
 
 
 def test_mobile_action_sheet_french_labels():
@@ -236,20 +236,18 @@ def test_file_intake_sheet_portaled_to_body_on_open():
 
 
 def test_attach_button_not_desktop_only():
-    """The attach button is visible by default (desktop) and forced visible on mobile."""
+    """The attach chip lives in the toolbar row and stays hidden inside the input wrapper on mobile."""
     html = _html()
-    base = html.split(".oc-file-attach-btn {")[0]
     attach_rule = html.split("#btnFileIntake,")[1].split("body.oc-night-mode #btnFileIntake")[0]
     assert "display: inline-flex" in attach_rule
-    assert "width: 44px" in attach_rule
-    assert "min-width: 44px" in attach_rule
     assert "oc-attach-btn" in html
-    assert 'aria-label="Ajouter photo ou fichier"' in html
+    assert "coco-file-intake-chip" in html
+    assert "📎 Photo/Fichier" in html
+    assert 'id="cocoComposerAttachSlot"' in html
     mobile_rule = html.split(
         "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake"
     )[1].split("}")[0]
-    assert "display: inline-flex !important" in mobile_rule
-    assert "44px" in mobile_rule
+    assert "display: none !important" in mobile_rule
 
 
 def test_attach_button_night_mode_visible_styles():
@@ -259,10 +257,10 @@ def test_attach_button_night_mode_visible_styles():
     assert '[data-theme="night"] #btnFileIntake' in html
     assert "rgba(3, 18, 31, 0.96)" in html
     assert "rgba(89, 226, 255, 0.7)" in html
-    mobile_icon = html.split(
-        "html.ux-chat-clean .clean-input-shell .input-wrapper #btnFileIntake .oc-composer-attach-icon"
-    )[1].split("html.ux-chat-clean .clean-input-shell .input-wrapper {")[0]
-    assert "display: block" in mobile_icon
+    chip_rule = html.split("html.ux-chat-clean #btnFileIntake.coco-file-intake-chip {")[1].split(
+        "html.ux-chat-clean #btnFileIntake.coco-file-intake-chip:hover"
+    )[0]
+    assert "border-radius: 999px" in chip_rule
 
 
 def test_file_input_accepts_required_types():
