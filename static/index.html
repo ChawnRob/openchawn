@@ -373,6 +373,7 @@ body[data-theme="night"] #sendBtn.oc-composer-action-mic,
   stroke: currentColor;
   fill: none;
   transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
 }
 
 .send-btn .oc-composer-send-icon {
@@ -381,22 +382,48 @@ body[data-theme="night"] #sendBtn.oc-composer-action-mic,
   height: 20px;
   fill: #fff;
   transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
 }
 
 .send-btn {
+  position: relative;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+
+.send-btn .oc-composer-send-icon,
+.send-btn .oc-composer-mic-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .send-btn.oc-composer-action-send .oc-composer-send-icon {
   fill: #fff;
+  opacity: 1;
+  visibility: visible;
 }
 
 .send-btn.oc-composer-action-mic .oc-composer-mic-icon {
   display: block;
+  opacity: 1;
+  visibility: visible;
+  fill: none;
+  stroke: currentColor;
 }
 
 .send-btn.oc-composer-action-mic .oc-composer-send-icon {
   display: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-mic .oc-composer-send-icon {
+  display: none !important;
+}
+
+html.ux-chat-clean .send-btn.oc-composer-action-send .oc-composer-mic-icon {
+  display: none !important;
 }
 
 html.ux-chat-clean .send-btn.oc-composer-action-mic {
@@ -1383,17 +1410,20 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
     gap: 4px;
   }
 
-  /* Slim mobile toolbar: AFFiNE + mic only (no duplicate row below) */
+  /* Slim mobile toolbar: AFFiNE + Obsidian + Photo/Fichier on one row */
   html.ux-chat-clean .oc-composer-mobile-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    padding: 0 2px 2px;
-    min-height: 0;
-    max-height: 34px;
-    overflow: hidden;
+    flex-wrap: nowrap;
+    padding: 0 2px 4px;
+    margin-bottom: 6px;
+    min-height: 32px;
+    position: relative;
+    z-index: 3;
+    overflow: visible;
   }
 
   html.ux-chat-clean .coco-future-controls {
@@ -1429,6 +1459,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   html.ux-chat-clean .coco-composer-attach-slot {
     flex: 0 0 auto;
     margin-left: auto;
+    align-self: center;
   }
 
   html.ux-chat-clean .clean-input-shell .input-wrapper > #btnImportPlus {
@@ -3024,6 +3055,11 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
   pointer-events: none;
 }
 
+.send-btn svg.oc-composer-mic-icon {
+  fill: none;
+  stroke: currentColor;
+}
+
 /* Scanline soft */
 .scanline {
   position: fixed;
@@ -3357,8 +3393,18 @@ html.oc-theme-night .coco-prompt-chip {
 }
 
 html.ux-chat-clean .oc-composer-mobile-toolbar {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
+  flex-wrap: nowrap;
+  margin-bottom: 6px;
+  padding: 0 2px 4px;
+  min-height: 32px;
+  position: relative;
+  z-index: 3;
+  box-sizing: border-box;
 }
 
 html.ux-chat-clean .coco-mobile-mic-mount {
@@ -3367,6 +3413,10 @@ html.ux-chat-clean .coco-mobile-mic-mount {
 
 html.ux-chat-clean .coco-prompt-chips {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 html.ux-chat-clean .coco-composer-attach-slot {
@@ -3375,6 +3425,7 @@ html.ux-chat-clean .coco-composer-attach-slot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  align-self: center;
 }
 
 html.ux-chat-clean #btnFileIntake.coco-file-intake-chip {
@@ -3500,8 +3551,10 @@ html.ux-legacy .coco-companion-presence {
     min-width: 44px;
   }
 
-  html.ux-chat-clean .oc-composer-mobile-toolbar {
-    max-height: 32px;
+  html.ux-chat-clean .clean-input-shell {
+    gap: 4px;
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -3816,7 +3869,7 @@ html.ux-legacy .coco-companion-presence {
         </svg>
       </button>
       <textarea id="input" rows="1" placeholder="Transmettez votre requête… (Entrée pour envoyer)" autofocus></textarea>
-      <button type="button" class="send-btn oc-composer-action-send" id="sendBtn" title="Envoyer à OpenChawn" aria-label="Envoyer à OpenChawn">
+      <button type="button" class="send-btn oc-composer-action-mic" id="sendBtn" title="Dictée navigateur — ne envoie pas automatiquement" aria-label="Micro dictée">
         <svg class="oc-composer-send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         <svg class="oc-composer-mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" aria-hidden="true">
           <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
@@ -4146,6 +4199,7 @@ console.log('[OpenChawn] device:', OC_DEVICE);
 let token = sessionStorage.getItem('oc_token') || '';
 let currentUser = null;
 let sending = false;
+let pendingImageAttachment = null;
 let isGuestMode = false;
 
 const dom = {
@@ -4288,7 +4342,12 @@ function ocComposerActionIsMicMode() {
 function ocComposerHasSendPayload() {
   const text = dom.input ? String(dom.input.value || '').trim() : '';
   if (text) return true;
-  return typeof ocHasPendingImageAttachment === 'function' && ocHasPendingImageAttachment();
+  if (typeof ocHasPendingImageAttachment !== 'function') return false;
+  try {
+    return ocHasPendingImageAttachment();
+  } catch (_) {
+    return false;
+  }
 }
 
 function ocResetComposerSendEmergency() {
@@ -4679,7 +4738,6 @@ function ocRenderSysAccessState() {
 const OC_IMPORT_MAX_BYTES = 100 * 1024;
 const OC_FILE_INTAKE_MAX_BYTES = 10 * 1024 * 1024;
 const OC_FILE_INTAKE_ACCEPT_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv'];
-let pendingImageAttachment = null;
 let ocFileIntakeDraft = null;
 let ocFileIntakeDraftReplaceSource = 'file';
 
@@ -6344,6 +6402,9 @@ dom.input.addEventListener('keydown', (e) => {
 ocResetComposerSendEmergency();
 ocBindSendButtonTap(dom.send, ocHandleSendButtonClick);
 ocSyncMobileComposerActionButton();
+window.addEventListener('load', function () {
+  ocSyncMobileComposerActionButton();
+}, { once: true });
 
 // ── Scan effect ─────────────────────────────────────
 function triggerScan() {
@@ -6712,7 +6773,8 @@ async function send() {
 
   dom.input.value = '';
   dom.input.style.height = 'auto';
-  dom.input.placeholder = 'Transmettez votre requête… (Entrée pour envoyer)';
+  ocUxSetInputPlaceholder();
+  ocSyncMobileComposerActionButton();
 
   addMsg('user', userDisplay || chatMessage);
   dom.typing.classList.add('visible');
