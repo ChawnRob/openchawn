@@ -6253,6 +6253,7 @@ function enterChat() {
   ocApplySysBarDefaults();
   ocSyncChatCleanLayout();
   ocSyncGuestAuthHeaderBtn();
+  ocSetCocoState('ready');
   dom.input.focus();
 }
 
@@ -6284,6 +6285,7 @@ function enterGuestChat() {
   ocApplySysBarDefaults();
   ocSyncChatCleanLayout();
   ocSyncGuestAuthHeaderBtn();
+  ocSetCocoState('ready');
   dom.input.focus();
 }
 
@@ -6782,15 +6784,63 @@ function scrollDown() {
 var COCO_STATE_CLASSES = ['ready', 'thinking', 'error', 'retry', 'listening', 'speaking'];
 var COCO_STATE_LABELS = { ready: 'Ready', thinking: 'Thinking', error: 'Error', retry: 'Retry available' };
 
+function ocGetCurrentUserRecord() {
+  if (currentUser && typeof currentUser === 'object') return currentUser;
+  try {
+    const u = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+    return u && typeof u === 'object' ? u : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function ocGetCurrentUserDisplayName() {
+  const u = ocGetCurrentUserRecord();
+  if (!u) return '';
+  const displayName = String(u.display_name || u.name || '').trim();
+  if (displayName) {
+    const first = displayName.split(/\s+/).filter(Boolean)[0];
+    return first || displayName;
+  }
+  const email = String(u.email || '').trim();
+  if (!email) return '';
+  const at = email.indexOf('@');
+  if (at > 0) return email.slice(0, at);
+  return email;
+}
+
+function ocIsAuthenticatedAccount() {
+  return !!(token || sessionStorage.getItem('oc_token') || '').trim();
+}
+
+function ocGetCocoReadyStateLabel() {
+  if (!ocIsAuthenticatedAccount()) return 'Ready';
+  const name = ocGetCurrentUserDisplayName();
+  if (!name) return 'Ready';
+  return '\u25cf ' + name;
+}
+
 function ocSetCocoState(state, label) {
-  var text = label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
+  var text;
+  if (state === 'ready') {
+    text = ocGetCocoReadyStateLabel();
+  } else {
+    text = label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
+  }
   [document.getElementById('cocoCompanionPresence'), document.getElementById('cocoHeaderPresence')].forEach(function (el) {
     if (!el) return;
     COCO_STATE_CLASSES.forEach(function (s) { el.classList.remove('coco-state-' + s); });
     if (state) el.classList.add('coco-state-' + state);
     el.setAttribute('data-coco-state', state || 'ready');
     var lab = el.querySelector('.coco-state-label, .coco-header-state-label');
-    if (lab) lab.textContent = text;
+    if (lab) {
+      lab.textContent = text;
+      if (state === 'ready' && ocIsAuthenticatedAccount() && ocGetCurrentUserDisplayName()) {
+        lab.setAttribute('title', 'Connecté : ' + ocGetCurrentUserDisplayName());
+      } else {
+        lab.removeAttribute('title');
+      }
+    }
   });
 }
 
