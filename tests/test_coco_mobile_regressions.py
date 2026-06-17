@@ -191,7 +191,7 @@ def test_obsidian_connect_phrases_short_circuit_list():
     connect_fn = _html().split("function ocRenderObsidianUriAssistantMessage")[1].split(
         "function ocAddObsidianConnectAssistantMessage"
     )[0]
-    assert "ocBuildObsidianSyncButton(handoff.uri" in connect_fn
+    assert "ocBuildObsidianHandoffActions" in connect_fn
     sync_btn_fn = _html().split("function ocBuildObsidianSyncButton")[1].split(
         "function ocObsidianNoteTitlePath"
     )[0]

@@ -141,14 +141,14 @@ def test_obsidian_sync_intent_synchroniser_a_obsidian_with_prebuilt_uri():
     handoff_fn = html.split("function ocBuildObsidianUriHandoff")[1].split(
         "function ocRenderObsidianUriAssistantMessage"
     )[0]
-    assert "ocBuildObsidianNewNoteUri" in handoff_fn
+    assert "ocBuildObsidianUriHandoffPack" in handoff_fn
     assert "ocGetObsidianHandoffAssistantText" in handoff_fn
     assert "userText: userText" in handoff_fn
 
     render_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
         "async function ocHandleObsidianChatIntent"
     )[0]
-    assert "ocBuildObsidianSyncButton(handoff.uri" in render_fn
+    assert "ocBuildObsidianHandoffActions" in render_fn
     sync_btn_fn = html.split("function ocBuildObsidianSyncButton")[1].split(
         "function ocObsidianNoteTitlePath"
     )[0]
@@ -158,9 +158,10 @@ def test_obsidian_sync_intent_synchroniser_a_obsidian_with_prebuilt_uri():
     uri_fn = html.split("function ocBuildObsidianNewNoteUri")[1].split(
         "function ocCopyObsidianMarkdown"
     )[0]
-    assert "params.set('vault'" in uri_fn
-    assert "params.set('name'" in uri_fn
-    assert "params.set('content'" in uri_fn
+    assert "encodeURIComponent" in uri_fn
+    assert "vault=" in uri_fn
+    assert "name=" in uri_fn
+    assert "content=" in uri_fn
 
     reply = _uri_connect_reply_from_html()
     assert "Sync Obsidian" in reply
@@ -228,10 +229,11 @@ def test_ui_affine_and_obsidian_chips_separate():
 def test_oc_build_obsidian_new_note_uri_includes_encoded_name_and_content():
     block = _obsidian_block()
     assert "function ocBuildObsidianNewNoteUri" in block
-    assert "URLSearchParams" in block
+    assert "encodeURIComponent" in block
     assert "obsidian://new" in block
-    assert "params.set('name'" in block
-    assert "params.set('content'" in block
+    uri_fn = block.split("function ocBuildObsidianNewNoteUri")[1].split("function ocCopyObsidianMarkdown")[0]
+    assert "name=" in uri_fn
+    assert "content=" in uri_fn
 
 
 def test_oc_build_obsidian_new_note_uri_omits_missing_vault():
@@ -265,7 +267,7 @@ def test_ui_no_false_obsidian_sync_success_messages():
     assert "sync réussie" not in block
     assert "Synchronisation réussie" not in block
     assert "Obsidian sync complete" not in block
-    assert "OC_OBSIDIAN_URI_OPENED_FR" in _html()
+    assert "OC_OBSIDIAN_HANDOFF_PENDING_FR" in _html()
     assert "/api/obsidian-sync/status" in _html()
 
 
@@ -372,8 +374,8 @@ def test_obsidian_note_intent_reply_contract():
     render_fn = html.split("function ocRenderObsidianUriAssistantMessage")[1].split(
         "async function ocHandleObsidianChatIntent"
     )[0]
-    assert "ocBuildObsidianNewNoteUri" in handoff_fn
-    assert "ocBuildObsidianSyncButton(handoff.uri" in render_fn
+    assert "ocBuildObsidianUriHandoffPack" in handoff_fn
+    assert "ocBuildObsidianHandoffActions" in render_fn
 
 
 def test_obsidian_connect_intent_uri_aware_in_ui():
@@ -400,7 +402,7 @@ def test_obsidian_connect_intent_uri_aware_in_ui():
     )[0]
     assert "sync réussie" not in connect_fn
     assert "note écrite" not in connect_fn
-    assert "ocBuildObsidianSyncButton(handoff.uri" in connect_fn
+    assert "ocBuildObsidianHandoffActions" in connect_fn
     assert "data-obsidian-uri" in html
     for phrase in OC_OBSIDIAN_URI_DENIAL_PHRASES:
         assert phrase not in connect_fn

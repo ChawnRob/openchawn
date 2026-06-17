@@ -229,6 +229,6 @@ def test_knowledge_organizer_obsidian_api_handoff():
     assert "/api/integrations/obsidian/notes" in handler
     assert "source: 'knowledge_organizer'" in handler
     assert "local_rest" in handler
-    assert "ocBuildObsidianNewNoteUri" in handler
+    assert "ocBuildObsidianUriHandoffPack" in handler
     assert "noté dans Obsidian" in handler
     assert "d.note_path" in handler
