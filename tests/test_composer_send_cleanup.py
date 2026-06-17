@@ -34,24 +34,24 @@ def _clear_fn() -> str:
 def test_send_clears_composer_after_queueing_user_message():
     send_fn = _send_fn()
     before_add = send_fn.split("addMsg('user', userDisplay || chatMessage)")[0]
-    assert "function ocClearComposerInputAfterSend" in _html()
-    assert "ocClearComposerInputAfterSend(text)" in before_add
-    assert "dom.input.value = ''" in _clear_fn()
+    assert "function ocHardResetComposerAfterSend" in _html()
+    assert "ocHardResetComposerAfterSend()" in before_add
+    assert "dom.input.value = ''" in _html().split("function ocHardResetComposerAfterSend")[1].split("function ocFinalizeComposerAfterChatTurn")[0]
 
 
 def test_send_stops_dictation_before_chat_post():
     send_fn = _send_fn()
     before_chat = send_fn.split("console.info('[COCO:CHAT_POST_START]')")[0]
-    assert "ocClearComposerDictationForSend()" in before_chat
+    assert "ocBumpComposerSendGeneration(text)" in before_chat
+    assert "ocHardResetComposerAfterSend()" in before_chat
     assert "sending = true" in before_chat
     assert "dom.send.disabled = true" in before_chat
 
 
 def test_dictation_buffers_suppressed_after_send_cleanup():
     speech = _speech_fn()
-    assert "suppressSpeechSync" in speech
+    assert "ocSpeechSessionIsStale(sessionGeneration)" in speech or "micState !== MIC_LISTENING" in speech
     assert "ocClearComposerDictationForSend = function" in speech
-    assert "if (suppressSpeechSync) return" in speech
     assert "rec.abort()" in speech
 
 
@@ -64,7 +64,7 @@ def test_successful_send_resets_mic_when_no_attachment():
         "function ocUpdateMobileComposerChrome"
     )[0]
     assert "oc-composer-action-mic" in sync_fn
-    assert "ocSyncMobileComposerActionButton()" in _clear_fn()
+    assert "ocSyncMobileComposerActionButton()" in _html().split("function ocHardResetComposerAfterSend")[1].split("function ocFinalizeComposerAfterChatTurn")[0]
 
 
 def test_double_tap_ignored_while_sending():
@@ -88,8 +88,8 @@ def test_last_sent_text_blocks_stale_draft_restore():
 
 def test_clear_composer_input_records_last_sent_text():
     clear_fn = _clear_fn()
-    assert "ocLastSentComposerText = String(consumed || '').trim()" in clear_fn
-    assert "ocClearComposerDictationForSend" in clear_fn
+    assert "ocBumpComposerSendGeneration(sentText)" in clear_fn
+    assert "ocHardResetComposerAfterSend()" in clear_fn
 
 
 def test_speech_sync_blocks_restoring_last_sent_text():
@@ -101,8 +101,8 @@ def test_speech_sync_blocks_restoring_last_sent_text():
 def test_speech_onend_skips_ui_when_send_suppressed_sync():
     speech = _speech_fn()
     onend = speech.split("r.onend = () => {")[1].split("};")[0]
-    assert "const blocked = suppressSpeechSync" in onend
-    assert "if (blocked) return" in onend
+    assert "ocSpeechSessionIsStale(sessionGeneration)" in onend
+    assert "micState = MIC_IDLE" in onend
 
 
 def test_input_listener_guards_against_stale_draft():
@@ -114,17 +114,14 @@ def test_input_listener_guards_against_stale_draft():
 def test_composer_stays_empty_after_assistant_response():
     """Dictated text sends, composer clears, finally block keeps it empty after /chat."""
     send_fn = _send_fn()
-    assert "ocClearComposerInputAfterSend(text)" in send_fn
+    assert "ocHardResetComposerAfterSend()" in send_fn
     finally_block = send_fn.split("} finally {")[1]
     assert "ocFinalizeComposerAfterChatTurn()" in finally_block
     assert finally_block.index("ocFinalizeComposerAfterChatTurn()") < finally_block.index(
         "ocResetComposerSendEmergency()"
     )
     finalize_fn = _finalize_fn()
-    assert "ocClearComposerDictationForSend" in finalize_fn
-    assert "dom.input.value = ''" in finalize_fn
-    assert "ocGuardComposerInputAgainstStaleDraft()" in finalize_fn
-    assert "ocSyncMobileComposerActionButton()" in finalize_fn
+    assert "ocHardResetComposerAfterSend()" in finalize_fn
 
 
 def test_second_tap_after_response_cannot_resend_stale_text():

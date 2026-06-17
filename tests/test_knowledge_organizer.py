@@ -217,7 +217,9 @@ def test_knowledge_organizer_preserves_mobile_send_baseline():
     mic_mode_fn = html.split("function ocComposerActionIsMicMode")[1].split(
         "function ocComposerHasSendPayload"
     )[0]
-    assert "return false" in mic_mode_fn
+    assert "ocComposerHasSendPayload" in mic_mode_fn
+    normalized = mic_mode_fn.replace(" ", "").replace("\n", "")
+    assert "return!ocComposerHasSendPayload()" in normalized
 
 
 def test_knowledge_organizer_obsidian_api_handoff():

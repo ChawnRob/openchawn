@@ -177,6 +177,6 @@ def format_image_context_for_prompt(ctx: LastImageContext) -> str:
         f"description: {ctx.description}\n"
         f"detected_elements: {elements}\n"
         f"extracted_text: {ocr}\n"
-        "Instruction: The user refers to this recently uploaded image. "
-        "Answer using this context. Do NOT claim you cannot see the image when this block is present."
+        "Instruction: Use this structured vision summary when answering the user's request "
+        "about their recently uploaded image. Do NOT claim you cannot see the image when this block is present."
     )
