@@ -189,3 +189,31 @@ def test_mobile_send_baseline_untouched():
     handler = html.split("function ocHandleSendButtonClick")[1].split("dom.input.addEventListener('input'")[0]
     assert "ocComposerHasSendPayload()" in handler
     assert "console.info('[COCO:SEND_CALL]')" in handler
+
+
+def test_obsidian_mobile_uri_handoff_contracts():
+    html = _html()
+    assert "OC_OBSIDIAN_URI_MAX_LENGTH" in html
+    assert "1800" in html
+    assert "[OBSIDIAN_URI_LENGTH]" in html
+    assert "[OBSIDIAN_URI_VAULT]" in html
+    assert "[OBSIDIAN_URI_MODE]" in html
+    assert "ocBuildObsidianUriHandoffPack" in html
+    assert "ocBuildObsidianCompactMarkdown" in html
+    assert "uriNoVault" in html
+    assert "open-obsidian-sync-no-vault" in html
+    assert "Copier Markdown" in html
+    assert "ouvrez Obsidian puis collez la note" in html
+    assert "OC_OBSIDIAN_HANDOFF_PENDING_FR" in html
+    assert "encodeURIComponent" in html.split("function ocBuildObsidianNewNoteUri")[1].split("function ocCopyObsidianMarkdown")[0]
+
+
+def test_obsidian_mobile_pack_keeps_uri_under_limit():
+    from app.integrations.obsidian.uri_handoff import build_obsidian_new_uri
+
+    long_body = "# COCO test\n\n" + ("Ligne de contenu très longue. " * 400)
+    uri = build_obsidian_new_uri(vault="OpenChawn", note_path="COCO/note", markdown=long_body)
+    assert uri.startswith("obsidian://new?")
+    uri_no_vault = build_obsidian_new_uri(vault="", note_path="COCO/note", markdown=long_body[:800])
+    assert "vault=" not in uri_no_vault
+    assert len(uri_no_vault) < len(uri)
