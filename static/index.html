@@ -1735,6 +1735,22 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   outline-offset: 2px;
 }
 
+/* chat_clean mobile : Connexion compacte invité (hors rangée composer) */
+html.ux-chat-clean .oc-guest-auth-header-btn {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  html.ux-chat-clean .oc-guest-auth-header-btn.oc-guest-auth-visible {
+    display: inline-flex !important;
+    align-items: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    padding: 5px 10px;
+    margin-left: auto;
+  }
+}
+
 /* ── System chips ── */
 .sys-bar {
   display: flex;
@@ -3632,6 +3648,7 @@ html.ux-legacy .coco-companion-presence {
       <span class="coco-header-state-dot" aria-hidden="true"></span>
       <span class="coco-header-state-label" id="cocoHeaderStateLabel">Ready</span>
     </div>
+    <button type="button" class="logout-btn oc-guest-auth-header-btn oc-settings-only-clean hidden" id="ocGuestAuthBtn" aria-label="Connexion ou inscription">Connexion</button>
     <div class="header-right oc-header-actions-legacy">
       <div class="link-cluster" id="ocHeaderHudCluster">
         <div class="status-badge">
@@ -4577,6 +4594,7 @@ function ocBootComposerUi() {
   ocUxSetInputPlaceholder();
   ocUpdateMobileComposerChrome();
   ocSyncMobileComposerActionButton();
+  ocSyncGuestAuthHeaderBtn();
 }
 ocBootComposerUi();
 requestAnimationFrame(function () {
@@ -4586,6 +4604,7 @@ window.addEventListener('resize', () => {
   ocUxSetInputPlaceholder();
   ocUpdateMobileComposerChrome();
   ocSyncMobileComposerActionButton();
+  ocSyncGuestAuthHeaderBtn();
   if (!ocChatCleanMobileComposer()) ocCloseMobileComposerMenu();
 }, { passive: true });
 
@@ -6025,6 +6044,37 @@ dom.logoutBtn.addEventListener('click', async () => {
   }
 });
 
+function ocNormalizeApiDetail(detail) {
+  if (Array.isArray(detail)) {
+    return detail.map(function (e) { return (e && e.msg) ? e.msg : String(e); }).join(', ');
+  }
+  return String(detail || '');
+}
+
+function ocIsGuestQuotaLimitError(status, detail) {
+  if (Number(status) !== 429) return false;
+  const text = ocNormalizeApiDetail(detail).toLowerCase();
+  return (
+    text.indexOf('limite gratuite') !== -1
+    || text.indexOf('créez un compte') !== -1
+    || text.indexOf('creez un compte') !== -1
+    || text.indexOf('creer un compte') !== -1
+    || text.indexOf('free limit') !== -1
+  );
+}
+
+function ocSyncGuestAuthHeaderBtn() {
+  const btn = document.getElementById('ocGuestAuthBtn');
+  if (!btn) return;
+  const mobileClean =
+    document.documentElement.classList.contains('ux-chat-clean')
+    && typeof ocChatCleanMobileComposer === 'function'
+    && ocChatCleanMobileComposer();
+  const show = !!isGuestMode && mobileClean;
+  btn.classList.toggle('oc-guest-auth-visible', show);
+  btn.classList.toggle('hidden', !show);
+}
+
 function showAuthForLogin() {
   try {
     if (typeof ocCloseSettingsDrawer === 'function') ocCloseSettingsDrawer();
@@ -6061,6 +6111,7 @@ function enterChat() {
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   ocApplySysBarDefaults();
   ocSyncChatCleanLayout();
+  ocSyncGuestAuthHeaderBtn();
   dom.input.focus();
 }
 
@@ -6090,8 +6141,13 @@ function enterGuestChat() {
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   ocApplySysBarDefaults();
   ocSyncChatCleanLayout();
+  ocSyncGuestAuthHeaderBtn();
   dom.input.focus();
 }
+
+document.getElementById('ocGuestAuthBtn')?.addEventListener('click', () => {
+  showAuthForLogin();
+});
 
 // ── Auto-login si token valide ───────────────────────
 async function tryAutoLogin() {
@@ -6644,6 +6700,19 @@ function ocBuildErrorMsgActions() {
   return bar;
 }
 
+function ocBuildQuotaLimitMsgActions() {
+  var bar = document.createElement('div');
+  bar.className = 'coco-msg-actions';
+  bar.setAttribute('aria-label', 'Quota limit actions');
+  var auth = document.createElement('button');
+  auth.type = 'button';
+  auth.className = 'coco-msg-action';
+  auth.setAttribute('data-coco-action', 'open-auth');
+  auth.textContent = 'Connexion / Inscription';
+  bar.appendChild(auth);
+  return bar;
+}
+
 function ocGetMsgBodyText(msgEl) {
   if (!msgEl) return '';
   var body = msgEl.querySelector('.msg-body');
@@ -6739,7 +6808,7 @@ function ocFormatAssistantMessageHtml(text) {
 }
 
 // ── Add message ─────────────────────────────────────
-function addMsg(role, text, meta) {
+function addMsg(role, text, meta, opts) {
   if (dom.welcome) dom.welcome.remove();
 
   const div = document.createElement('div');
@@ -6760,7 +6829,11 @@ function addMsg(role, text, meta) {
   div.appendChild(body);
 
   if (role === 'assistant') {
-    div.appendChild(ocBuildAssistantMsgActions());
+    if (opts && opts.actions === 'quota-auth') {
+      div.appendChild(ocBuildQuotaLimitMsgActions());
+    } else {
+      div.appendChild(ocBuildAssistantMsgActions());
+    }
   }
   if (role === 'error') {
     div.appendChild(ocBuildErrorMsgActions());
@@ -7010,23 +7083,36 @@ async function send() {
 
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
-      throw new Error(d.detail || 'HTTP ' + r.status);
+      const detail = ocNormalizeApiDetail(d.detail);
+      if (ocIsGuestQuotaLimitError(r.status, detail)) {
+        addMsg(
+          'assistant',
+          'Tu as atteint la limite gratuite. Connecte-toi ou cr\u00e9e un compte pour continuer.',
+          null,
+          { actions: 'quota-auth' }
+        );
+        showAuthForLogin();
+        ocSetCocoState('ready', 'Ready');
+      } else {
+        throw new Error(detail || 'HTTP ' + r.status);
+      }
+    } else {
+      const d = await r.json();
+      console.info('[COCO:CHAT_POST_DONE]');
+
+      const raw = d.output || d.response || d.message || "...";
+      const clean = (typeof raw === 'string') ? raw : JSON.stringify(raw, null, 2);
+      addMsg('assistant', clean);
+      lastAssistantPlain = clean;
+      refreshExportButtons();
+      ocSetCocoState('ready', 'Ready');
+      ocSetImagePipelineStatus(null);
+
+      // provider gardé en console pour debug, pas affiché
+      if (d.provider) console.log('[OpenChawn] provider:', d.provider);
+      dom.sysLang.textContent = d.lang || '---';
+      ocSyncSysBarAfterChat(d);
     }
-    const d = await r.json();
-    console.info('[COCO:CHAT_POST_DONE]');
-
-    const raw = d.output || d.response || d.message || "...";
-    const clean = (typeof raw === 'string') ? raw : JSON.stringify(raw, null, 2);
-    addMsg('assistant', clean);
-    lastAssistantPlain = clean;
-    refreshExportButtons();
-    ocSetCocoState('ready', 'Ready');
-    ocSetImagePipelineStatus(null);
-
-    // provider gardé en console pour debug, pas affiché
-    if (d.provider) console.log('[OpenChawn] provider:', d.provider);
-    dom.sysLang.textContent = d.lang || '---';
-    ocSyncSysBarAfterChat(d);
 
   } catch (err) {
     if (hasAttachment) {
@@ -7996,6 +8082,12 @@ document.getElementById('cocoPromptChips')?.addEventListener('click', function (
       if (!msg.classList.contains('assistant')) return;
       e.preventDefault();
       ocCopyAssistantMessage(btn, msg);
+      return;
+    }
+
+    if (action === 'open-auth') {
+      e.preventDefault();
+      showAuthForLogin();
       return;
     }
 
