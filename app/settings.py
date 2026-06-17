@@ -23,6 +23,21 @@ _DEFAULT_DEV_SECRET = "dev-secret-change-me-in-production"
 _DEEPSEEK_HOST = "https://api.deepseek.com"
 
 
+def _validate_production_secret(is_prod: bool, secret: str) -> None:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    if (os.getenv("OPENCHAWN_ENV") or "").strip().lower() == "test":
+        return
+    if not is_prod:
+        return
+    value = (secret or "").strip()
+    if not value or value == _DEFAULT_DEV_SECRET:
+        raise RuntimeError(
+            "OPENCHAWN_ENV=production requires a strong SECRET_KEY or OPENCHAWN_SECRET_KEY "
+            "(must not be empty or the default dev secret)."
+        )
+
+
 def _deepseek_base_normalize(url: str) -> str:
     """Base sans segment /v1 — ex. https://api.deepseek.com (POST …/chat/completions)."""
     u = (url or "").strip().rstrip("/")
@@ -234,6 +249,7 @@ def _build_settings() -> Settings:
     is_prod = env == "production"
 
     secret = _str("SECRET_KEY", "OPENCHAWN_SECRET_KEY", default=_DEFAULT_DEV_SECRET)
+    _validate_production_secret(is_prod, secret)
 
     # OpenChawn n’appelle pas Ollama (Railway : OLLAMA_ENABLED=false).
     _ = _bool("OLLAMA_ENABLED", default=False)
