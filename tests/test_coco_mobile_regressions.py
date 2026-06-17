@@ -202,7 +202,7 @@ def test_obsidian_connect_phrases_short_circuit_list():
 def test_assistant_markdown_bold_rendered():
     html = _html()
     assert "function ocFormatAssistantMessageHtml" in html
-    add_fn = html.split("function addMsg(role, text, meta)")[1].split("let ocImagePipelineStatusEl")[0]
+    add_fn = html.split("function addMsg(role, text, meta, opts)")[1].split("let ocImagePipelineStatusEl")[0]
     assert "ocFormatAssistantMessageHtml(text)" in add_fn
     assert "<strong>$1</strong>" in html
 
