@@ -42,8 +42,21 @@ def _detect_obsidian_note_intent(text: str) -> bool:
 @pytest.fixture
 def client():
     from app.main import app
+    from app.auth import guest as guest_auth
+    from app import middleware as mw
 
+    guest_auth._sessions.clear()
+    guest_auth._ip_sessions.clear()
+    mw._buckets.clear()
+    mw._last_chat_request_at.clear()
+    mw._request_counts.clear()
     return TestClient(app)
+
+
+def _guest_headers(client) -> dict[str, str]:
+    r = client.post("/guest/session")
+    assert r.status_code == 200
+    return {"X-Guest-Session": r.json()["session_id"]}
 
 
 def test_uri_handoff_creates_obsidian_new_button():
@@ -95,6 +108,7 @@ def test_local_rest_writes_note_via_mocked_api(client):
                     "folder": "COCO/",
                     "source": "chat",
                 },
+                headers=_guest_headers(client),
             )
     assert r.status_code == 200
     data = r.json()
@@ -124,6 +138,7 @@ def test_failed_local_rest_falls_back_to_uri_handoff(client):
             r = client.post(
                 "/api/integrations/obsidian/notes",
                 json={"title": "COCO-fallback", "markdown": "# Fallback", "folder": "COCO"},
+                headers=_guest_headers(client),
             )
     data = r.json()
     assert data["ok"] is True
@@ -159,6 +174,7 @@ def test_disabled_mode_returns_not_configured(client):
         r = client.post(
             "/api/integrations/obsidian/notes",
             json={"title": "x", "markdown": "# x"},
+            headers=_guest_headers(client),
         )
     data = r.json()
     assert data["ok"] is False

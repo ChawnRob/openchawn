@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.integrations.obsidian.connector import create_obsidian_note, get_obsidian_connector_status
+
+from app.auth.deps import get_current_user_or_guest
 
 router = APIRouter(tags=["openchawn-obsidian"])
 
@@ -32,7 +34,11 @@ class ObsidianNoteResponse(BaseModel):
 
 
 @router.post("/api/integrations/obsidian/notes", response_model=ObsidianNoteResponse)
-def post_obsidian_note(req: ObsidianNoteRequest) -> dict[str, Any]:
+def post_obsidian_note(
+    req: ObsidianNoteRequest,
+    user: dict = Depends(get_current_user_or_guest),
+) -> dict[str, Any]:
+    _ = user
     result = create_obsidian_note(
         title=req.title,
         markdown=req.markdown,

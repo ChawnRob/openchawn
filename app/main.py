@@ -41,6 +41,20 @@ from app.memory import memory_reflection_engine as mem_reflect
 from app.auth.database import init_db, create_user, get_user_by_email, update_user_business
 from app.auth.security import hash_password, verify_password, create_token
 from app.auth.deps import get_current_user
+from app.security.auth_logging import privacy_user_log_ref
+from app.security.memory_access import (
+    deny_memory_mutation_in_prod,
+    deny_unscoped_memory_in_prod,
+    filter_memory_entries,
+    filter_payload_memory_lists,
+    lookup_owned_entry,
+    memory_account_key,
+    memory_entries_payload,
+    memory_entry_owned,
+    memory_items_response,
+    require_memory_trace_owner,
+)
+from app.security.memory_http_guard import MemoryHttpGuardMiddleware
 from app.auth.guest import create_guest_session, get_guest_quota_status
 from app.settings import get_settings
 from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, global_error_handler
@@ -69,6 +83,7 @@ _APP_STARTED_AT = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(MemoryHttpGuardMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -234,7 +249,7 @@ def register(req: RegisterRequest):
     if not user:
         raise HTTPException(status_code=409, detail="Email déjà utilisé")
     token = create_token(user["id"], user["email"])
-    logger.info(f"Nouveau user: {user['email']} ({user['business_type']})")
+    logger.info("Nouveau user: %s", privacy_user_log_ref(user["id"], user["email"]))
     return {
         "token": token,
         "user": {
@@ -255,7 +270,7 @@ def login(req: LoginRequest):
     if not user["is_active"]:
         raise HTTPException(status_code=403, detail="Compte désactivé")
     token = create_token(user["id"], user["email"])
-    logger.info(f"Login: {user['email']}")
+    logger.info("Login: %s", privacy_user_log_ref(user["id"], user["email"]))
     return {
         "token": token,
         "user": {
@@ -543,108 +558,120 @@ def health_language_chat_dry_run(req: ChatLanguageDryRunRequest):
 
 
 @app.get("/memory/recent")
-def memory_recent():
-    items = recent_memories(limit=10)
-    return {"status": "ok", "count": len(items), "items": items}
+def memory_recent(request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    return memory_items_response(recent_memories(limit=10), uk)
 
 
 @app.post("/memory/search")
-def memory_search(req: MemorySearchRequest):
-    items = search_memories(req.query, limit=10)
-    return {"status": "ok", "count": len(items), "items": items}
+def memory_search(req: MemorySearchRequest, request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    return memory_items_response(search_memories(req.query, limit=10), uk)
 
 
 @app.get("/memory/concepts")
-def memory_concepts():
-    items = concept_memories(limit=20)
-    return {"status": "ok", "count": len(items), "items": items}
+def memory_concepts(request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    return memory_items_response(concept_memories(limit=20), uk)
 
 
 @app.get("/memory/top")
-def memory_top():
-    items = top_memories(limit=10)
-    return {"status": "ok", "count": len(items), "items": items}
+def memory_top(request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    return memory_items_response(top_memories(limit=10), uk)
 
 
 @app.get("/memory/system")
-def memory_system():
+def memory_system(request: Request):
+    uk = memory_account_key(request.state.memory_user)
     idx = store_indexes_snapshot()
-    return {
-        "status": "ok",
-        "indexes": idx.get("system_concepts"),
-        "entries": memories_by_type("system", 80, include_archived=True),
-    }
+    return memory_entries_payload(
+        memories_by_type("system", 80, include_archived=True),
+        uk,
+        indexes=idx.get("system_concepts"),
+    )
 
 
 @app.get("/memory/projects")
-def memory_projects_view():
+def memory_projects_view(request: Request):
+    uk = memory_account_key(request.state.memory_user)
     idx = store_indexes_snapshot()
-    return {
-        "status": "ok",
-        "indexes": idx.get("project_concepts"),
-        "entries": memories_by_type("project", 120, include_archived=True),
-    }
+    return memory_entries_payload(
+        memories_by_type("project", 120, include_archived=True),
+        uk,
+        indexes=idx.get("project_concepts"),
+    )
 
 
 @app.get("/memory/user")
-def memory_user_view():
+def memory_user_view(request: Request):
+    uk = memory_account_key(request.state.memory_user)
     idx = store_indexes_snapshot()
-    return {
-        "status": "ok",
-        "indexes": idx.get("user_preferences"),
-        "entries": memories_by_type("user", 120, include_archived=True),
-    }
+    return memory_entries_payload(
+        memories_by_type("user", 120, include_archived=True),
+        uk,
+        indexes=idx.get("user_preferences"),
+    )
 
 
 @app.get("/memory/session")
-def memory_session_view():
-    return {
-        "status": "ok",
-        "indexes": [],
-        "entries": memories_by_type("session", 100, include_archived=True),
-    }
+def memory_session_view(request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    return memory_entries_payload(memories_by_type("session", 100, include_archived=True), uk, indexes=[])
 
 
 @app.get("/memory/observability/overview")
-def memory_observability_overview_route():
+def memory_observability_overview_route(request: Request):
+    deny_unscoped_memory_in_prod()
     return memory_observability_overview()
 
 
 @app.get("/memory/trace/{memory_id}")
-def memory_trace_route(memory_id: str):
+def memory_trace_route(memory_id: str, request: Request):
+    uk = memory_account_key(request.state.memory_user)
     out = memory_trace(memory_id)
     if out.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Mémoire introuvable")
-    return out
+    return require_memory_trace_owner(out, uk)
 
 
 @app.get("/memory/last-context")
-def memory_last_context():
+def memory_last_context(request: Request):
+    deny_unscoped_memory_in_prod()
     return get_last_memory_context()
 
 
 @app.get("/memory/concepts/graph")
-def memory_concepts_graph():
+def memory_concepts_graph(request: Request):
+    deny_unscoped_memory_in_prod()
     return concept_graph_lightweight()
 
 
 @app.get("/memory/archive")
 def memory_archive_route(
+    request: Request,
     project: str = Query(default=""),
     memory_type: str = Query(default=""),
     older_than_days: float | None = Query(default=None),
     limit: int = Query(default=80, ge=1, le=150),
 ):
-    return list_archived_memories(
+    uk = memory_account_key(request.state.memory_user)
+    payload = list_archived_memories(
         project=project,
         memory_type=memory_type,
         older_than_days=older_than_days,
         limit=limit,
     )
+    if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+        payload = dict(payload)
+        payload["items"] = filter_memory_entries(payload["items"], uk)
+        payload["count"] = len(payload["items"])
+    return payload
 
 
 @app.get("/memory/timeline")
 def memory_timeline_route(
+    request: Request,
     project: str = Query(default=""),
     memory_type: str = Query(default=""),
     event_type: str = Query(default=""),
@@ -652,6 +679,7 @@ def memory_timeline_route(
     until: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=2000),
 ):
+    deny_unscoped_memory_in_prod()
     events = mem_timeline.filter_timeline_events(
         project=project,
         memory_type=memory_type,
@@ -665,12 +693,14 @@ def memory_timeline_route(
 
 @app.get("/memory/replay")
 def memory_replay_route(
+    request: Request,
     project: str = Query(default=""),
     memory_type: str = Query(default=""),
     since: str | None = Query(default=None),
     until: str | None = Query(default=None),
     limit: int = Query(default=250, ge=1, le=500),
 ):
+    deny_unscoped_memory_in_prod()
     return mem_timeline.build_replay_payload(
         project=project,
         memory_type=memory_type,
@@ -681,78 +711,93 @@ def memory_replay_route(
 
 
 @app.get("/memory/replay/session/{session_id}")
-def memory_replay_session_route(session_id: str, limit: int = Query(default=200, ge=1, le=500)):
+def memory_replay_session_route(session_id: str, request: Request, limit: int = Query(default=200, ge=1, le=500)):
+    deny_unscoped_memory_in_prod()
     return mem_timeline.build_session_replay(session_id, limit=limit)
 
 
 @app.get("/memory/decision-trace")
 def memory_decision_trace_route(
+    request: Request,
     concept: str = Query(..., min_length=1),
     project: str = Query(default=""),
 ):
+    deny_unscoped_memory_in_prod()
     return mem_timeline.decision_trace(concept=concept, project=project)
 
 
 @app.get("/memory/index")
-def memory_index_route():
+def memory_index_route(request: Request):
+    deny_unscoped_memory_in_prod()
     return mem_index.build_memory_index()
 
 
 @app.get("/memory/concepts/top")
-def memory_concepts_top_route(limit: int = Query(default=12, ge=1, le=80)):
+def memory_concepts_top_route(request: Request, limit: int = Query(default=12, ge=1, le=80)):
+    deny_unscoped_memory_in_prod()
     return mem_index.top_concepts_response(limit)
 
 
 @app.get("/memory/graph/stats")
-def memory_graph_stats_route():
+def memory_graph_stats_route(request: Request):
+    deny_unscoped_memory_in_prod()
     return mem_index.graph_statistics()
 
 
 @app.get("/memory/projects/gravity")
-def memory_projects_gravity_route():
+def memory_projects_gravity_route(request: Request):
+    deny_unscoped_memory_in_prod()
     return mem_index.projects_gravity_board()
 
 
 @app.get("/memory/decision/last")
-def memory_decision_last_route():
+def memory_decision_last_route(request: Request):
+    deny_unscoped_memory_in_prod()
     return mem_decision.lean_decision_payload(mem_decision.get_last_decision_bundle())
 
 
 @app.get("/memory/decision/simulate")
 def memory_decision_simulate_route(
+    request: Request,
     query: str = Query(..., min_length=1),
     project: str = Query(default=""),
     user_key: str = Query(default=""),
     as_guest: bool = Query(default=True),
 ):
+    uk = memory_account_key(request.state.memory_user)
     bundle = mem_decision.simulate_memory_decision(
         query=query,
         project=project,
-        user_key=user_key,
-        is_guest=as_guest,
+        user_key=uk,
+        is_guest=False,
     )
     lean = mem_decision.lean_decision_payload(bundle)
-    return {
-        "status": "ok",
-        "simulate": True,
-        "candidate_count": bundle.get("candidate_count"),
-        "selected": lean.get("selected_memories"),
-        "rejected": lean.get("rejected_memories"),
-        "scoring_breakdown": bundle.get("scoring_breakdown"),
-        "conflicts_detected": bundle.get("conflicts_detected"),
-        "final_context_preview": lean.get("final_context_preview"),
-        "confidence_hint": bundle.get("confidence_hint"),
-        "arbitration_summary": bundle.get("arbitration_summary"),
-    }
+    return filter_payload_memory_lists(
+        {
+            "status": "ok",
+            "simulate": True,
+            "candidate_count": bundle.get("candidate_count"),
+            "selected": lean.get("selected_memories"),
+            "rejected": lean.get("rejected_memories"),
+            "scoring_breakdown": bundle.get("scoring_breakdown"),
+            "conflicts_detected": bundle.get("conflicts_detected"),
+            "final_context_preview": lean.get("final_context_preview"),
+            "confidence_hint": bundle.get("confidence_hint"),
+            "arbitration_summary": bundle.get("arbitration_summary"),
+        },
+        uk,
+    )
 
 
 @app.get("/memory/reflection/report")
-def memory_reflection_report_route():
+def memory_reflection_report_route(request: Request):
+    deny_unscoped_memory_in_prod()
     return mem_reflect.build_reflection_report()
 
 
 @app.get("/memory/retrieval-policy")
-def memory_retrieval_policy_route():
+def memory_retrieval_policy_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import retrieval_policy as rp
 
     last = rp.get_last_retrieval_policy()
@@ -762,14 +807,16 @@ def memory_retrieval_policy_route():
 
 
 @app.get("/memory/retrieval-policy/simulate")
-def memory_retrieval_policy_simulate_route(state: str = Query(default="stable")):
+def memory_retrieval_policy_simulate_route(request: Request, state: str = Query(default="stable")):
+    deny_unscoped_memory_in_prod()
     from app.memory import retrieval_policy as rp
 
     return rp.simulate_policy_for_state(state)
 
 
 @app.get("/memory/compression/candidates")
-def memory_compression_candidates_route(include_archived: bool = Query(default=False)):
+def memory_compression_candidates_route(request: Request, include_archived: bool = Query(default=False)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_compression as mc
     from app.memory.fractal_memory import entries_snapshot_for_tests
 
@@ -777,7 +824,8 @@ def memory_compression_candidates_route(include_archived: bool = Query(default=F
 
 
 @app.post("/memory/compression/run")
-def memory_compression_run_route(req: MemoryCompressionRunRequest):
+def memory_compression_run_route(req: MemoryCompressionRunRequest, request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import memory_compression as mc
 
     proj = str(req.project or "").strip()
@@ -789,14 +837,16 @@ def memory_compression_run_route(req: MemoryCompressionRunRequest):
 
 
 @app.get("/memory/compression/health")
-def memory_compression_health_route():
+def memory_compression_health_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_compression as mc
 
     return mc.compression_health_report()
 
 
 @app.get("/memory/compression/{compressed_id}")
-def memory_compression_get_route(compressed_id: str):
+def memory_compression_get_route(compressed_id: str, request: Request):
+    uk = memory_account_key(request.state.memory_user)
     from app.memory import memory_compression as mc
 
     out = mc.get_compressed_memory_by_id(compressed_id)
@@ -804,32 +854,39 @@ def memory_compression_get_route(compressed_id: str):
         raise HTTPException(status_code=400, detail="Ce n’est pas une entrée mémoire de type compressed")
     if str(out.get("status") or "") != "ok":
         raise HTTPException(status_code=404, detail="Mémoire introuvable")
+    entry = out.get("entry") if isinstance(out.get("entry"), dict) else out
+    if isinstance(entry, dict) and not memory_entry_owned(entry, uk):
+        raise HTTPException(status_code=403, detail="Accès mémoire refusé")
     return out
 
 
 @app.get("/memory/consolidation/plan")
-def memory_consolidation_plan_route():
+def memory_consolidation_plan_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_consolidation_scheduler as mcs
 
     return mcs.build_consolidation_plan()
 
 
 @app.post("/memory/consolidation/run-light")
-def memory_consolidation_run_light_route():
+def memory_consolidation_run_light_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import memory_consolidation_scheduler as mcs
 
     return mcs.run_light_consolidation()
 
 
 @app.post("/memory/consolidation/run-deep")
-def memory_consolidation_run_deep_route():
+def memory_consolidation_run_deep_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import memory_consolidation_scheduler as mcs
 
     return mcs.run_deep_consolidation()
 
 
 @app.get("/memory/consolidation/last-report")
-def memory_consolidation_last_report_route():
+def memory_consolidation_last_report_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_consolidation_scheduler as mcs
 
     return mcs.get_last_consolidation_report()
@@ -837,6 +894,7 @@ def memory_consolidation_last_report_route():
 
 @app.get("/memory/semantic/search")
 def memory_semantic_search_route(
+    request: Request,
     q: str = Query(default=""),
     project_name: str = Query(default=""),
     memory_type: str = Query(default=""),
@@ -845,6 +903,7 @@ def memory_semantic_search_route(
     contradicted: bool | None = Query(default=None),
     limit: int = Query(default=8, ge=1, le=30),
 ):
+    uk = memory_account_key(request.state.memory_user)
     from app.memory import faiss_memory as fsm
 
     filters = {
@@ -854,53 +913,63 @@ def memory_semantic_search_route(
         "archived": archived,
         "contradicted": contradicted,
     }
-    return fsm.search_semantic_memory((q or "").strip(), top_k=limit, filters=filters)
+    payload = fsm.search_semantic_memory((q or "").strip(), top_k=limit, filters=filters)
+    if isinstance(payload, dict):
+        return filter_payload_memory_lists(payload, uk)
+    return payload
 
 
 @app.get("/memory/semantic/stats")
-def memory_semantic_stats_route():
+def memory_semantic_stats_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import faiss_memory as fsm
 
     return fsm.get_semantic_index_stats()
 
 
 @app.get("/memory/semantic/health")
-def memory_semantic_health_route(window: int = Query(default=50, ge=1, le=120)):
+def memory_semantic_health_route(request: Request, window: int = Query(default=50, ge=1, le=120)):
+    deny_unscoped_memory_in_prod()
     from app.memory import fractal_memory as fm
 
     return fm.get_semantic_health(window=window)
 
 
 @app.post("/memory/semantic/rebuild")
-def memory_semantic_rebuild_route(incremental: bool = Query(default=False)):
+def memory_semantic_rebuild_route(request: Request, incremental: bool = Query(default=False)):
+    deny_memory_mutation_in_prod()
     from app.memory import faiss_memory as fsm
 
     return fsm.rebuild_semantic_index(incremental=bool(incremental))
 
 
 @app.get("/memory/semantic/worker/status")
-def memory_semantic_worker_status_route():
+def memory_semantic_worker_status_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import semantic_indexing_worker as siw
 
     return siw.get_semantic_worker_status()
 
 
 @app.post("/memory/semantic/worker/run-once")
-def memory_semantic_worker_run_once_route():
+def memory_semantic_worker_run_once_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import semantic_indexing_worker as siw
 
     return siw.process_semantic_index_queue()
 
 
 @app.get("/memory/semantic/cache/stats")
-def memory_semantic_cache_stats_route():
+def memory_semantic_cache_stats_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import embedding_cache as ec
 
     return ec.embedding_cache_stats()
 
 
 @app.get("/memory/importance/health")
-def memory_importance_health_route():
+def memory_importance_health_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import fractal_memory as fm
 
     rows = fm.entries_snapshot_for_tests()
@@ -921,17 +990,19 @@ def memory_importance_health_route():
 
 
 @app.post("/memory/importance/refresh")
-def memory_importance_refresh_route():
+def memory_importance_refresh_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import memory_importance as mi
 
     return mi.refresh_importance_scores()
 
 
 @app.get("/memory/importance/top")
-def memory_importance_top_route(limit: int = Query(default=20, ge=1, le=100)):
+def memory_importance_top_route(request: Request, limit: int = Query(default=20, ge=1, le=100)):
     from app.memory import fractal_memory as fm
 
-    rows = fm.entries_snapshot_for_tests()
+    uk = memory_account_key(request.state.memory_user)
+    rows = filter_memory_entries(fm.entries_snapshot_for_tests(), uk)
     rows.sort(
         key=lambda e: (
             float(e.get("importance_score") or 0.0),
@@ -960,17 +1031,13 @@ def memory_importance_top_route(limit: int = Query(default=20, ge=1, le=100)):
 
 
 @app.get("/memory/importance/explain/{memory_id}")
-def memory_importance_explain_route(memory_id: str):
-    from app.memory import fractal_memory as fm
-
+def memory_importance_explain_route(memory_id: str, request: Request):
     mid = (memory_id or "").strip()
     if not mid:
         raise HTTPException(status_code=400, detail="memory_id manquant")
-    rows = fm.entries_snapshot_for_tests()
-    for e in rows:
-        if str(e.get("id") or "") != mid:
-            continue
-        return {
+    uk = memory_account_key(request.state.memory_user)
+    e = lookup_owned_entry(mid, uk)
+    return {
             "status": "ok",
             "memory_id": mid,
             "importance_score": float(e.get("importance_score") or 0.0),
@@ -981,18 +1048,19 @@ def memory_importance_explain_route(memory_id: str):
             "importance_explanation": str(e.get("importance_explanation") or ""),
             "importance_updated_at": e.get("importance_updated_at"),
         }
-    raise HTTPException(status_code=404, detail="Mémoire introuvable")
 
 
 @app.get("/memory/graph/stats")
-def memory_graph_stats_route():
+def memory_graph_stats_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import graph_persistence as gp
 
     return gp.graph_stats()
 
 
 @app.get("/memory/graph/hubs")
-def memory_graph_hubs_route(limit: int = Query(default=20, ge=1, le=100)):
+def memory_graph_hubs_route(request: Request, limit: int = Query(default=20, ge=1, le=100)):
+    deny_unscoped_memory_in_prod()
     from app.memory import fractal_memory as fm
 
     rows = fm.entries_snapshot_for_tests()
@@ -1015,21 +1083,26 @@ def memory_graph_hubs_route(limit: int = Query(default=20, ge=1, le=100)):
 
 
 @app.get("/memory/graph/related/{memory_id}")
-def memory_graph_related_route(memory_id: str, limit: int = Query(default=12, ge=1, le=60)):
+def memory_graph_related_route(memory_id: str, request: Request, limit: int = Query(default=12, ge=1, le=60)):
+    uk = memory_account_key(request.state.memory_user)
+    lookup_owned_entry(memory_id, uk)
     from app.memory import memory_relationship_graph as mrg
 
     return {"status": "ok", "memory_id": memory_id, "items": mrg.find_related_memories(memory_id, limit=limit)}
 
 
 @app.post("/memory/graph/rebuild")
-def memory_graph_rebuild_route():
+def memory_graph_rebuild_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import graph_persistence as gp
 
     return gp.rebuild_relationship_graph(persist_entries=True)
 
 
 @app.get("/memory/graph/explain/{memory_id}")
-def memory_graph_explain_route(memory_id: str):
+def memory_graph_explain_route(memory_id: str, request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    lookup_owned_entry(memory_id, uk)
     from app.memory import memory_relationship_graph as mrg
 
     out = mrg.explain_memory_relationships(memory_id)
@@ -1039,7 +1112,8 @@ def memory_graph_explain_route(memory_id: str):
 
 
 @app.get("/memory/temporal/snapshot")
-def memory_temporal_snapshot_route():
+def memory_temporal_snapshot_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_temporal_evolution as mte
 
     snap = mte.build_temporal_snapshot()
@@ -1055,14 +1129,16 @@ def memory_temporal_snapshot_route():
 
 
 @app.post("/memory/temporal/refresh")
-def memory_temporal_refresh_route():
+def memory_temporal_refresh_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import memory_temporal_evolution as mte
 
     return mte.refresh_temporal_evolution()
 
 
 @app.get("/memory/temporal/rising")
-def memory_temporal_rising_route(limit: int = Query(default=20, ge=1, le=100)):
+def memory_temporal_rising_route(request: Request, limit: int = Query(default=20, ge=1, le=100)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_temporal_evolution as mte
 
     rows = mte.detect_rising_concepts(mte.build_temporal_snapshot().get("entries") or [])
@@ -1070,7 +1146,8 @@ def memory_temporal_rising_route(limit: int = Query(default=20, ge=1, le=100)):
 
 
 @app.get("/memory/temporal/declining")
-def memory_temporal_declining_route(limit: int = Query(default=20, ge=1, le=100)):
+def memory_temporal_declining_route(request: Request, limit: int = Query(default=20, ge=1, le=100)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_temporal_evolution as mte
 
     rows = mte.detect_declining_concepts(mte.build_temporal_snapshot().get("entries") or [])
@@ -1078,7 +1155,9 @@ def memory_temporal_declining_route(limit: int = Query(default=20, ge=1, le=100)
 
 
 @app.get("/memory/temporal/explain/{memory_id}")
-def memory_temporal_explain_route(memory_id: str):
+def memory_temporal_explain_route(memory_id: str, request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    lookup_owned_entry(memory_id, uk)
     from app.memory import memory_temporal_evolution as mte
 
     out = mte.explain_temporal_evolution(memory_id)
@@ -1088,28 +1167,33 @@ def memory_temporal_explain_route(memory_id: str):
 
 
 @app.get("/memory/contradictions/candidates")
-def memory_contradictions_candidates_route():
+def memory_contradictions_candidates_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_contradiction_resolution as mcr
 
     return {"status": "ok", "items": mcr.detect_resolution_candidates()}
 
 
 @app.post("/memory/contradictions/refresh")
-def memory_contradictions_refresh_route():
+def memory_contradictions_refresh_route(request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import memory_contradiction_resolution as mcr
 
     return mcr.refresh_contradiction_resolutions()
 
 
 @app.get("/memory/contradictions/report")
-def memory_contradictions_report_route():
+def memory_contradictions_report_route(request: Request):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_contradiction_resolution as mcr
 
     return mcr.build_contradiction_resolution_report()
 
 
 @app.get("/memory/contradictions/explain/{memory_id}")
-def memory_contradictions_explain_route(memory_id: str):
+def memory_contradictions_explain_route(memory_id: str, request: Request):
+    uk = memory_account_key(request.state.memory_user)
+    lookup_owned_entry(memory_id, uk)
     from app.memory import memory_contradiction_resolution as mcr
 
     out = mcr.explain_contradiction_resolution(memory_id)
@@ -1119,7 +1203,8 @@ def memory_contradictions_explain_route(memory_id: str):
 
 
 @app.post("/memory/contradictions/resolve")
-def memory_contradictions_resolve_route(req: MemoryContradictionResolveRequest):
+def memory_contradictions_resolve_route(req: MemoryContradictionResolveRequest, request: Request):
+    deny_memory_mutation_in_prod()
     from app.memory import fractal_memory as fm
     from app.memory import memory_contradiction_resolution as mcr
 
@@ -1139,14 +1224,16 @@ def memory_contradictions_resolve_route(req: MemoryContradictionResolveRequest):
 
 
 @app.get("/memory/context/build")
-def memory_context_build_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+def memory_context_build_route(request: Request, q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_decision_context as mdc
 
     return mdc.build_decision_context(query=q, limit=limit)
 
 
 @app.get("/memory/context/explain")
-def memory_context_explain_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+def memory_context_explain_route(request: Request, q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_decision_context as mdc
 
     ctx = mdc.build_decision_context(query=q, limit=limit)
@@ -1154,7 +1241,8 @@ def memory_context_explain_route(q: str = "", limit: int = Query(default=14, ge=
 
 
 @app.get("/memory/context/risk")
-def memory_context_risk_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+def memory_context_risk_route(request: Request, q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_decision_context as mdc
 
     ctx = mdc.build_decision_context(query=q, limit=limit)
@@ -1167,7 +1255,8 @@ def memory_context_risk_route(q: str = "", limit: int = Query(default=14, ge=4, 
 
 
 @app.get("/memory/context/stability")
-def memory_context_stability_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+def memory_context_stability_route(request: Request, q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_decision_context as mdc
 
     ctx = mdc.build_decision_context(query=q, limit=limit)
@@ -1180,7 +1269,8 @@ def memory_context_stability_route(q: str = "", limit: int = Query(default=14, g
 
 
 @app.get("/memory/context/clusters")
-def memory_context_clusters_route(q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+def memory_context_clusters_route(request: Request, q: str = "", limit: int = Query(default=14, ge=4, le=80)):
+    deny_unscoped_memory_in_prod()
     from app.memory import memory_decision_context as mdc
 
     ctx = mdc.build_decision_context(query=q, limit=limit)
