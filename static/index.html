@@ -6830,6 +6830,17 @@ async function send() {
     return;
   }
 
+  if (!hasAttachment && ocDetectKnowledgeOrganizerIntent(text)) {
+    dom.input.value = '';
+    dom.input.style.height = 'auto';
+    addMsg('user', text);
+    await ocHandleKnowledgeOrganizerIntent(text);
+    ocSetCocoState('ready', 'Ready');
+    scrollDown();
+    dom.input.focus();
+    return;
+  }
+
   if (!hasAttachment && ocDetectObsidianNoteIntent(text)) {
     ocClearComposerInputAfterSend(text);
     addMsg('user', text);
@@ -6990,6 +7001,256 @@ var OC_LANGUAGE_COMPLAINT_FR =
 var OC_OBSIDIAN_URI_NOTE_FR =
   'Oui. J\u2019ai préparé une note Markdown pour Obsidian. Appuie sur Sync Obsidian pour l\u2019ouvrir dans Obsidian et valider l\u2019enregistrement depuis ton appareil.';
 var OC_OBSIDIAN_URI_MAX_CONTENT = 6000;
+var OC_KNOWLEDGE_ORGANIZER_FR =
+  'Oui. J\u2019ai préparé une note Markdown structurée pour {dest}. Utilise le bouton ci-dessous pour l\u2019envoyer — l\u2019enregistrement final se fait sur ton appareil.';
+
+function ocDetectKnowledgeOrganizerIntent(text) {
+  var t = ocNormalizeObsidianIntentText(text);
+  if (!t) return false;
+  var patterns = [
+    /\b(range|organis\w*|structure)\w*\s+(ce\s+)?cours\b/,
+    /\bcours\b.*\b(obsidian|affine)\b/,
+    /\b(obsidian|affine)\b.*\bcours\b/,
+    /\bfiche\s+de\s+revision\b/,
+    /\bfiche\s+de\s+revis\w+\b/,
+    /\bfais[- ]?moi\s+une\s+fiche\b/,
+    /\bnote\s+ma\s+progression\b/,
+    /\b(progress(?:ion)?|suivi)\b.*\b(anglais|matiere|matière|obsidian|affine)\b/,
+    /\b(prepare|prépare|preparer)\w*\s+une\s+note\s+(carriere|carrière|orientation)\b/,
+    /\bnote\s+(carriere|carrière|orientation)\b/,
+    /\b(mets|met)\w*\s+(cette\s+)?idee\s+(dans\s+)?affine\b/,
+    /\b(mets|met)\w*\s+(cette\s+)?idée\s+(dans\s+)?affine\b/,
+    /\b(capture|captur)\w*\s+(cette\s+)?idee\b/,
+    /\bprojet\b.*\b(note|obsidian|affine)\b/,
+    /\b(revision|revis\w+|orientation|carriere|carrière)\b.*\b(obsidian|affine)\b/,
+  ];
+  for (var i = 0; i < patterns.length; i++) {
+    if (patterns[i].test(t)) return true;
+  }
+  return false;
+}
+
+function ocClassifyKnowledgeNoteType(text) {
+  var t = ocNormalizeObsidianIntentText(text);
+  if (/\bfiche\s+de\s+revis/.test(t) || /\bfais[- ]?moi\s+une\s+fiche\b/.test(t)) return 'revision';
+  if (/\bnote\s+ma\s+progression\b/.test(t) || /\bprogress(?:ion)?\b/.test(t)) return 'progress';
+  if (/\b(carriere|carrière|orientation)\b/.test(t)) return 'career';
+  if (/\bidee\b/.test(t) || /\bidée\b/.test(String(text || '').toLowerCase())) return 'idea';
+  if (/\bprojet\b/.test(t)) return 'project';
+  if (/\bcours\b/.test(t)) return 'course';
+  return 'idea';
+}
+
+function ocResolveKnowledgeDestination(text) {
+  var t = ocNormalizeObsidianIntentText(text);
+  var hasObsidian = /\bobsidian\b/.test(t);
+  var hasAffine = /\baffine\b/.test(t);
+  if (hasObsidian && hasAffine) return 'Obsidian ou AFFiNE';
+  if (hasAffine) return 'AFFiNE';
+  if (hasObsidian) return 'Obsidian';
+  return 'Obsidian ou AFFiNE';
+}
+
+function ocExtractKnowledgeSubject(text) {
+  var t = ocNormalizeObsidianIntentText(text);
+  if (/\bmaths?\b/.test(t)) return 'Maths';
+  if (/\banglais\b/.test(t)) return 'Anglais';
+  var m = t.match(/\ben\s+([a-z][a-z\s]{2,24})\b/) || t.match(/\bde\s+([a-z][a-z\s]{2,24})\b/);
+  if (m && m[1] && !/^(obsidian|affine|cours|note|fiche)$/.test(m[1])) {
+    return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+  }
+  return 'Général';
+}
+
+function ocBuildKnowledgeOrganizerNote(userText) {
+  var createdAt = new Date().toISOString();
+  var noteType = ocClassifyKnowledgeNoteType(userText);
+  var subject = ocExtractKnowledgeSubject(userText);
+  var destination = ocResolveKnowledgeDestination(userText);
+  var stamp = createdAt.slice(0, 10);
+  var slug = ocNormalizeObsidianIntentText(userText).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'general';
+  var typeLabels = { course: 'Cours', revision: 'Revision', project: 'Projet', progress: 'Progression', career: 'Carriere', idea: 'Idee' };
+  var title = 'COCO-' + (typeLabels[noteType] || 'Note') + '-' + stamp + '-' + slug;
+  var tags = ['#coco', '#study', '#' + noteType, '#' + subject.toLowerCase().replace(/\s+/g, '-')];
+  var sections = [];
+  if (noteType === 'course') {
+    sections = [
+      ['Objectifs du cours', 'Organiser et structurer : ' + userText],
+      ['Points clés', '_À compléter après la session._'],
+      ['Définitions', '_Termes importants à retenir._'],
+      ['Exemples', '_Exemples vus en cours._'],
+      ['Questions ouvertes', '_Points à clarifier._'],
+    ];
+  } else if (noteType === 'revision') {
+    sections = [
+      ['Sujet', subject],
+      ['À retenir', '_Formulations courtes et mémorables._'],
+      ['Formules / règles', '_Liste des règles essentielles._'],
+      ['Pièges fréquents', '_Erreurs à éviter._'],
+      ['Auto-test', '_3 questions pour vérifier la compréhension._'],
+    ];
+  } else if (noteType === 'project') {
+    sections = [
+      ['Contexte', userText],
+      ['Objectifs', '_Résultat attendu du projet._'],
+      ['Étapes', '_Plan d\'action par phases._'],
+      ['Ressources', '_Liens, docs, contacts._'],
+      ['Prochaines actions', '_3 actions concrètes._'],
+    ];
+  } else if (noteType === 'progress') {
+    sections = [
+      ['Domaine', subject],
+      ['Niveau actuel', '_Auto-évaluation ou dernier résultat._'],
+      ['Objectif', '_Où vous voulez arriver._'],
+      ['Jalons', '_Étapes intermédiaires mesurables._'],
+      ['Notes de séance', userText],
+    ];
+  } else if (noteType === 'career') {
+    sections = [
+      ['Profil & intérêts', userText],
+      ['Options explorées', '_Pistes professionnelles ou académiques._'],
+      ['Compétences', '_Forces actuelles et à développer._'],
+      ['Ressources', '_Contacts, sites, formations._'],
+      ['Prochaines étapes', '_Actions concrètes cette semaine._'],
+    ];
+  } else {
+    sections = [
+      ['Idée', userText],
+      ['Contexte', '_D\'où vient cette idée._'],
+      ['Pourquoi maintenant', '_Ce qui rend l\'idée pertinente._'],
+      ['Prochaines actions', '_Première étape pour avancer._'],
+    ];
+  }
+  var lines = [
+    '# ' + title,
+    '',
+    '## Métadonnées',
+    '',
+    '- **Type:** ' + noteType,
+    '- **Date:** ' + createdAt,
+    '- **Sujet:** ' + subject,
+    '- **Destination suggérée:** ' + destination,
+    '- **Tags:** ' + tags.join(' '),
+    '- **Source:** COCO Study/Career Knowledge Organizer',
+    '',
+  ];
+  for (var si = 0; si < sections.length; si++) {
+    lines.push('## ' + sections[si][0], '', sections[si][1], '');
+  }
+  lines.push(
+    '## Destination',
+    '',
+    'Cette note est préparée pour **' + destination + '**. L\'enregistrement final se fait sur votre appareil via le bouton d\'envoi.',
+    ''
+  );
+  return {
+    title: title,
+    markdown: lines.join('\n'),
+    note_type: noteType,
+    subject: subject,
+    suggested_destination: destination,
+    tags: tags,
+    sections: sections.map(function (row) { return row[0]; }),
+  };
+}
+
+function ocBuildKnowledgeActionButton(label, action, uri, markdown) {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ux-tool-btn tool-accent';
+  btn.setAttribute('data-coco-knowledge-action', action);
+  btn.setAttribute('title', label);
+  btn.setAttribute('aria-label', label);
+  btn.textContent = label;
+  if (uri) btn.setAttribute('data-obsidian-uri', uri);
+  if (markdown) btn.setAttribute('data-obsidian-markdown', markdown);
+  if (action === 'open-obsidian-sync') btn.classList.add('coco-obsidian-sync-btn');
+  if (action === 'open-affine-second-brain') btn.classList.add('coco-second-brain-btn');
+  return btn;
+}
+
+function ocRenderKnowledgeOrganizerAssistant(replyText, note, handoff) {
+  if (dom.welcome) dom.welcome.remove();
+  var div = document.createElement('div');
+  div.className = 'msg assistant';
+  var roleLabel = document.createElement('span');
+  roleLabel.className = 'msg-role-label';
+  roleLabel.textContent = ocMsgRoleLabel('assistant');
+  div.appendChild(roleLabel);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = replyText;
+  div.appendChild(body);
+  var actions = document.createElement('div');
+  actions.className = 'oc-affine-chat-action';
+  var dest = note.suggested_destination || '';
+  var uri = handoff && handoff.uri ? handoff.uri : '';
+  var md = note.markdown || '';
+  if (dest.indexOf('Obsidian') >= 0 && uri) {
+    actions.appendChild(ocBuildKnowledgeActionButton('Envoyer vers Obsidian', 'open-obsidian-sync', uri, md));
+  }
+  if (dest.indexOf('AFFiNE') >= 0) {
+    actions.appendChild(ocBuildKnowledgeActionButton('Envoyer vers AFFiNE', 'open-affine-second-brain', '', md));
+  }
+  actions.appendChild(ocBuildKnowledgeActionButton('Copier la note', 'copy-knowledge-note', '', md));
+  div.appendChild(actions);
+  div.appendChild(ocBuildAssistantMsgActions());
+  dom.messages.insertBefore(div, dom.typing);
+  lastAssistantPlain = replyText;
+  refreshExportButtons();
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
+
+async function ocHandleKnowledgeOrganizerIntent(userText) {
+  await ocRefreshObsidianSyncConfig();
+  var note = ocBuildKnowledgeOrganizerNote(userText);
+  var reply = OC_KNOWLEDGE_ORGANIZER_FR.replace('{dest}', note.suggested_destination);
+  var cfg = ocObsidianSyncConfig;
+  var handoff = { uri: '', markdown: note.markdown };
+  var wantsObsidian = note.suggested_destination.indexOf('Obsidian') >= 0;
+
+  if (wantsObsidian && cfg.enabled && cfg.sync_mode !== 'disabled') {
+    try {
+      var r = await fetch(API + '/api/integrations/obsidian/notes', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+        body: JSON.stringify({
+          title: note.title,
+          markdown: note.markdown,
+          folder: cfg.default_folder || 'COCO',
+          source: 'knowledge_organizer',
+          user_text: userText,
+          assistant_text: '',
+        }),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (r.ok && d.ok) {
+        if (d.mode === 'local_rest' && d.note_path) {
+          reply = 'C\u2019est noté dans Obsidian. (' + d.note_path + ')';
+          ocRenderKnowledgeOrganizerAssistant(reply, note, { uri: '', markdown: note.markdown });
+          return;
+        }
+        if (d.uri) {
+          handoff.uri = d.uri;
+          handoff.markdown = d.markdown || note.markdown;
+        }
+      }
+    } catch (err) {
+      console.warn('[COCO:Knowledge] Obsidian connector fallback', err);
+    }
+  }
+
+  if (!handoff.uri && wantsObsidian && ocObsidianUriHandoffEnabled(cfg)) {
+    handoff.uri = ocBuildObsidianNewNoteUri({
+      vault: cfg.vault_name || '',
+      title: ocObsidianNoteTitlePath(cfg, note.title),
+      markdown: note.markdown,
+    });
+  }
+
+  ocRenderKnowledgeOrganizerAssistant(reply, note, handoff);
+}
 
 function ocDetectObsidianNoteIntent(text) {
   var t = ocNormalizeObsidianIntentText(text);
@@ -7587,6 +7848,25 @@ function ocSyncObsidian(event) {
 }
 
 document.addEventListener('click', function (e) {
+  var copyBtn = e.target.closest('[data-coco-knowledge-action="copy-knowledge-note"]');
+  if (copyBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    var md = copyBtn.getAttribute('data-obsidian-markdown') || '';
+    ocCopyObsidianMarkdown(md);
+    ocShowComposerToast('Note Markdown copiée.');
+    return;
+  }
+  var affineKo = e.target.closest('[data-coco-knowledge-action="open-affine-second-brain"]');
+  if (affineKo) {
+    e.preventDefault();
+    e.stopPropagation();
+    var mdAff = affineKo.getAttribute('data-obsidian-markdown') || '';
+    ocCopyObsidianMarkdown(mdAff);
+    ocOpenAffineSecondBrain(affineKo);
+    ocShowComposerToast('Note copiée — ouvrez AFFiNE pour la coller.');
+    return;
+  }
   var sb = e.target.closest('[data-coco-action="open-affine-second-brain"], .coco-second-brain-btn');
   if (sb) {
     e.preventDefault();
@@ -7594,7 +7874,7 @@ document.addEventListener('click', function (e) {
     ocOpenAffineSecondBrain(sb);
     return;
   }
-  var ob = e.target.closest('[data-coco-action="open-obsidian-sync"], .coco-obsidian-sync-btn');
+  var ob = e.target.closest('[data-coco-action="open-obsidian-sync"], .coco-obsidian-sync-btn, [data-coco-knowledge-action="open-obsidian-sync"]');
   if (!ob) return;
   ocSyncObsidian(e);
 }, true);

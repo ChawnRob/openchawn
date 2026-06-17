@@ -12,6 +12,7 @@ from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
 from app.core.coco_identity import COCO_PUBLIC_IDENTITY_EN
 from app.core.initial_rules import build_runtime_rules_prompt
+from app.core.knowledge_organizer import build_knowledge_organizer_context
 from app.core.obsidian_sync import build_obsidian_sync_context
 from app.core.second_brain import build_second_brain_context
 from app.core.language_policy import (
@@ -123,6 +124,7 @@ def build_openchawn_base_system_prompt() -> str:
         f"{COCO_PUBLIC_IDENTITY_EN}\n\n"
         f"{build_second_brain_context()}\n\n"
         f"{build_obsidian_sync_context()}\n\n"
+        f"{build_knowledge_organizer_context()}\n\n"
         "OpenChawn orchestration (Robert): follow the OUTPUT LANGUAGE / language block at the start "
         "of the user message when present. Keep answers concise. Never mention model providers or "
         "engine names.\n\n"
