@@ -3207,6 +3207,72 @@ html.ux-chat-clean .oc-mobile-composer-menu-item:disabled {
 
 .auth-error { color: var(--error-soft); font-size: 12px; margin-top: 10px; min-height: 16px; text-align: center; font-family: var(--font-ui); }
 
+.auth-password-wrap {
+  position: relative;
+}
+
+.auth-password-wrap input {
+  padding-right: 44px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 36px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-password-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.auth-password-toggle[aria-pressed="true"] {
+  color: var(--deep-blue);
+}
+
+@media (max-width: 640px) {
+  .auth-screen {
+    justify-content: flex-start;
+    align-items: stretch;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100dvh;
+    padding-top: max(16px, env(safe-area-inset-top, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: 24px;
+  }
+
+  .auth-screen .welcome.auth-hero-mini {
+    align-self: center;
+  }
+
+  .auth-box {
+    align-self: center;
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 56px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+}
+
 .welcome.auth-hero-mini .welcome-icon {
   width: 56px;
   height: 56px;
@@ -3680,7 +3746,10 @@ html.ux-legacy .coco-companion-presence {
       </div>
       <div class="auth-field">
         <label>Mot de passe</label>
-        <input type="password" id="loginPassword" placeholder="********" autocomplete="current-password">
+        <div class="auth-password-wrap">
+          <input type="password" id="loginPassword" placeholder="********" autocomplete="current-password">
+          <button type="button" class="auth-password-toggle" aria-label="Afficher le mot de passe" aria-pressed="false">Voir</button>
+        </div>
       </div>
       <button class="auth-btn" id="loginBtn">Connexion</button>
       <div class="auth-error" id="loginError"></div>
@@ -3700,7 +3769,10 @@ html.ux-legacy .coco-companion-presence {
       </div>
       <div class="auth-field">
         <label>Mot de passe (8 car. min)</label>
-        <input type="password" id="regPassword" placeholder="********" autocomplete="new-password">
+        <div class="auth-password-wrap">
+          <input type="password" id="regPassword" placeholder="********" autocomplete="new-password">
+          <button type="button" class="auth-password-toggle" aria-label="Afficher le mot de passe" aria-pressed="false">Voir</button>
+        </div>
       </div>
       <div class="auth-field">
         <label>Type d'activite</label>
@@ -6075,10 +6147,76 @@ function ocSyncGuestAuthHeaderBtn() {
   btn.classList.toggle('hidden', !show);
 }
 
+function ocAuthKeyboardInsetPx() {
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+}
+
+function ocApplyAuthKeyboardPadding() {
+  if (!dom.authScreen || dom.authScreen.classList.contains('hidden')) return;
+  const inset = ocAuthKeyboardInsetPx();
+  dom.authScreen.style.paddingBottom = inset > 0 ? (inset + 16) + 'px' : '';
+  dom.authScreen.classList.toggle('oc-auth-keyboard-open', inset > 80);
+}
+
+function ocResetAuthKeyboardPadding() {
+  if (!dom.authScreen) return;
+  dom.authScreen.style.paddingBottom = '';
+  dom.authScreen.classList.remove('oc-auth-keyboard-open');
+}
+
+function ocScrollAuthFieldIntoView(el) {
+  if (!el || !dom.authScreen || dom.authScreen.classList.contains('hidden')) return;
+  setTimeout(function () {
+    try {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch (_) {
+      try { el.scrollIntoView(true); } catch (_e) {}
+    }
+  }, 250);
+}
+
+function ocInitAuthMobileKeyboardUi() {
+  if (!dom.authScreen || dom.authScreen.dataset.ocAuthKbBound === '1') return;
+  dom.authScreen.dataset.ocAuthKbBound = '1';
+
+  dom.authScreen.addEventListener('focusin', function (e) {
+    const t = e.target;
+    if (!t || !dom.authScreen.contains(t)) return;
+    if (!t.matches('input, select, textarea')) return;
+    ocApplyAuthKeyboardPadding();
+    ocScrollAuthFieldIntoView(t);
+  });
+
+  dom.authScreen.addEventListener('click', function (e) {
+    const btn = e.target.closest('.auth-password-toggle');
+    if (!btn || !dom.authScreen.contains(btn)) return;
+    e.preventDefault();
+    const wrap = btn.closest('.auth-password-wrap');
+    const input = wrap && wrap.querySelector('input');
+    if (!input) return;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+    btn.setAttribute('aria-label', show ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+    btn.textContent = show ? 'Masquer' : 'Voir';
+    ocScrollAuthFieldIntoView(input);
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', ocApplyAuthKeyboardPadding, { passive: true });
+    window.visualViewport.addEventListener('scroll', ocApplyAuthKeyboardPadding, { passive: true });
+  }
+  window.addEventListener('resize', ocApplyAuthKeyboardPadding, { passive: true });
+}
+
 function showAuthForLogin() {
   try {
     if (typeof ocCloseSettingsDrawer === 'function') ocCloseSettingsDrawer();
   } catch (_) {}
+  ocInitAuthMobileKeyboardUi();
+  ocResetAuthKeyboardPadding();
   dom.authScreen.classList.remove('hidden');
   dom.messages.classList.add('hidden');
   dom.inputArea.classList.add('hidden');
@@ -6088,6 +6226,8 @@ function showAuthForLogin() {
   dom.registerBox.classList.add('hidden');
   dom.loginError.textContent = '';
   dom.regError.textContent = '';
+  try { dom.authScreen.scrollTop = 0; } catch (_) {}
+  requestAnimationFrame(function () { ocApplyAuthKeyboardPadding(); });
 }
 
 // ── Enter chat (compte) ──────────────────────────────
@@ -6095,6 +6235,7 @@ function enterChat() {
   ocLastOwnerValidated = false;
   ocOwnerTokenRejected = false;
   isGuestMode = false;
+  ocResetAuthKeyboardPadding();
   dom.authScreen.classList.add('hidden');
   dom.messages.classList.remove('hidden');
   dom.inputArea.classList.remove('hidden');
@@ -6130,6 +6271,7 @@ function enterGuestChat() {
 
   ocLastOwnerValidated = false;
   isGuestMode = true;
+  ocResetAuthKeyboardPadding();
   dom.authScreen.classList.add('hidden');
   dom.messages.classList.remove('hidden');
   dom.inputArea.classList.remove('hidden');
@@ -6195,6 +6337,7 @@ async function boot() {
     // n'a pas pu être créée immédiatement.
     console.warn('[OpenChawn] guest session init failed:', e?.message || e);
   }
+  ocInitAuthMobileKeyboardUi();
 }
 boot();
 
