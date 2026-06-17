@@ -4237,6 +4237,7 @@ let currentUser = null;
 let sending = false;
 let pendingImageAttachment = null;
 let ocLastSentComposerText = '';
+let composerSendGeneration = 0;
 let isGuestMode = false;
 
 const dom = {
@@ -4403,19 +4404,25 @@ function ocNotifySendBlockedUi(reason) {
 function ocSyncMobileComposerActionButton() {
   if (!dom.send) return;
   const micMode = ocComposerActionIsMicMode();
+  const listening = typeof ocComposerMicIsListening === 'function' && ocComposerMicIsListening();
   dom.send.classList.remove('recording');
   if (micMode) {
     dom.send.classList.remove('oc-composer-action-send');
     dom.send.classList.add('oc-composer-action-mic');
     dom.send.setAttribute('title', 'Dictée navigateur — ne envoie pas automatiquement');
     dom.send.setAttribute('aria-label', 'Micro dictée');
-    dom.send.removeAttribute('aria-pressed');
+    if (!listening) dom.send.removeAttribute('aria-pressed');
   } else {
     dom.send.classList.remove('oc-composer-action-mic');
     dom.send.classList.add('oc-composer-action-send');
     dom.send.setAttribute('title', 'Envoyer à OpenChawn');
     dom.send.setAttribute('aria-label', 'Envoyer à OpenChawn');
     dom.send.removeAttribute('aria-pressed');
+  }
+  if (listening) {
+    dom.send.classList.add('recording');
+    dom.send.setAttribute('aria-pressed', 'true');
+    dom.send.title = 'Dictée en cours';
   }
 }
 
@@ -6170,7 +6177,10 @@ dom.btnClearOwnerToken.addEventListener('click', () => {
 });
 
 // ── Dictée locale (pas d’envoi auto) — Web Speech API ───
-let ocClearComposerDictationForSend = function () {};
+var ocClearComposerDictationForSend = function () {};
+var ocResetComposerSpeechBuffers = function () {};
+var ocGetComposerMicState = function () { return 'micIdle'; };
+var ocComposerMicIsListening = function () { return false; };
 
 (function ocInitSpeechInput() {
   const btn = dom.btnSpeech;
@@ -6199,11 +6209,19 @@ let ocClearComposerDictationForSend = function () {};
   }
 
   let rec = null;
-  let listening = false;
+  const MIC_IDLE = 'micIdle';
+  const MIC_LISTENING = 'micListening';
+  const MIC_STOPPING = 'micStopping';
+  let micState = MIC_IDLE;
+  let speechStopReason = null;
   let suppressSpeechSync = false;
   let dictationBaseText = '';
   let dictationFinalTranscript = '';
   let dictationInterimTranscript = '';
+
+  function ocSpeechSessionIsStale(sessionGeneration) {
+    return sessionGeneration < composerSendGeneration;
+  }
 
   function ocShowComposerToast(message) {
     const shell = dom.inputArea?.querySelector('.clean-input-shell');
@@ -6229,27 +6247,85 @@ let ocClearComposerDictationForSend = function () {};
     } catch (_) {}
   }
 
-  function ocSetDictationUiState(active) {
-    listening = !!active;
+  function ocApplyDictationVisuals(active) {
+    const listening = !!active;
     btn.classList.toggle('recording', listening);
     btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
     btn.title = listening ? 'Dictée en cours' : 'Dictée navigateur — ne envoie pas automatiquement';
     if (dom.send) {
       dom.send.classList.toggle('recording', listening);
-      dom.send.setAttribute('aria-pressed', listening ? 'true' : 'false');
-      dom.send.title = listening
-        ? 'Dictée en cours'
-        : (ocComposerActionIsMicMode()
-          ? 'Dictée navigateur — ne envoie pas automatiquement'
-          : 'Envoyer à OpenChawn');
+      if (listening) {
+        dom.send.setAttribute('aria-pressed', 'true');
+        dom.send.title = 'Dictée en cours';
+      } else {
+        dom.send.removeAttribute('aria-pressed');
+      }
     }
     if (mirror) mirror.title = listening ? 'Dictée en cours' : 'Micro dictée';
     if (dom.input) {
       if (listening) dom.input.placeholder = 'Écoute en cours…';
       else ocResetInputPlaceholder();
     }
-    if (!listening) ocSyncMobileComposerActionButton();
   }
+
+  function ocSetDictationUiState(active) {
+    if (active) {
+      micState = MIC_LISTENING;
+    } else if (micState !== MIC_STOPPING) {
+      micState = MIC_IDLE;
+    }
+    ocApplyDictationVisuals(active);
+    if (dom.send && !active) {
+      dom.send.title = ocComposerActionIsMicMode()
+        ? 'Dictée navigateur — ne envoie pas automatiquement'
+        : 'Envoyer à OpenChawn';
+    }
+    if (!active) ocSyncMobileComposerActionButton();
+  }
+
+  function ocTransitionToMicIdle() {
+    micState = MIC_IDLE;
+    speechStopReason = null;
+    rec = null;
+    ocApplyDictationVisuals(false);
+    ocSyncMobileComposerActionButton();
+  }
+
+  function ocStopDictation(reason) {
+    speechStopReason = reason || 'user';
+    if (reason === 'send') suppressSpeechSync = true;
+    const wasActive = micState === MIC_LISTENING || !!rec;
+    micState = MIC_STOPPING;
+    ocApplyDictationVisuals(false);
+    if (rec) {
+      try {
+        rec.abort();
+      } catch (_abortErr) {
+        try {
+          rec.stop();
+        } catch (_stopErr) {}
+      }
+    } else if (!wasActive) {
+      if (reason === 'send') ocResetSpeechBuffers();
+      ocTransitionToMicIdle();
+    }
+  }
+
+  ocClearComposerDictationForSend = function () {
+    ocStopDictation('send');
+  };
+
+  ocResetComposerSpeechBuffers = function () {
+    ocResetSpeechBuffers();
+  };
+
+  ocGetComposerMicState = function () {
+    return micState;
+  };
+
+  ocComposerMicIsListening = function () {
+    return micState === MIC_LISTENING;
+  };
 
   function ocComposeSpeechValue(baseText, finalTranscript, interimTranscript) {
     const base = String(baseText || '');
@@ -6261,8 +6337,13 @@ let ocClearComposerDictationForSend = function () {};
     return /\s$/.test(base) ? (base + speechText) : (base + ' ' + speechText);
   }
 
-  function ocSyncSpeechToComposer() {
-    if (suppressSpeechSync || !dom.input) return;
+  function ocSyncSpeechToComposer(sessionGeneration) {
+    if (
+      ocSpeechSessionIsStale(sessionGeneration) ||
+      suppressSpeechSync ||
+      micState !== MIC_LISTENING ||
+      !dom.input
+    ) return;
     const composed = ocComposeSpeechValue(
       dictationBaseText,
       dictationFinalTranscript,
@@ -6271,6 +6352,7 @@ let ocClearComposerDictationForSend = function () {};
     if (typeof ocShouldBlockComposerDraftRestore === 'function' && ocShouldBlockComposerDraftRestore(composed)) {
       return;
     }
+    if (sending) return;
     dom.input.value = composed;
     dom.input.dispatchEvent(new Event('input', { bubbles: true }));
   }
@@ -6281,39 +6363,12 @@ let ocClearComposerDictationForSend = function () {};
     dictationInterimTranscript = '';
   }
 
-  ocClearComposerDictationForSend = function () {
-    suppressSpeechSync = true;
-    if (listening && rec) {
-      try {
-        rec.abort();
-      } catch (_abortErr) {
-        try {
-          rec.stop();
-        } catch (_stopErr) {}
-      }
-      rec = null;
-    }
-    if (listening) {
-      listening = false;
-      btn.classList.remove('recording');
-      btn.setAttribute('aria-pressed', 'false');
-      btn.title = 'Dictée navigateur — ne envoie pas automatiquement';
-      if (dom.send) {
-        dom.send.classList.remove('recording');
-        dom.send.removeAttribute('aria-pressed');
-      }
-      if (mirror) mirror.title = 'Micro dictée';
-      ocResetInputPlaceholder();
-    }
-    ocResetSpeechBuffers();
-  };
-
-  function wireInstance(r) {
+  function wireInstance(r, sessionGeneration) {
     r.lang = (navigator.language || 'fr-FR').replace(/_/g, '-');
     r.continuous = true;
     r.interimResults = true;
     r.onresult = (ev) => {
-      if (suppressSpeechSync) return;
+      if (ocSpeechSessionIsStale(sessionGeneration) || suppressSpeechSync || micState !== MIC_LISTENING) return;
       let finalText = '';
       let interimText = '';
       for (let i = 0; i < ev.results.length; i++) {
@@ -6325,55 +6380,77 @@ let ocClearComposerDictationForSend = function () {};
       }
       dictationFinalTranscript = finalText.trim();
       dictationInterimTranscript = interimText.trim();
-      ocSyncSpeechToComposer();
+      ocSyncSpeechToComposer(sessionGeneration);
     };
     r.onerror = (ev) => {
+      if (ocSpeechSessionIsStale(sessionGeneration)) {
+        rec = null;
+        return;
+      }
       const err = (ev && ev.error) ? ev.error : 'unknown';
       console.log('[OpenChawn] voice dictation error:', err);
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         ocShowComposerToast('Accès micro refusé. Autorisez le micro dans le navigateur.');
       }
-      ocSetDictationUiState(false);
-      rec = null;
+      suppressSpeechSync = false;
+      speechStopReason = null;
       ocResetSpeechBuffers();
+      ocTransitionToMicIdle();
     };
     r.onend = () => {
-      const blocked = suppressSpeechSync;
+      if (ocSpeechSessionIsStale(sessionGeneration)) {
+        rec = null;
+        suppressSpeechSync = true;
+        ocResetSpeechBuffers();
+        micState = MIC_IDLE;
+        speechStopReason = null;
+        ocApplyDictationVisuals(false);
+        ocResetInputPlaceholder();
+        ocSyncMobileComposerActionButton();
+        return;
+      }
+      const reason = speechStopReason;
       rec = null;
-      ocResetSpeechBuffers();
-      if (blocked) return;
-      ocSetDictationUiState(false);
+      if (reason === 'send') {
+        suppressSpeechSync = true;
+        ocResetSpeechBuffers();
+      } else {
+        ocResetSpeechBuffers();
+      }
+      micState = MIC_IDLE;
+      speechStopReason = null;
+      ocApplyDictationVisuals(false);
+      ocResetInputPlaceholder();
+      ocSyncMobileComposerActionButton();
     };
   }
 
   btn.addEventListener('click', () => {
     if (btn.disabled || sending) return;
     if (ocChatCleanMobileComposer()) console.log('[OpenChawn] mobile mic tapped');
-    if (listening && rec) {
-      try {
-        rec.stop();
-      } catch (e) {
-        console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
-      }
-      ocSetDictationUiState(false);
-      rec = null;
+    if (micState === MIC_LISTENING && rec) {
+      ocStopDictation('user');
       return;
     }
     try {
       console.log('[OpenChawn] voice dictation start');
+      speechStopReason = null;
       suppressSpeechSync = false;
+      const sessionGeneration = composerSendGeneration;
       rec = new SR();
-      wireInstance(rec);
+      wireInstance(rec, sessionGeneration);
       dictationBaseText = dom.input ? dom.input.value : '';
       dictationFinalTranscript = '';
       dictationInterimTranscript = '';
+      micState = MIC_LISTENING;
       ocSetDictationUiState(true);
       rec.start();
     } catch (e) {
       console.log('[OpenChawn] voice dictation error:', String(e && e.message ? e.message : e));
-      ocSetDictationUiState(false);
-      rec = null;
+      suppressSpeechSync = false;
+      speechStopReason = null;
       ocResetSpeechBuffers();
+      ocTransitionToMicIdle();
     }
   });
 
@@ -6756,41 +6833,52 @@ function ocShouldBlockComposerDraftRestore(candidate) {
 }
 
 function ocGuardComposerInputAgainstStaleDraft() {
-  if (!dom.input || ocHasPendingImageAttachment()) return;
+  if (!dom.input || sending || ocHasPendingImageAttachment()) return;
   const val = dom.input.value.trim();
   if (val && ocShouldBlockComposerDraftRestore(val)) {
     dom.input.value = '';
+    dom.input.textContent = '';
     dom.input.style.height = 'auto';
+    dom.input.dispatchEvent(new Event('input', { bubbles: true }));
     ocUxSetInputPlaceholder();
     ocSyncMobileComposerActionButton();
   }
 }
 
-function ocFinalizeComposerAfterChatTurn() {
+function ocBumpComposerSendGeneration(sentText) {
+  composerSendGeneration += 1;
+  ocLastSentComposerText = String(sentText || '').trim();
+}
+
+function ocHardResetComposerAfterSend() {
   if (typeof ocClearComposerDictationForSend === 'function') {
     ocClearComposerDictationForSend();
   }
-  if (dom.input && !ocHasPendingImageAttachment()) {
-    dom.input.value = '';
-    dom.input.style.height = 'auto';
+  if (typeof ocResetComposerSpeechBuffers === 'function') {
+    ocResetComposerSpeechBuffers();
   }
+  if (dom.input) {
+    dom.input.value = '';
+    dom.input.textContent = '';
+    dom.input.style.height = 'auto';
+    dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  try {
+    sessionStorage.removeItem('oc_composer_draft');
+    localStorage.removeItem('oc_composer_draft');
+  } catch (_draftErr) {}
   ocUxSetInputPlaceholder();
   ocGuardComposerInputAgainstStaleDraft();
   ocSyncMobileComposerActionButton();
 }
 
+function ocFinalizeComposerAfterChatTurn() {
+  ocHardResetComposerAfterSend();
+}
+
 function ocClearComposerInputAfterSend(sentText) {
-  const consumed = sentText !== undefined ? sentText : (dom.input ? dom.input.value : '');
-  ocLastSentComposerText = String(consumed || '').trim();
-  if (typeof ocClearComposerDictationForSend === 'function') {
-    ocClearComposerDictationForSend();
-  }
-  if (dom.input) {
-    dom.input.value = '';
-    dom.input.style.height = 'auto';
-  }
-  ocUxSetInputPlaceholder();
-  ocSyncMobileComposerActionButton();
+  ocBumpComposerSendGeneration(sentText);
+  ocHardResetComposerAfterSend();
 }
 
 async function send() {
@@ -6831,8 +6919,7 @@ async function send() {
   }
 
   if (!hasAttachment && ocDetectKnowledgeOrganizerIntent(text)) {
-    dom.input.value = '';
-    dom.input.style.height = 'auto';
+    ocClearComposerInputAfterSend(text);
     addMsg('user', text);
     await ocHandleKnowledgeOrganizerIntent(text);
     ocSetCocoState('ready', 'Ready');
@@ -6865,7 +6952,7 @@ async function send() {
   console.info('[COCO:SEND_CALL]');
   sending = true;
   if (dom.send) dom.send.disabled = true;
-  ocClearComposerDictationForSend();
+  ocBumpComposerSendGeneration(text);
 
   let chatMessage = text;
   let mediaId = null;
@@ -6896,13 +6983,14 @@ async function send() {
       addMsg('error', 'FILE INTAKE FAILED — ' + fmsg);
       ocSetCocoState('retry', 'Retry available');
       dom.typing.classList.remove('visible');
+      ocHardResetComposerAfterSend();
       ocResetComposerSendEmergency();
       dom.input.focus();
       return;
     }
   }
 
-  ocClearComposerInputAfterSend(text);
+  ocHardResetComposerAfterSend();
 
   addMsg('user', userDisplay || chatMessage);
   dom.typing.classList.add('visible');
@@ -6914,6 +7002,7 @@ async function send() {
     const chatBody = { message: ocSanitizeChatOutboundMessage(chatMessage) };
     if (mediaId) chatBody.media_id = mediaId;
     console.info('[COCO:CHAT_POST_START]');
+    ocHardResetComposerAfterSend();
     const r = await apiFetch('/chat', {
       method: 'POST',
       body: JSON.stringify(chatBody),

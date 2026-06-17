@@ -17,8 +17,10 @@ from app.core.obsidian_sync import build_obsidian_sync_context
 from app.core.second_brain import build_second_brain_context
 from app.core.language_policy import (
     build_language_instruction,
+    build_vision_response_language_instruction,
     detect_user_language,
     derive_response_language_trace,
+    message_for_language_policy,
 )
 from app.core.runtime_language_policy import (
     OPENCHAWN_ENVIRONMENTAL_IDENTITY_EN,
@@ -122,9 +124,9 @@ def infer_forced_french_source_type(*, memory_body: str, profile_prompt: str, sy
 def build_openchawn_base_system_prompt() -> str:
     return (
         f"{COCO_PUBLIC_IDENTITY_EN}\n\n"
+        f"{build_knowledge_organizer_context()}\n\n"
         f"{build_second_brain_context()}\n\n"
         f"{build_obsidian_sync_context()}\n\n"
-        f"{build_knowledge_organizer_context()}\n\n"
         "OpenChawn orchestration (Robert): follow the OUTPUT LANGUAGE / language block at the start "
         "of the user message when present. Keep answers concise. Never mention model providers or "
         "engine names.\n\n"
@@ -149,7 +151,7 @@ def assemble_chat_generation_inputs(
       3) Retrieval mémoire fractale ;
       4) Garde-langue runtime (sanitize) avant envoi gateway.
     """
-    lt = language_trace or derive_response_language_trace(req.message)
+    lt = language_trace or derive_response_language_trace(message_for_language_policy(req.message))
     proj_hint = (req.project_name or "").strip()
     if user.get("is_guest"):
         user_key = f"guest-{(user.get('guest_session_id') or '')[:28]}"
@@ -167,6 +169,7 @@ def assemble_chat_generation_inputs(
 
     # Phase 2 — language policy applied to outbound instruction (sans état mémoire).
     lang_instruction = build_language_instruction(req.message)
+    target_language = final_language
 
     # Phase 3 — official V11.7 chat memory read path. Keep in sync with
     # docs/OPENCHAWN_MEMORY_MAP_V11_7.md if this routing changes.
@@ -199,6 +202,9 @@ def assemble_chat_generation_inputs(
     if should_inject and img_ctx:
         image_context_block = format_image_context_for_prompt(img_ctx)
         image_context_injected = True
+        lang_instruction = (
+            f"{lang_instruction}\n\n{build_vision_response_language_instruction(target_language)}"
+        )
 
     logger.info(
         "chat image_context lookup | chat_session_key=%s | user_message_references_image=%s | "
@@ -263,6 +269,7 @@ def assemble_chat_generation_inputs(
         "final_language_hint": final_language,
         "response_language_mode": response_language_mode,
         "language_source": language_source,
+        "target_language": target_language,
         "lang_instruction": lang_instruction,
         "system_prompt": system_prompt,
         "user_message": layered_user_message,
@@ -326,7 +333,7 @@ def handle_chat_request(
                 detail="Vous avez atteint la limite gratuite. Créez un compte pour continuer.",
             )
 
-    trace = derive_response_language_trace(req.message)
+    trace = derive_response_language_trace(message_for_language_policy(req.message))
     bundle = assemble_chat_generation_inputs(
         req, user=user, persist_memory_side_effects=True, language_trace=trace
     )
