@@ -3765,6 +3765,19 @@ html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .coco-companion-
   border: 0;
 }
 
+/* Mobile connecté : jamais de nom utilisateur sous l'orbe (état ready) */
+html.ux-chat-clean.oc-session-connected .welcome.hero-cockpit .coco-companion-presence.coco-state-ready .coco-state-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 @keyframes ocWelcomeOrbPulse {
   0%, 100% {
     filter: drop-shadow(0 0 0 transparent);
@@ -4634,6 +4647,10 @@ function ocSyncChatCleanLayout() {
     ocSyncChatCleanLayout();
   }
 })();
+
+window.addEventListener('resize', function () {
+  if (!OC_UX_LEGACY) ocSyncWelcomeHome();
+}, { passive: true });
 
 function ocUxPlaceTechnicalBundle() {
   const bundle = document.getElementById('ocTechnicalBundle');
@@ -6221,6 +6238,7 @@ function ocIsConnectedSession() {
 
 function ocSyncAuthHeaderButtons() {
   const connected = ocIsConnectedSession();
+  document.documentElement.classList.toggle('oc-session-connected', connected);
   if (dom.logoutBtn) {
     dom.logoutBtn.classList.remove('hidden');
     dom.logoutBtn.textContent = connected ? 'Déconnexion' : 'Connexion';
@@ -6232,6 +6250,7 @@ function ocSyncAuthHeaderButtons() {
     dom.headerLogoutBtn.classList.toggle('hidden', !connected);
   }
   ocSyncGuestAuthHeaderBtn();
+  ocSyncWelcomeHome();
 }
 
 function ocHasLocalOwnerToken() {
@@ -7218,7 +7237,7 @@ function ocSyncWelcomeHome() {
   const actions = document.getElementById('ocWelcomeQuickActions');
   const greeting = document.getElementById('ocWelcomeGreeting');
   const show = ocShouldShowMobileWelcomeHome();
-  if (dom.chatShell) dom.chatShell.classList.toggle('oc-welcome-home-shell', show);
+  document.documentElement.classList.toggle('oc-welcome-home-shell', show);
   if (welcome) welcome.classList.toggle('oc-welcome-home-active', show);
   if (home) {
     home.classList.toggle('oc-welcome-home-visible', show);
@@ -7231,6 +7250,21 @@ function ocSyncWelcomeHome() {
   }
 }
 
+function ocApplyCocoStateEl(el, state, text, isHeader) {
+  if (!el) return;
+  COCO_STATE_CLASSES.forEach(function (s) { el.classList.remove('coco-state-' + s); });
+  if (state) el.classList.add('coco-state-' + state);
+  el.setAttribute('data-coco-state', state || 'ready');
+  var lab = el.querySelector(isHeader ? '.coco-header-state-label' : '.coco-state-label');
+  if (!lab) return;
+  lab.textContent = text;
+  if (isHeader && state === 'ready' && ocIsAuthenticatedAccount() && ocGetCurrentUserDisplayName()) {
+    lab.setAttribute('title', 'Connecté : ' + ocGetCurrentUserDisplayName());
+  } else {
+    lab.removeAttribute('title');
+  }
+}
+
 function ocSetCocoState(state, label) {
   var headerText;
   if (state === 'ready') {
@@ -7239,24 +7273,13 @@ function ocSetCocoState(state, label) {
     headerText = label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
   }
   var companionText = ocGetCocoCompanionStateLabel(state, label);
+  if (state === 'ready' && ocIsConnectedSession()) {
+    companionText = 'COCO';
+  }
   var headerEl = document.getElementById('cocoHeaderPresence');
   var companionEl = document.getElementById('cocoCompanionPresence');
-  [headerEl, companionEl].forEach(function (el, idx) {
-    if (!el) return;
-    var text = idx === 0 ? headerText : companionText;
-    COCO_STATE_CLASSES.forEach(function (s) { el.classList.remove('coco-state-' + s); });
-    if (state) el.classList.add('coco-state-' + state);
-    el.setAttribute('data-coco-state', state || 'ready');
-    var lab = el.querySelector('.coco-state-label, .coco-header-state-label');
-    if (lab) {
-      lab.textContent = text;
-      if (idx === 0 && state === 'ready' && ocIsAuthenticatedAccount() && ocGetCurrentUserDisplayName()) {
-        lab.setAttribute('title', 'Connecté : ' + ocGetCurrentUserDisplayName());
-      } else {
-        lab.removeAttribute('title');
-      }
-    }
-  });
+  ocApplyCocoStateEl(headerEl, state, headerText, true);
+  ocApplyCocoStateEl(companionEl, state, companionText, false);
   ocSyncWelcomeHome();
 }
 
