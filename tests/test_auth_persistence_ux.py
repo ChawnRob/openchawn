@@ -87,3 +87,48 @@ def test_owner_session_restored_on_boot():
     assert "enterGuestChat()" in fn
     after_chat = _html().split("function ocSyncSysBarAfterChat(payload)")[1].split("function authHeaders")[0]
     assert "OC_OWNER_SESSION_VALID_KEY" in after_chat
+    assert "ocSyncAuthHeaderButtons()" in after_chat
+
+
+def test_connected_user_shows_header_logout_button():
+    html = _html()
+    assert 'id="ocHeaderLogoutBtn"' in html
+    assert "oc-header-logout-btn" in html
+    assert "oc-header-status-cluster" in html
+    sync = html.split("function ocSyncAuthHeaderButtons()")[1].split("function ocHasLocalOwnerToken")[0]
+    assert "headerLogoutBtn" in sync
+    assert "oc-auth-logout-visible" in sync
+    assert "Déconnexion" in sync
+    css = html.split("html.ux-chat-clean .oc-header-logout-btn {")[1].split("html.ux-chat-clean .oc-header-logout-btn.oc-auth-logout-visible")[0]
+    assert "min-height: 44px" in css
+    assert "min-width: 44px" in css
+
+
+def test_connected_owner_shows_header_logout_hidden_connexion():
+    guest_sync = _html().split("function ocSyncGuestAuthHeaderBtn()")[1].split("function ocAuthKeyboardInsetPx")[0]
+    assert "!ocIsConnectedSession()" in guest_sync
+    sync = _html().split("function ocSyncAuthHeaderButtons()")[1].split("function ocHasLocalOwnerToken")[0]
+    assert "dom.headerLogoutBtn.classList.toggle('oc-auth-logout-visible', connected)" in sync
+
+
+def test_guest_hides_header_logout_shows_connexion():
+    sync = _html().split("function ocSyncAuthHeaderButtons()")[1].split("function ocHasLocalOwnerToken")[0]
+    assert "dom.headerLogoutBtn.classList.toggle('hidden', !connected)" in sync
+
+
+def test_logout_click_handler_shared_and_clears_storage():
+    html = _html()
+    assert "function ocHandleLogoutClick()" in html
+    assert "dom.headerLogoutBtn?.addEventListener('click', ocHandleLogoutClick)" in html
+    assert "dom.logoutBtn.addEventListener('click', ocHandleLogoutClick)" in html
+    handler = html.split("async function ocHandleLogoutClick()")[1].split("dom.logoutBtn.addEventListener")[0]
+    assert "ocClearAuthSession()" in handler
+    assert "enterGuestChat()" in handler
+
+
+def test_boot_restore_calls_auth_header_sync_via_enter_chat():
+    enter = _html().split("function enterChat()")[1].split("// ── Enter chat (invité)")[0]
+    guest = _html().split("function enterGuestChat()")[1].split("document.getElementById('ocGuestAuthBtn')")[0]
+    assert "ocSyncAuthHeaderButtons()" in enter
+    assert "ocSyncAuthHeaderButtons()" in guest
+

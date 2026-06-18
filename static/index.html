@@ -1740,6 +1740,31 @@ html.ux-chat-clean .oc-guest-auth-header-btn {
   display: none;
 }
 
+html.ux-chat-clean .oc-header-status-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+html.ux-chat-clean .oc-header-logout-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+}
+
+html.ux-chat-clean .oc-header-logout-btn.oc-auth-logout-visible {
+  display: inline-flex !important;
+}
+
 @media (max-width: 640px) {
   html.ux-chat-clean .oc-guest-auth-header-btn.oc-guest-auth-visible {
     display: inline-flex !important;
@@ -1747,7 +1772,14 @@ html.ux-chat-clean .oc-guest-auth-header-btn {
     flex-shrink: 0;
     font-size: 10px;
     padding: 5px 10px;
+    min-height: 44px;
     margin-left: auto;
+  }
+
+  html.ux-chat-clean .oc-header-status-cluster {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
   }
 }
 
@@ -3427,6 +3459,7 @@ html.ux-chat-clean .header-left {
 html.ux-chat-clean .coco-header-presence {
   display: flex;
   flex-shrink: 0;
+  margin-left: 0;
 }
 
 .coco-header-state-dot {
@@ -3696,7 +3729,7 @@ html.ux-legacy .coco-companion-presence {
   .coco-prompt-chips { gap: 5px; justify-content: flex-start; }
   .coco-prompt-chip { font-size: 10px; padding: 6px 10px; }
   html.ux-chat-clean .coco-header-presence {
-    width: 100%;
+    width: auto;
     margin-left: 0;
     justify-content: center;
   }
@@ -3725,9 +3758,12 @@ html.ux-legacy .coco-companion-presence {
         </div>
       </div>
     </div>
-    <div class="coco-header-presence coco-state-ready" id="cocoHeaderPresence" data-coco-state="ready" aria-live="polite">
-      <span class="coco-header-state-dot" aria-hidden="true"></span>
-      <span class="coco-header-state-label" id="cocoHeaderStateLabel">Ready</span>
+    <div class="oc-header-status-cluster oc-settings-only-clean">
+      <div class="coco-header-presence coco-state-ready" id="cocoHeaderPresence" data-coco-state="ready" aria-live="polite">
+        <span class="coco-header-state-dot" aria-hidden="true"></span>
+        <span class="coco-header-state-label" id="cocoHeaderStateLabel">Ready</span>
+      </div>
+      <button type="button" class="logout-btn oc-header-logout-btn hidden" id="ocHeaderLogoutBtn" aria-label="Déconnexion" title="Déconnexion">Déconnexion</button>
     </div>
     <button type="button" class="logout-btn oc-guest-auth-header-btn oc-settings-only-clean hidden" id="ocGuestAuthBtn" aria-label="Connexion ou inscription">Connexion</button>
     <div class="header-right oc-header-actions-legacy">
@@ -4379,6 +4415,7 @@ const dom = {
   sysLang: document.getElementById('sysLang'),
   sysUser: document.getElementById('sysUser'),
   logoutBtn: document.getElementById('logoutBtn'),
+  headerLogoutBtn: document.getElementById('ocHeaderLogoutBtn'),
   continueGuest: document.getElementById('continueGuest'),
   uxToolbar: document.getElementById('uxToolbar'),
   toggleImportPanel: document.getElementById('toggleImportPanel'),
@@ -6017,6 +6054,12 @@ function ocSyncAuthHeaderButtons() {
     dom.logoutBtn.classList.remove('hidden');
     dom.logoutBtn.textContent = connected ? 'Déconnexion' : 'Connexion';
   }
+  if (dom.headerLogoutBtn) {
+    dom.headerLogoutBtn.textContent = 'Déconnexion';
+    dom.headerLogoutBtn.setAttribute('aria-label', 'Déconnexion');
+    dom.headerLogoutBtn.classList.toggle('oc-auth-logout-visible', connected);
+    dom.headerLogoutBtn.classList.toggle('hidden', !connected);
+  }
   ocSyncGuestAuthHeaderBtn();
 }
 
@@ -6049,6 +6092,7 @@ function ocSyncSysBarAfterChat(payload) {
     dom.ownerAccessStatus.textContent = '';
     dom.ownerAccessStatus.classList.remove('err');
     ocRenderSysAccessState();
+    ocSyncAuthHeaderButtons();
     return;
   }
 
@@ -6222,7 +6266,7 @@ async function doRegister() {
 }
 
 // ── Logout / Connexion header ───────────────────────
-dom.logoutBtn.addEventListener('click', async () => {
+async function ocHandleLogoutClick() {
   if (ocIsConnectedSession() || ocGetStoredJwt() || ocHasLocalOwnerToken()) {
     ocClearAuthSession();
     try {
@@ -6232,7 +6276,10 @@ dom.logoutBtn.addEventListener('click', async () => {
     return;
   }
   showAuthForLogin();
-});
+}
+
+dom.logoutBtn.addEventListener('click', ocHandleLogoutClick);
+dom.headerLogoutBtn?.addEventListener('click', ocHandleLogoutClick);
 
 function ocNormalizeApiDetail(detail) {
   if (Array.isArray(detail)) {
