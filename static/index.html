@@ -4336,7 +4336,11 @@ const OC_DEVICE = (() => {
 console.log('[OpenChawn] device:', OC_DEVICE);
 
 // ── State ───────────────────────────────────────────
-let token = sessionStorage.getItem('oc_token') || '';
+const OC_AUTH_TOKEN_KEY = 'oc_token';
+const OC_AUTH_USER_KEY = 'oc_user';
+const OC_OWNER_SESSION_VALID_KEY = 'oc_owner_session_valid';
+
+let token = '';
 let currentUser = null;
 let sending = false;
 let pendingImageAttachment = null;
@@ -4778,7 +4782,7 @@ let ocOwnerTokenRejected = false;
 function ocRefreshOwnerAccessSummary() {
   const el = dom.ownerAccessSummaryLine;
   if (!el) return;
-  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  const jwt = ocGetStoredJwt();
   el.classList.remove('err', 'pending');
   if (!isGuestMode || jwt) {
     el.textContent = '';
@@ -4809,7 +4813,7 @@ function ocRefreshOwnerAccessSummary() {
 function ocRenderSysAccessState() {
   if (!dom.sysMode || !dom.accessTierChip || !dom.sysProfile || !dom.sysUser) return;
 
-  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  const jwt = ocGetStoredJwt();
   const ownerLocal = ocHasLocalOwnerToken();
 
   dom.accessTierChip.classList.remove(
@@ -4823,7 +4827,9 @@ function ocRenderSysAccessState() {
   // ── Compte JWT : jamais réutiliser les labels owner invité du strip ──
   if (jwt) {
     try {
-      const u = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+      const u = JSON.parse(
+        sessionStorage.getItem(OC_AUTH_USER_KEY) || localStorage.getItem(OC_AUTH_USER_KEY) || 'null'
+      );
       dom.sysUser.textContent = (u && u.email) ? u.email : '---';
       dom.sysProfile.textContent = (u && u.business_type) ? u.business_type : '---';
     } catch (_) {
@@ -5914,6 +5920,106 @@ dom.btnDownloadResponse.addEventListener('click', downloadAssistantTxt);
 dom.btnCopyResponse.addEventListener('click', () => { copyAssistantPlain(); });
 
 // ── Auth helpers ─────────────────────────────────────
+function ocGetStoredJwt() {
+  return (token || sessionStorage.getItem(OC_AUTH_TOKEN_KEY) || localStorage.getItem(OC_AUTH_TOKEN_KEY) || '').trim();
+}
+
+function ocHydrateAuthFromStorage() {
+  token = ocGetStoredJwt();
+  if (token && !sessionStorage.getItem(OC_AUTH_TOKEN_KEY)) {
+    sessionStorage.setItem(OC_AUTH_TOKEN_KEY, token);
+  }
+  if (token && !localStorage.getItem(OC_AUTH_TOKEN_KEY)) {
+    localStorage.setItem(OC_AUTH_TOKEN_KEY, token);
+  }
+  let raw = sessionStorage.getItem(OC_AUTH_USER_KEY) || localStorage.getItem(OC_AUTH_USER_KEY) || '';
+  if (!raw) {
+    currentUser = null;
+    return;
+  }
+  try {
+    currentUser = JSON.parse(raw);
+    if (currentUser && !sessionStorage.getItem(OC_AUTH_USER_KEY)) {
+      sessionStorage.setItem(OC_AUTH_USER_KEY, raw);
+    }
+    if (currentUser && !localStorage.getItem(OC_AUTH_USER_KEY)) {
+      localStorage.setItem(OC_AUTH_USER_KEY, raw);
+    }
+  } catch (_) {
+    currentUser = null;
+  }
+}
+
+function ocPersistAuthSession(nextToken, user) {
+  token = (nextToken || '').trim();
+  currentUser = user && typeof user === 'object' ? user : null;
+  if (token) {
+    sessionStorage.setItem(OC_AUTH_TOKEN_KEY, token);
+    localStorage.setItem(OC_AUTH_TOKEN_KEY, token);
+  }
+  if (currentUser) {
+    const raw = JSON.stringify(currentUser);
+    sessionStorage.setItem(OC_AUTH_USER_KEY, raw);
+    localStorage.setItem(OC_AUTH_USER_KEY, raw);
+  }
+}
+
+function ocClearAuthSession() {
+  token = '';
+  currentUser = null;
+  isGuestMode = false;
+  ocLastOwnerValidated = false;
+  ocOwnerTokenRejected = false;
+  sessionStorage.removeItem(OC_AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(OC_AUTH_USER_KEY);
+  localStorage.removeItem(OC_AUTH_TOKEN_KEY);
+  localStorage.removeItem(OC_AUTH_USER_KEY);
+  localStorage.removeItem(OC_OWNER_SESSION_VALID_KEY);
+  localStorage.removeItem('oc_owner_token');
+}
+
+function ocDecodeJwtPayload(jwt) {
+  try {
+    const parts = String(jwt || '').split('.');
+    if (parts.length !== 3) return null;
+    let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (payload.length % 4) payload += '=';
+    return JSON.parse(atob(payload));
+  } catch (_) {
+    return null;
+  }
+}
+
+function ocJwtLooksValid(jwt) {
+  const probe = String(jwt || '').trim();
+  if (!probe) return false;
+  const payload = ocDecodeJwtPayload(probe);
+  if (!payload || !payload.sub) return false;
+  const exp = Number(payload.exp || 0);
+  if (exp && exp <= Math.floor(Date.now() / 1000)) return false;
+  return true;
+}
+
+function ocIsOwnerSessionActive() {
+  if (!ocHasLocalOwnerToken()) return false;
+  return localStorage.getItem(OC_OWNER_SESSION_VALID_KEY) === '1' || ocLastOwnerValidated === true;
+}
+
+function ocIsConnectedSession() {
+  if (ocIsAuthenticatedAccount()) return true;
+  if (ocHasLocalOwnerToken()) return true;
+  return false;
+}
+
+function ocSyncAuthHeaderButtons() {
+  const connected = ocIsConnectedSession();
+  if (dom.logoutBtn) {
+    dom.logoutBtn.classList.remove('hidden');
+    dom.logoutBtn.textContent = connected ? 'Déconnexion' : 'Connexion';
+  }
+  ocSyncGuestAuthHeaderBtn();
+}
+
 function ocHasLocalOwnerToken() {
   return !!(localStorage.getItem('oc_owner_token') || '').trim();
 }
@@ -5935,10 +6041,11 @@ function ocSyncSysBarAfterChat(payload) {
     return;
   }
   ocLastOwnerValidated = !!payload.owner_authenticated;
-  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  const jwt = ocGetStoredJwt();
 
   if (payload.owner_authenticated) {
     ocOwnerTokenRejected = false;
+    localStorage.setItem(OC_OWNER_SESSION_VALID_KEY, '1');
     dom.ownerAccessStatus.textContent = '';
     dom.ownerAccessStatus.classList.remove('err');
     ocRenderSysAccessState();
@@ -5961,7 +6068,7 @@ function ocSyncSysBarAfterChat(payload) {
 
 function authHeaders() {
   const h = { 'Content-Type': 'application/json' };
-  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
+  const jwt = ocGetStoredJwt();
   const ownerTok = (localStorage.getItem('oc_owner_token') || '').trim();
   if (jwt) {
     h['Authorization'] = 'Bearer ' + jwt;
@@ -6003,10 +6110,12 @@ async function apiFetch(path, opts = {}) {
   };
   let r = await run();
   if (r.status === 401) {
-    if (token) {
-      token = '';
-      sessionStorage.removeItem('oc_token');
-      sessionStorage.removeItem('oc_user');
+    if (ocGetStoredJwt()) {
+      ocClearAuthSession();
+    } else if (ocHasLocalOwnerToken()) {
+      localStorage.removeItem(OC_OWNER_SESSION_VALID_KEY);
+      ocLastOwnerValidated = false;
+      ocOwnerTokenRejected = true;
     } else {
       sessionStorage.removeItem('oc_guest_session');
     }
@@ -6014,6 +6123,7 @@ async function apiFetch(path, opts = {}) {
     r = await run();
   }
   if (r.status === 401) {
+    ocSyncAuthHeaderButtons();
     showAuthForLogin();
     throw new Error('Session expirée');
   }
@@ -6070,10 +6180,8 @@ async function doLogin() {
     const d = await r.json();
     if (!r.ok) throw new Error(Array.isArray(d.detail) ? d.detail.map(e => e.msg).join(', ') : d.detail || 'Erreur');
     token = d.token;
-    sessionStorage.setItem('oc_token', token);
+    ocPersistAuthSession(d.token, d.user);
     sessionStorage.removeItem('oc_guest_session');
-    sessionStorage.setItem('oc_user', JSON.stringify(d.user));
-    currentUser = d.user;
     enterChat();
   } catch (err) {
     dom.loginError.textContent = err.message;
@@ -6103,10 +6211,8 @@ async function doRegister() {
     const d = await r.json();
     if (!r.ok) throw new Error(Array.isArray(d.detail) ? d.detail.map(e => e.msg).join(', ') : d.detail || 'Erreur');
     token = d.token;
-    sessionStorage.setItem('oc_token', token);
+    ocPersistAuthSession(d.token, d.user);
     sessionStorage.removeItem('oc_guest_session');
-    sessionStorage.setItem('oc_user', JSON.stringify(d.user));
-    currentUser = d.user;
     enterChat();
   } catch (err) {
     dom.regError.textContent = err.message;
@@ -6117,18 +6223,15 @@ async function doRegister() {
 
 // ── Logout / Connexion header ───────────────────────
 dom.logoutBtn.addEventListener('click', async () => {
-  if (token) {
-    token = '';
-    currentUser = null;
-    sessionStorage.removeItem('oc_token');
-    sessionStorage.removeItem('oc_user');
+  if (ocIsConnectedSession() || ocGetStoredJwt() || ocHasLocalOwnerToken()) {
+    ocClearAuthSession();
     try {
-      await ensureGuestSession(false);
+      await ensureGuestSession(true);
     } catch (_) {}
     enterGuestChat();
-  } else {
-    showAuthForLogin();
+    return;
   }
+  showAuthForLogin();
 });
 
 function ocNormalizeApiDetail(detail) {
@@ -6157,7 +6260,7 @@ function ocSyncGuestAuthHeaderBtn() {
     document.documentElement.classList.contains('ux-chat-clean')
     && typeof ocChatCleanMobileComposer === 'function'
     && ocChatCleanMobileComposer();
-  const show = !!isGuestMode && mobileClean;
+  const show = !!isGuestMode && !ocIsConnectedSession() && mobileClean;
   btn.classList.toggle('oc-guest-auth-visible', show);
   btn.classList.toggle('hidden', !show);
 }
@@ -6247,7 +6350,6 @@ function showAuthForLogin() {
 
 // ── Enter chat (compte) ──────────────────────────────
 function enterChat() {
-  ocLastOwnerValidated = false;
   ocOwnerTokenRejected = false;
   isGuestMode = false;
   ocResetAuthKeyboardPadding();
@@ -6257,35 +6359,29 @@ function enterChat() {
   dom.sysBar.classList.remove('hidden');
   dom.ownerAccessWrap.classList.remove('hidden');
   ocRefreshOwnerTokenHint();
-  dom.logoutBtn.classList.remove('hidden');
-  dom.logoutBtn.textContent = 'Déconnexion';
   if (currentUser) {
     try {
-      sessionStorage.setItem('oc_user', JSON.stringify(currentUser));
+      ocPersistAuthSession(ocGetStoredJwt(), currentUser);
     } catch (_) {}
   }
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   ocApplySysBarDefaults();
   ocSyncChatCleanLayout();
-  ocSyncGuestAuthHeaderBtn();
+  ocSyncAuthHeaderButtons();
   ocSetCocoState('ready');
   dom.input.focus();
 }
 
 // ── Enter chat (invité) ──────────────────────────────
 function enterGuestChat() {
-  const jwt = (token || sessionStorage.getItem('oc_token') || '').trim();
-  if (jwt) {
-    try {
-      currentUser = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
-    } catch (_) {
-      currentUser = null;
-    }
+  const jwt = ocGetStoredJwt();
+  if (jwt && ocJwtLooksValid(jwt)) {
+    token = jwt;
+    if (!currentUser) ocHydrateAuthFromStorage();
     enterChat();
     return;
   }
 
-  ocLastOwnerValidated = false;
   isGuestMode = true;
   ocResetAuthKeyboardPadding();
   dom.authScreen.classList.add('hidden');
@@ -6294,12 +6390,15 @@ function enterGuestChat() {
   dom.sysBar.classList.remove('hidden');
   dom.ownerAccessWrap.classList.remove('hidden');
   ocRefreshOwnerTokenHint();
-  dom.logoutBtn.classList.remove('hidden');
-  dom.logoutBtn.textContent = 'Connexion';
+  if (ocHasLocalOwnerToken()) {
+    ocLastOwnerValidated = localStorage.getItem(OC_OWNER_SESSION_VALID_KEY) === '1';
+  } else {
+    ocLastOwnerValidated = false;
+  }
   document.getElementById('sysDevice').textContent = OC_DEVICE.label + (OC_DEVICE.pwa ? ' (PWA)' : '');
   ocApplySysBarDefaults();
   ocSyncChatCleanLayout();
-  ocSyncGuestAuthHeaderBtn();
+  ocSyncAuthHeaderButtons();
   ocSetCocoState('ready');
   dom.input.focus();
 }
@@ -6310,39 +6409,70 @@ document.getElementById('ocGuestAuthBtn')?.addEventListener('click', () => {
 
 // ── Auto-login si token valide ───────────────────────
 async function tryAutoLogin() {
-  if (!token) return false;
-  try {
-    const r = await fetch(API + '/history?limit=1', {
-      headers: { 'Authorization': 'Bearer ' + token },
-    });
-    if (!r.ok) throw new Error();
-    const d = await r.json();
+  ocHydrateAuthFromStorage();
+  const jwt = ocGetStoredJwt();
+  if (!jwt) return false;
+  if (!ocJwtLooksValid(jwt)) {
+    ocClearAuthSession();
+    return false;
+  }
+  token = jwt;
+  if (!currentUser) {
     try {
-      currentUser = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+      currentUser = JSON.parse(
+        sessionStorage.getItem(OC_AUTH_USER_KEY) || localStorage.getItem(OC_AUTH_USER_KEY) || 'null'
+      );
     } catch (_) {
       currentUser = null;
     }
-    if (!currentUser) {
-      currentUser = { email: String(d.user_id || 'compte'), business_type: 'default' };
-    }
-    enterChat();
-    return true;
+  }
+  try {
+    const r = await fetch(API + '/providers/status', {
+      headers: { Authorization: 'Bearer ' + jwt },
+    });
+    if (!r.ok) throw new Error('auth_probe_failed');
   } catch (_) {
-    token = '';
-    sessionStorage.removeItem('oc_token');
-    sessionStorage.removeItem('oc_user');
+    ocClearAuthSession();
     return false;
   }
+  if (!currentUser) {
+    const payload = ocDecodeJwtPayload(jwt) || {};
+    currentUser = {
+      email: String(payload.email || 'compte'),
+      display_name: String(payload.email || 'compte').split('@')[0],
+      business_type: 'default',
+    };
+    ocPersistAuthSession(jwt, currentUser);
+  }
+  enterChat();
+  return true;
+}
+
+async function tryRestoreOwnerSession() {
+  if (ocGetStoredJwt()) return false;
+  if (!ocHasLocalOwnerToken()) return false;
+  ocLastOwnerValidated = localStorage.getItem(OC_OWNER_SESSION_VALID_KEY) === '1';
+  enterGuestChat();
+  return true;
 }
 
 async function boot() {
-  // JWT valide → compte avant tout, pour ne jamais avoir isGuestMode=true avec strip COMPTE incohérent.
-  const jwtProbe = (token || sessionStorage.getItem('oc_token') || '').trim();
-  if (jwtProbe) {
+  ocHydrateAuthFromStorage();
+
+  const jwt = ocGetStoredJwt();
+  if (jwt) {
     const ok = await tryAutoLogin();
-    if (ok) {
-      return;
+    if (ok) return;
+  }
+
+  if (await tryRestoreOwnerSession()) {
+    try {
+      await ensureGuestSession(false);
+    } catch (e) {
+      console.warn('[OpenChawn] guest session init failed:', e?.message || e);
     }
+    ocInitAuthMobileKeyboardUi();
+    return;
   }
 
   enterGuestChat();
@@ -6350,8 +6480,6 @@ async function boot() {
   try {
     await ensureGuestSession(false);
   } catch (e) {
-    // On garde le chat ouvert même si la session guest
-    // n'a pas pu être créée immédiatement.
     console.warn('[OpenChawn] guest session init failed:', e?.message || e);
   }
   ocInitAuthMobileKeyboardUi();
@@ -6383,11 +6511,13 @@ dom.btnSaveOwnerToken.addEventListener('click', () => {
 
 dom.btnClearOwnerToken.addEventListener('click', () => {
   localStorage.removeItem('oc_owner_token');
+  localStorage.removeItem(OC_OWNER_SESSION_VALID_KEY);
   ocLastOwnerValidated = false;
   ocOwnerTokenRejected = false;
   dom.ownerTokenInput.value = '';
   ocRefreshOwnerTokenHint();
   ocApplySysBarDefaults();
+  ocSyncAuthHeaderButtons();
   dom.ownerAccessStatus.textContent = 'Jeton efface.';
   dom.ownerAccessStatus.classList.remove('err');
 });
@@ -6802,7 +6932,9 @@ var COCO_STATE_LABELS = { ready: 'Ready', thinking: 'Thinking', error: 'Error', 
 function ocGetCurrentUserRecord() {
   if (currentUser && typeof currentUser === 'object') return currentUser;
   try {
-    const u = JSON.parse(sessionStorage.getItem('oc_user') || 'null');
+    const u = JSON.parse(
+      sessionStorage.getItem(OC_AUTH_USER_KEY) || localStorage.getItem(OC_AUTH_USER_KEY) || 'null'
+    );
     return u && typeof u === 'object' ? u : null;
   } catch (_) {
     return null;
@@ -6825,14 +6957,19 @@ function ocGetCurrentUserDisplayName() {
 }
 
 function ocIsAuthenticatedAccount() {
-  return !!(token || sessionStorage.getItem('oc_token') || '').trim();
+  const jwt = ocGetStoredJwt();
+  return !!jwt && ocJwtLooksValid(jwt);
 }
 
 function ocGetCocoReadyStateLabel() {
-  if (!ocIsAuthenticatedAccount()) return 'Ready';
-  const name = ocGetCurrentUserDisplayName();
-  if (!name) return 'Ready';
-  return '\u25cf ' + name;
+  if (ocIsAuthenticatedAccount()) {
+    const name = ocGetCurrentUserDisplayName();
+    return name ? '\u25cf ' + name : 'Ready';
+  }
+  if (ocHasLocalOwnerToken()) {
+    return '\u25cf Owner';
+  }
+  return 'Ready';
 }
 
 function ocSetCocoState(state, label) {
