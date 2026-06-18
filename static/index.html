@@ -3650,6 +3650,161 @@ html.ux-chat-clean .welcome.hero-cockpit .hero-system-ready {
   display: none !important;
 }
 
+.oc-welcome-home {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.oc-welcome-home .oc-welcome-greeting {
+  margin: 0;
+  font-size: clamp(1.28rem, 4.6vw, 1.68rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+.oc-welcome-home .oc-welcome-subline {
+  margin: 0.4rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+}
+
+.oc-welcome-quick-actions {
+  display: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.oc-welcome-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-height: 4.1rem;
+  padding: 0.72rem 0.78rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-cyan);
+  background: color-mix(in srgb, var(--glass-strong) 88%, transparent);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 560;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.oc-welcome-card:hover {
+  border-color: color-mix(in srgb, var(--cyan) 42%, var(--border-cyan));
+  background: color-mix(in srgb, var(--cyan) 10%, var(--glass-strong));
+}
+
+.oc-welcome-card:active {
+  transform: scale(0.985);
+}
+
+html.oc-theme-night .oc-welcome-card {
+  background: rgba(12, 32, 48, 0.72);
+  border-color: rgba(66, 232, 255, 0.22);
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active {
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 0.85rem;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .oc-welcome-hero-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.85rem;
+  width: 100%;
+  max-width: min(100%, 28rem);
+  margin: 0 auto;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .oc-welcome-hero-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .oc-welcome-home {
+  display: block;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .oc-welcome-quick-actions {
+  display: grid;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .coco-companion-presence {
+  flex: 0 0 auto;
+  --coco-face-size: clamp(2.35rem, 11vw, 3rem);
+  gap: 0;
+  animation: ocWelcomeOrbPulse 4.8s ease-in-out infinite;
+}
+
+html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .coco-companion-presence .coco-state-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes ocWelcomeOrbPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(56, 221, 245, 0.22));
+    transform: scale(1.02);
+  }
+}
+
+html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .messages.oc-message-list {
+  padding-top: clamp(8px, 2vh, 16px);
+}
+
+html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty {
+  padding-top: clamp(16px, 4vh, 36px);
+}
+
+html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .oc-clean-hero {
+  padding: 0.35rem 12px 0;
+  gap: 0.65rem;
+}
+
+html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  html.ux-chat-clean .oc-header-status-cluster:has(.oc-auth-logout-visible) {
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.ux-chat-clean .welcome.hero-cockpit.oc-welcome-home-active .coco-companion-presence {
+    animation: none !important;
+  }
+}
+
 html.ux-chat-clean .oc-clean-subtitle {
   letter-spacing: 0.04em;
   text-transform: none;
@@ -3843,39 +3998,54 @@ html.ux-legacy .coco-companion-presence {
   <div class="oc-chat-shell oc-chat-empty" id="ocChatShell">
   <div class="messages oc-message-list" id="messages">
     <div class="welcome hero-cockpit oc-clean-hero coco-companion-hero" id="welcome">
-      <!-- COCO companion face layer -->
-      <div class="coco-companion-presence coco-state-ready" id="cocoCompanionPresence" data-coco-state="ready" aria-live="polite">
-        <div class="coco-face-frame" aria-hidden="true">
-          <div class="coco-face-inner">
-            <svg class="coco-face-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="COCO companion presence">
-              <defs>
-                <radialGradient id="cocoSkin" cx="50%" cy="40%" r="58%">
-                  <stop offset="0%" stop-color="#ffffff"/>
-                  <stop offset="42%" stop-color="#d4f4fc"/>
-                  <stop offset="100%" stop-color="rgba(56,221,245,0.18)"/>
-                </radialGradient>
-                <radialGradient id="cocoCheekL" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stop-color="rgba(56,221,245,0.14)"/>
-                  <stop offset="100%" stop-color="transparent"/>
-                </radialGradient>
-                <linearGradient id="cocoHalo" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="rgba(255,255,255,0.55)"/>
-                  <stop offset="100%" stop-color="rgba(56,221,245,0.08)"/>
-                </linearGradient>
-              </defs>
-              <ellipse cx="100" cy="112" rx="74" ry="86" fill="url(#cocoSkin)"/>
-              <ellipse cx="100" cy="118" rx="68" ry="78" fill="url(#cocoCheekL)" opacity="0.9"/>
-              <path d="M52 118 Q100 148 148 118" fill="none" stroke="rgba(6,37,54,0.08)" stroke-width="2" stroke-linecap="round"/>
-              <ellipse cx="78" cy="98" rx="14" ry="8" fill="rgba(6,37,54,0.07)"/>
-              <ellipse cx="122" cy="98" rx="14" ry="8" fill="rgba(6,37,54,0.07)"/>
-              <ellipse cx="80" cy="97" rx="5" ry="3.5" fill="rgba(6,37,54,0.14)"/>
-              <ellipse cx="120" cy="97" rx="5" ry="3.5" fill="rgba(6,37,54,0.14)"/>
-              <path d="M88 128 Q100 134 112 128" fill="none" stroke="rgba(6,37,54,0.1)" stroke-width="1.75" stroke-linecap="round"/>
-              <ellipse cx="100" cy="52" rx="82" ry="36" fill="url(#cocoHalo)" opacity="0.85"/>
-            </svg>
+      <div class="oc-welcome-hero-layout">
+        <div class="oc-welcome-hero-row">
+          <div class="coco-companion-presence coco-state-ready" id="cocoCompanionPresence" data-coco-state="ready" aria-live="polite">
+            <div class="coco-face-frame" aria-hidden="true">
+              <div class="coco-face-inner">
+                <svg class="coco-face-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="COCO companion presence">
+                  <defs>
+                    <radialGradient id="cocoSkin" cx="50%" cy="40%" r="58%">
+                      <stop offset="0%" stop-color="#ffffff"/>
+                      <stop offset="42%" stop-color="#d4f4fc"/>
+                      <stop offset="100%" stop-color="rgba(56,221,245,0.18)"/>
+                    </radialGradient>
+                    <radialGradient id="cocoCheekL" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stop-color="rgba(56,221,245,0.14)"/>
+                      <stop offset="100%" stop-color="transparent"/>
+                    </radialGradient>
+                    <linearGradient id="cocoHalo" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="rgba(255,255,255,0.55)"/>
+                      <stop offset="100%" stop-color="rgba(56,221,245,0.08)"/>
+                    </linearGradient>
+                  </defs>
+                  <ellipse cx="100" cy="112" rx="74" ry="86" fill="url(#cocoSkin)"/>
+                  <ellipse cx="100" cy="118" rx="68" ry="78" fill="url(#cocoCheekL)" opacity="0.9"/>
+                  <path d="M52 118 Q100 148 148 118" fill="none" stroke="rgba(6,37,54,0.08)" stroke-width="2" stroke-linecap="round"/>
+                  <ellipse cx="78" cy="98" rx="14" ry="8" fill="rgba(6,37,54,0.07)"/>
+                  <ellipse cx="122" cy="98" rx="14" ry="8" fill="rgba(6,37,54,0.07)"/>
+                  <ellipse cx="80" cy="97" rx="5" ry="3.5" fill="rgba(6,37,54,0.14)"/>
+                  <ellipse cx="120" cy="97" rx="5" ry="3.5" fill="rgba(6,37,54,0.14)"/>
+                  <path d="M88 128 Q100 134 112 128" fill="none" stroke="rgba(6,37,54,0.1)" stroke-width="1.75" stroke-linecap="round"/>
+                  <ellipse cx="100" cy="52" rx="82" ry="36" fill="url(#cocoHalo)" opacity="0.85"/>
+                </svg>
+              </div>
+            </div>
+            <span class="coco-state-label" id="cocoStateLabel">COCO</span>
+          </div>
+          <div class="oc-welcome-home" id="ocWelcomeHome" aria-hidden="true">
+            <div class="oc-welcome-home-copy">
+              <h2 class="oc-welcome-greeting" id="ocWelcomeGreeting">Bonjour</h2>
+              <p class="oc-welcome-subline" id="ocWelcomeSubline">Que souhaites-tu faire aujourd'hui ?</p>
+            </div>
           </div>
         </div>
-        <span class="coco-state-label" id="cocoStateLabel">Ready</span>
+        <div class="oc-welcome-quick-actions" id="ocWelcomeQuickActions" role="group" aria-label="Actions rapides" hidden>
+          <button type="button" class="oc-welcome-card" data-coco-prompt="Organise mes notes de cours">📚 Organiser mes notes</button>
+          <button type="button" class="oc-welcome-card" data-coco-action="open-affine-second-brain">🧠 Travailler avec AFFiNE</button>
+          <button type="button" class="oc-welcome-card" data-coco-prompt="Analyse cette image et résume ce que tu vois">📷 Analyser une image</button>
+          <button type="button" class="oc-welcome-card" data-coco-prompt="Aide-moi à réviser pour mon examen">🎓 Étudier / Réviser</button>
+        </div>
       </div>
       <div class="hero-emblem-wrap" aria-hidden="true">
         <div class="hero-ring"></div>
@@ -4452,6 +4622,7 @@ function ocSyncChatCleanLayout() {
   dom.chatShell.classList.toggle('oc-chat-empty', empty);
   dom.chatShell.classList.toggle('oc-chat-active', !empty);
   dom.inputArea.classList.toggle('oc-composer-sticky', !empty);
+  ocSyncWelcomeHome();
 }
 
 (function ocUxInitChatShell() {
@@ -7019,28 +7190,74 @@ function ocGetCocoReadyStateLabel() {
   return 'Ready';
 }
 
-function ocSetCocoState(state, label) {
-  var text;
-  if (state === 'ready') {
-    text = ocGetCocoReadyStateLabel();
-  } else {
-    text = label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
+function ocGetCocoCompanionStateLabel(state, label) {
+  if (state && state !== 'ready') {
+    return label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
   }
-  [document.getElementById('cocoCompanionPresence'), document.getElementById('cocoHeaderPresence')].forEach(function (el) {
+  return 'COCO';
+}
+
+function ocGetWelcomeDisplayName() {
+  const account = ocGetCurrentUserDisplayName();
+  if (account) return account;
+  if (ocHasLocalOwnerToken()) return 'Robert';
+  return '';
+}
+
+function ocShouldShowMobileWelcomeHome() {
+  if (OC_UX_LEGACY) return false;
+  if (!document.documentElement.classList.contains('ux-chat-clean')) return false;
+  if (typeof ocChatCleanMobileComposer !== 'function' || !ocChatCleanMobileComposer()) return false;
+  if (!dom.chatShell || !dom.chatShell.classList.contains('oc-chat-empty')) return false;
+  return ocIsConnectedSession();
+}
+
+function ocSyncWelcomeHome() {
+  const welcome = dom.welcome;
+  const home = document.getElementById('ocWelcomeHome');
+  const actions = document.getElementById('ocWelcomeQuickActions');
+  const greeting = document.getElementById('ocWelcomeGreeting');
+  const show = ocShouldShowMobileWelcomeHome();
+  if (dom.chatShell) dom.chatShell.classList.toggle('oc-welcome-home-shell', show);
+  if (welcome) welcome.classList.toggle('oc-welcome-home-active', show);
+  if (home) {
+    home.classList.toggle('oc-welcome-home-visible', show);
+    home.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+  if (actions) actions.hidden = !show;
+  if (greeting) {
+    const name = ocGetWelcomeDisplayName();
+    greeting.textContent = name ? 'Bonjour ' + name : 'Bonjour';
+  }
+}
+
+function ocSetCocoState(state, label) {
+  var headerText;
+  if (state === 'ready') {
+    headerText = ocGetCocoReadyStateLabel();
+  } else {
+    headerText = label || COCO_STATE_LABELS[state] || COCO_STATE_LABELS.ready;
+  }
+  var companionText = ocGetCocoCompanionStateLabel(state, label);
+  var headerEl = document.getElementById('cocoHeaderPresence');
+  var companionEl = document.getElementById('cocoCompanionPresence');
+  [headerEl, companionEl].forEach(function (el, idx) {
     if (!el) return;
+    var text = idx === 0 ? headerText : companionText;
     COCO_STATE_CLASSES.forEach(function (s) { el.classList.remove('coco-state-' + s); });
     if (state) el.classList.add('coco-state-' + state);
     el.setAttribute('data-coco-state', state || 'ready');
     var lab = el.querySelector('.coco-state-label, .coco-header-state-label');
     if (lab) {
       lab.textContent = text;
-      if (state === 'ready' && ocIsAuthenticatedAccount() && ocGetCurrentUserDisplayName()) {
+      if (idx === 0 && state === 'ready' && ocIsAuthenticatedAccount() && ocGetCurrentUserDisplayName()) {
         lab.setAttribute('title', 'Connecté : ' + ocGetCurrentUserDisplayName());
       } else {
         lab.removeAttribute('title');
       }
     }
   });
+  ocSyncWelcomeHome();
 }
 
 function ocMsgRoleLabel(role) {
@@ -8672,6 +8889,15 @@ document.getElementById('cocoPromptChips')?.addEventListener('click', function (
     return;
   }
   var prompt = chip.getAttribute('data-coco-prompt') || chip.textContent.trim();
+  if (!prompt) return;
+  ocRefillComposerPrompt(prompt);
+});
+
+document.getElementById('ocWelcomeQuickActions')?.addEventListener('click', function (e) {
+  var card = e.target.closest('.oc-welcome-card');
+  if (!card || card.disabled || !dom.input) return;
+  if (card.getAttribute('data-coco-action') === 'open-affine-second-brain') return;
+  var prompt = card.getAttribute('data-coco-prompt');
   if (!prompt) return;
   ocRefillComposerPrompt(prompt);
 });
