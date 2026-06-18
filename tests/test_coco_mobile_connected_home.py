@@ -74,10 +74,56 @@ def test_header_logout_and_composer_chips_preserved():
     assert 'id="inputArea"' in html
 
 
-def test_welcome_cards_wire_prompt_refill():
+def test_welcome_analyze_image_triggers_file_intake():
     html = _html()
-    marker = "document.getElementById('ocWelcomeQuickActions')?.addEventListener('click'"
-    assert marker in html
-    handler = html.split(marker)[1].split("// COCO v1.2 message actions")[0]
-    assert "ocRefillComposerPrompt(prompt)" in handler
-    assert "data-coco-prompt" in handler
+    cards = html.split('id="ocWelcomeQuickActions"')[1].split("</div>")[0]
+    assert 'data-coco-welcome-action="analyze-image"' in cards
+    assert "Analyse cette image et résume" not in cards
+
+    handler_fn = html.split("function ocHandleWelcomeQuickAction(card, ev)")[1].split("function ocShowCopyConfirmation")[0]
+    assert "welcomeAction === 'analyze-image'" in handler_fn
+    assert "ocTriggerFileIntakeFromWelcome(ev)" in handler_fn
+
+    trigger_fn = html.split("function ocTriggerFileIntakeFromWelcome(ev)")[1].split("function ocHandleWelcomeQuickAction")[0]
+    assert "getElementById('btnFileIntake')" in trigger_fn
+    assert "attachBtn.click()" in trigger_fn
+    assert "ocOpenFileIntakeActionSheet()" in trigger_fn
+
+
+def test_welcome_affine_launches_workflow_not_prompt():
+    html = _html()
+    cards = html.split('id="ocWelcomeQuickActions"')[1].split("</div>")[0]
+    assert 'data-coco-action="open-affine-second-brain"' in cards
+    assert "coco-second-brain-btn" in cards
+
+    handler_fn = html.split("function ocHandleWelcomeQuickAction(card, ev)")[1].split("function ocShowCopyConfirmation")[0]
+    assert "cocoAction === 'open-affine-second-brain'" in handler_fn
+    assert "ocOpenAffineSecondBrain(card)" in handler_fn
+    assert "Analyse cette image" not in handler_fn
+
+
+def test_welcome_notes_and_study_prefill_structured_prompts():
+    html = _html()
+    handler_fn = html.split("function ocHandleWelcomeQuickAction(card, ev)")[1].split("function ocShowCopyConfirmation")[0]
+    assert "Organise mes notes de cours : " in handler_fn
+    assert "Fais-moi une fiche de révision sur : " in handler_fn
+    assert "send(" not in handler_fn
+    assert "ocSubmit" not in handler_fn
+
+
+def test_welcome_cards_no_parasite_prompt_for_image():
+    html = _html()
+    cards = html.split('id="ocWelcomeQuickActions"')[1].split("</div>")[0]
+    assert 'data-coco-prompt="Analyse cette image' not in cards
+    assert 'data-coco-prompt="Aide-moi à réviser' not in cards
+    listener = html.split("document.getElementById('ocWelcomeQuickActions')?.addEventListener('click'")[1].split("// COCO v1.2 message actions")[0]
+    assert "ocHandleWelcomeQuickAction(card, e)" in listener
+
+
+def test_welcome_obsidian_affine_chips_still_present_for_mobile():
+    html = _html()
+    assert 'data-coco-action="open-obsidian-sync"' in html
+    assert 'data-coco-action="open-affine-second-brain"' in html
+    assert 'id="btnFileIntake"' in html
+    obsidian = html.split("function ocSyncObsidian")[1].split("document.addEventListener('click'")[0]
+    assert "obsidian" in obsidian.lower()
