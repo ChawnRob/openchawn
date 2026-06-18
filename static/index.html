@@ -5181,6 +5181,7 @@ function ocShouldAutoOpenMobileImageCrop(file, source) {
 }
 
 let ocCropperInstance = null;
+let ocCropperInitialDataKey = null;
 
 function ocDestroyCropper() {
   if (ocCropperInstance) {
@@ -5189,6 +5190,7 @@ function ocDestroyCropper() {
     } catch (_) {}
     ocCropperInstance = null;
   }
+  ocCropperInitialDataKey = null;
   const stage = document.getElementById('ocFileIntakeCropStage');
   const img = document.getElementById('ocFileIntakeCropImg');
   if (stage) stage.classList.remove('is-cropper-active', 'is-cropper-ready');
@@ -5198,12 +5200,19 @@ function ocDestroyCropper() {
   }
 }
 
+function ocCropperFinalizeInitialCrop(cropper) {
+  if (!cropper) return;
+  ocCropperMaximizeInitialCropBox(cropper);
+  ocCropperSnapshotBaseline(cropper);
+  document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
+}
+
 function ocCropperOptions() {
   return {
-    aspectRatio: 1,
+    aspectRatio: NaN,
     viewMode: 1,
     dragMode: 'move',
-    autoCropArea: 0.82,
+    autoCropArea: 1,
     movable: true,
     zoomable: true,
     zoomOnTouch: true,
@@ -5211,8 +5220,8 @@ function ocCropperOptions() {
     wheelZoomRatio: 0.08,
     rotatable: true,
     scalable: false,
-    cropBoxMovable: false,
-    cropBoxResizable: false,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
     toggleDragModeOnDblclick: false,
     guides: true,
     center: true,
@@ -5224,9 +5233,60 @@ function ocCropperOptions() {
     minContainerWidth: 180,
     minContainerHeight: 180,
     ready: function () {
-      document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
+      const cropper = this;
+      ocCropperFinalizeInitialCrop(cropper);
+      requestAnimationFrame(function () {
+        ocCropperFinalizeInitialCrop(cropper);
+        requestAnimationFrame(function () {
+          ocCropperFinalizeInitialCrop(cropper);
+        });
+      });
     },
   };
+}
+
+function ocCropperMaximizeInitialCropBox(cropper) {
+  if (!cropper) return;
+  const imageData = cropper.getImageData();
+  if (!imageData || !imageData.width || !imageData.height) return;
+  cropper.setCropBoxData({
+    left: imageData.left,
+    top: imageData.top,
+    width: imageData.width,
+    height: imageData.height,
+  });
+}
+
+function ocCropperDataKey(cropper) {
+  if (!cropper) return '';
+  const data = cropper.getData(true);
+  return [
+    Math.round(data.x || 0),
+    Math.round(data.y || 0),
+    Math.round(data.width || 0),
+    Math.round(data.height || 0),
+    data.rotate || 0,
+  ].join('|');
+}
+
+function ocCropperSnapshotBaseline(cropper) {
+  ocCropperInitialDataKey = ocCropperDataKey(cropper);
+}
+
+function ocCropperIsEffectivelyUnchanged(cropper) {
+  if (!cropper || !ocCropperInitialDataKey) return false;
+  return ocCropperDataKey(cropper) === ocCropperInitialDataKey;
+}
+
+function ocCropperExportAreaRatio(cropper) {
+  if (!cropper) return 0;
+  const data = cropper.getData(true);
+  const nw = data.naturalWidth || 0;
+  const nh = data.naturalHeight || 0;
+  const cw = data.width || 0;
+  const ch = data.height || 0;
+  if (!nw || !nh || !cw || !ch) return 0;
+  return (cw * ch) / (nw * nh);
 }
 
 function ocInitFileIntakeCropper(img, stage) {
@@ -5294,6 +5354,7 @@ function ocCropperRotate() {
 function ocCropperReset() {
   if (!ocCropperInstance) return;
   ocCropperInstance.reset();
+  ocCropperFinalizeInitialCrop(ocCropperInstance);
 }
 
 function ocShowFileIntakeError(msg) {
@@ -5537,10 +5598,19 @@ function ocCropImageCenterSquare(file) {
 }
 
 function ocCropImageFromCropper(file) {
-  if (!ocCropperInstance) return ocCropImageCenterSquare(file);
+  if (!ocCropperInstance) return Promise.resolve(file);
+  if (
+    ocCropperIsEffectivelyUnchanged(ocCropperInstance)
+    || ocCropperExportAreaRatio(ocCropperInstance) >= 0.9
+  ) {
+    return Promise.resolve(file);
+  }
+  const cropNatural = ocCropperInstance.getData(true);
   const canvas = ocCropperInstance.getCroppedCanvas({
-    maxWidth: 2048,
-    maxHeight: 2048,
+    width: Math.max(1, Math.round(cropNatural.width || 0)),
+    height: Math.max(1, Math.round(cropNatural.height || 0)),
+    maxWidth: 4096,
+    maxHeight: 4096,
     fillColor: '#000',
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high',
@@ -5648,7 +5718,7 @@ async function ocAttachImageToComposer(opts) {
     try {
       if (options.cropInteractive && ocCropperHasInstance()) {
         file = await ocCropImageFromCropper(file);
-        cropData = { mode: 'cropper_square' };
+        cropData = { mode: 'cropper_bounds' };
       } else {
         file = await ocCropImageCenterSquare(file);
         cropData = { mode: 'center_square' };
