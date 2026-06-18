@@ -4041,10 +4041,10 @@ html.ux-legacy .coco-companion-presence {
           </div>
         </div>
         <div class="oc-welcome-quick-actions" id="ocWelcomeQuickActions" role="group" aria-label="Actions rapides" hidden>
-          <button type="button" class="oc-welcome-card" data-coco-prompt="Organise mes notes de cours">📚 Organiser mes notes</button>
-          <button type="button" class="oc-welcome-card" data-coco-action="open-affine-second-brain">🧠 Travailler avec AFFiNE</button>
-          <button type="button" class="oc-welcome-card" data-coco-prompt="Analyse cette image et résume ce que tu vois">📷 Analyser une image</button>
-          <button type="button" class="oc-welcome-card" data-coco-prompt="Aide-moi à réviser pour mon examen">🎓 Étudier / Réviser</button>
+          <button type="button" class="oc-welcome-card" data-coco-welcome-action="organize-notes">📚 Organiser mes notes</button>
+          <button type="button" class="oc-welcome-card coco-second-brain-btn" data-coco-action="open-affine-second-brain">🧠 Travailler avec AFFiNE</button>
+          <button type="button" class="oc-welcome-card" data-coco-welcome-action="analyze-image">📷 Analyser une image</button>
+          <button type="button" class="oc-welcome-card" data-coco-welcome-action="study-revise">🎓 Étudier / Réviser</button>
         </div>
       </div>
       <div class="hero-emblem-wrap" aria-hidden="true">
@@ -7430,6 +7430,52 @@ function ocRefillComposerPrompt(text) {
   return true;
 }
 
+function ocTriggerFileIntakeFromWelcome(ev) {
+  if (ev) {
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopPropagation();
+  }
+  var attachBtn = document.getElementById('btnFileIntake');
+  if (attachBtn) {
+    attachBtn.click();
+    return;
+  }
+  if (typeof ocFileIntakeIsMobileComposer === 'function' && ocFileIntakeIsMobileComposer()) {
+    ocOpenFileIntakeActionSheet();
+    return;
+  }
+  ocPickFileIntakeSource('file');
+}
+
+function ocHandleWelcomeQuickAction(card, ev) {
+  if (!card || card.disabled) return;
+  var welcomeAction = card.getAttribute('data-coco-welcome-action') || '';
+  var cocoAction = card.getAttribute('data-coco-action') || '';
+
+  if (welcomeAction === 'analyze-image' || cocoAction === 'open-file-intake') {
+    ocTriggerFileIntakeFromWelcome(ev);
+    return;
+  }
+  if (cocoAction === 'open-affine-second-brain') {
+    if (ev) {
+      if (ev.cancelable) ev.preventDefault();
+      ev.stopPropagation();
+    }
+    ocOpenAffineSecondBrain(card);
+    return;
+  }
+  if (welcomeAction === 'organize-notes') {
+    ocRefillComposerPrompt('Organise mes notes de cours : ');
+    return;
+  }
+  if (welcomeAction === 'study-revise') {
+    ocRefillComposerPrompt('Fais-moi une fiche de révision sur : ');
+    return;
+  }
+  var prompt = card.getAttribute('data-coco-prompt');
+  if (prompt) ocRefillComposerPrompt(prompt);
+}
+
 function ocShowCopyConfirmation(btn, ok) {
   if (!btn) return;
   var prev = btn.textContent;
@@ -8965,11 +9011,8 @@ document.getElementById('cocoPromptChips')?.addEventListener('click', function (
 
 document.getElementById('ocWelcomeQuickActions')?.addEventListener('click', function (e) {
   var card = e.target.closest('.oc-welcome-card');
-  if (!card || card.disabled || !dom.input) return;
-  if (card.getAttribute('data-coco-action') === 'open-affine-second-brain') return;
-  var prompt = card.getAttribute('data-coco-prompt');
-  if (!prompt) return;
-  ocRefillComposerPrompt(prompt);
+  if (!card) return;
+  ocHandleWelcomeQuickAction(card, e);
 });
 
 // COCO v1.2 message actions — event delegation on #messages only
