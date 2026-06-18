@@ -42,13 +42,13 @@ def test_enter_chat_and_guest_chat_refresh_coco_ready_label():
 def test_user_record_from_session_storage():
     html = _html()
     fn = html.split("function ocGetCurrentUserRecord()")[1].split("function ocGetCurrentUserDisplayName")[0]
-    assert "sessionStorage.getItem('oc_user')" in fn
+    assert "OC_AUTH_USER_KEY" in fn
+    assert "localStorage.getItem(OC_AUTH_USER_KEY)" in fn
     assert "currentUser" in fn
 
 
 def test_login_stores_user_before_enter_chat():
     html = _html()
     login = html.split("async function doLogin()")[1].split("// ── Register")[0]
-    assert "sessionStorage.setItem('oc_user'" in login
-    assert "currentUser = d.user" in login
+    assert "ocPersistAuthSession" in login
     assert "enterChat()" in login
