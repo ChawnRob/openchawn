@@ -18,8 +18,8 @@ def test_cropper_defaults_maximize_visible_image():
     assert "autoCropArea: 1" in opts
     assert "viewMode: 1" in opts
     assert "cropBoxResizable: true" in opts
-    assert "ocCropperMaximizeInitialCropBox(this)" in opts
-    assert "ocCropperSnapshotBaseline(this)" in opts
+    assert "ocCropperMaximizeInitialCropBox(this)" in opts or "ocCropperFinalizeInitialCrop(cropper)" in opts
+    assert "ocCropperSnapshotBaseline" in opts or "ocCropperFinalizeInitialCrop" in opts
 
 
 def test_validate_without_edit_preserves_original_image():
@@ -41,8 +41,7 @@ def test_export_area_ratio_helper_exists():
 def test_crop_reset_restores_full_image_box():
     html = _html()
     reset = html.split("function ocCropperReset()")[1].split("function ocShowFileIntakeError")[0]
-    assert "ocCropperMaximizeInitialCropBox(ocCropperInstance)" in reset
-    assert "ocCropperSnapshotBaseline(ocCropperInstance)" in reset
+    assert "ocCropperFinalizeInitialCrop(ocCropperInstance)" in reset
 
 
 def test_regression_no_aggressive_square_auto_crop():

@@ -5200,6 +5200,13 @@ function ocDestroyCropper() {
   }
 }
 
+function ocCropperFinalizeInitialCrop(cropper) {
+  if (!cropper) return;
+  ocCropperMaximizeInitialCropBox(cropper);
+  ocCropperSnapshotBaseline(cropper);
+  document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
+}
+
 function ocCropperOptions() {
   return {
     aspectRatio: NaN,
@@ -5226,9 +5233,14 @@ function ocCropperOptions() {
     minContainerWidth: 180,
     minContainerHeight: 180,
     ready: function () {
-      ocCropperMaximizeInitialCropBox(this);
-      ocCropperSnapshotBaseline(this);
-      document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
+      const cropper = this;
+      ocCropperFinalizeInitialCrop(cropper);
+      requestAnimationFrame(function () {
+        ocCropperFinalizeInitialCrop(cropper);
+        requestAnimationFrame(function () {
+          ocCropperFinalizeInitialCrop(cropper);
+        });
+      });
     },
   };
 }
@@ -5342,8 +5354,7 @@ function ocCropperRotate() {
 function ocCropperReset() {
   if (!ocCropperInstance) return;
   ocCropperInstance.reset();
-  ocCropperMaximizeInitialCropBox(ocCropperInstance);
-  ocCropperSnapshotBaseline(ocCropperInstance);
+  ocCropperFinalizeInitialCrop(ocCropperInstance);
 }
 
 function ocShowFileIntakeError(msg) {
