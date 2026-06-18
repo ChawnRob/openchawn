@@ -23,12 +23,13 @@ def test_oc_get_current_user_display_name_helper():
 def test_coco_ready_label_guest_vs_authenticated():
     html = _html()
     assert "function ocGetCocoReadyStateLabel()" in html
-    fn = html.split("function ocGetCocoReadyStateLabel()")[1].split("function ocSetCocoState")[0]
+    fn = html.split("function ocGetCocoReadyStateLabel()")[1].split("function ocGetCocoCompanionStateLabel")[0]
     assert "return 'Ready'" in fn
     assert "\\u25cf" in fn or "●" in fn
     set_fn = html.split("function ocSetCocoState(state, label)")[1].split("function ocMsgRoleLabel")[0]
     assert "state === 'ready'" in set_fn
     assert "ocGetCocoReadyStateLabel()" in set_fn
+    assert "ocGetCocoCompanionStateLabel(state, label)" in set_fn
 
 
 def test_enter_chat_and_guest_chat_refresh_coco_ready_label():
