@@ -4054,10 +4054,10 @@ html.ux-legacy .coco-companion-presence {
           </div>
         </div>
         <div class="oc-welcome-quick-actions" id="ocWelcomeQuickActions" role="group" aria-label="Actions rapides" hidden>
-          <button type="button" class="oc-welcome-card" data-coco-prompt="Organise mes notes de cours">📚 Organiser mes notes</button>
-          <button type="button" class="oc-welcome-card" data-coco-action="open-affine-second-brain">🧠 Travailler avec AFFiNE</button>
-          <button type="button" class="oc-welcome-card" data-coco-prompt="Analyse cette image et résume ce que tu vois">📷 Analyser une image</button>
-          <button type="button" class="oc-welcome-card" data-coco-prompt="Aide-moi à réviser pour mon examen">🎓 Étudier / Réviser</button>
+          <button type="button" class="oc-welcome-card" data-coco-welcome-action="organize-notes">📚 Organiser mes notes</button>
+          <button type="button" class="oc-welcome-card coco-second-brain-btn" data-coco-action="open-affine-second-brain">🧠 Travailler avec AFFiNE</button>
+          <button type="button" class="oc-welcome-card" data-coco-welcome-action="analyze-image">📷 Analyser une image</button>
+          <button type="button" class="oc-welcome-card" data-coco-welcome-action="study-revise">🎓 Étudier / Réviser</button>
         </div>
       </div>
       <div class="hero-emblem-wrap" aria-hidden="true">
@@ -5198,6 +5198,7 @@ function ocShouldAutoOpenMobileImageCrop(file, source) {
 }
 
 let ocCropperInstance = null;
+let ocCropperInitialDataKey = null;
 
 function ocDestroyCropper() {
   if (ocCropperInstance) {
@@ -5206,6 +5207,7 @@ function ocDestroyCropper() {
     } catch (_) {}
     ocCropperInstance = null;
   }
+  ocCropperInitialDataKey = null;
   const stage = document.getElementById('ocFileIntakeCropStage');
   const img = document.getElementById('ocFileIntakeCropImg');
   if (stage) stage.classList.remove('is-cropper-active', 'is-cropper-ready');
@@ -5215,12 +5217,19 @@ function ocDestroyCropper() {
   }
 }
 
+function ocCropperFinalizeInitialCrop(cropper) {
+  if (!cropper) return;
+  ocCropperMaximizeInitialCropBox(cropper);
+  ocCropperSnapshotBaseline(cropper);
+  document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
+}
+
 function ocCropperOptions() {
   return {
-    aspectRatio: 1,
+    aspectRatio: NaN,
     viewMode: 1,
     dragMode: 'move',
-    autoCropArea: 0.82,
+    autoCropArea: 1,
     movable: true,
     zoomable: true,
     zoomOnTouch: true,
@@ -5228,8 +5237,8 @@ function ocCropperOptions() {
     wheelZoomRatio: 0.08,
     rotatable: true,
     scalable: false,
-    cropBoxMovable: false,
-    cropBoxResizable: false,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
     toggleDragModeOnDblclick: false,
     guides: true,
     center: true,
@@ -5241,9 +5250,60 @@ function ocCropperOptions() {
     minContainerWidth: 180,
     minContainerHeight: 180,
     ready: function () {
-      document.getElementById('ocFileIntakeCropStage')?.classList.add('is-cropper-ready');
+      const cropper = this;
+      ocCropperFinalizeInitialCrop(cropper);
+      requestAnimationFrame(function () {
+        ocCropperFinalizeInitialCrop(cropper);
+        requestAnimationFrame(function () {
+          ocCropperFinalizeInitialCrop(cropper);
+        });
+      });
     },
   };
+}
+
+function ocCropperMaximizeInitialCropBox(cropper) {
+  if (!cropper) return;
+  const imageData = cropper.getImageData();
+  if (!imageData || !imageData.width || !imageData.height) return;
+  cropper.setCropBoxData({
+    left: imageData.left,
+    top: imageData.top,
+    width: imageData.width,
+    height: imageData.height,
+  });
+}
+
+function ocCropperDataKey(cropper) {
+  if (!cropper) return '';
+  const data = cropper.getData(true);
+  return [
+    Math.round(data.x || 0),
+    Math.round(data.y || 0),
+    Math.round(data.width || 0),
+    Math.round(data.height || 0),
+    data.rotate || 0,
+  ].join('|');
+}
+
+function ocCropperSnapshotBaseline(cropper) {
+  ocCropperInitialDataKey = ocCropperDataKey(cropper);
+}
+
+function ocCropperIsEffectivelyUnchanged(cropper) {
+  if (!cropper || !ocCropperInitialDataKey) return false;
+  return ocCropperDataKey(cropper) === ocCropperInitialDataKey;
+}
+
+function ocCropperExportAreaRatio(cropper) {
+  if (!cropper) return 0;
+  const data = cropper.getData(true);
+  const nw = data.naturalWidth || 0;
+  const nh = data.naturalHeight || 0;
+  const cw = data.width || 0;
+  const ch = data.height || 0;
+  if (!nw || !nh || !cw || !ch) return 0;
+  return (cw * ch) / (nw * nh);
 }
 
 function ocInitFileIntakeCropper(img, stage) {
@@ -5311,6 +5371,7 @@ function ocCropperRotate() {
 function ocCropperReset() {
   if (!ocCropperInstance) return;
   ocCropperInstance.reset();
+  ocCropperFinalizeInitialCrop(ocCropperInstance);
 }
 
 function ocShowFileIntakeError(msg) {
@@ -5554,10 +5615,19 @@ function ocCropImageCenterSquare(file) {
 }
 
 function ocCropImageFromCropper(file) {
-  if (!ocCropperInstance) return ocCropImageCenterSquare(file);
+  if (!ocCropperInstance) return Promise.resolve(file);
+  if (
+    ocCropperIsEffectivelyUnchanged(ocCropperInstance)
+    || ocCropperExportAreaRatio(ocCropperInstance) >= 0.9
+  ) {
+    return Promise.resolve(file);
+  }
+  const cropNatural = ocCropperInstance.getData(true);
   const canvas = ocCropperInstance.getCroppedCanvas({
-    maxWidth: 2048,
-    maxHeight: 2048,
+    width: Math.max(1, Math.round(cropNatural.width || 0)),
+    height: Math.max(1, Math.round(cropNatural.height || 0)),
+    maxWidth: 4096,
+    maxHeight: 4096,
     fillColor: '#000',
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high',
@@ -5665,7 +5735,7 @@ async function ocAttachImageToComposer(opts) {
     try {
       if (options.cropInteractive && ocCropperHasInstance()) {
         file = await ocCropImageFromCropper(file);
-        cropData = { mode: 'cropper_square' };
+        cropData = { mode: 'cropper_bounds' };
       } else {
         file = await ocCropImageCenterSquare(file);
         cropData = { mode: 'center_square' };
@@ -7383,6 +7453,52 @@ function ocRefillComposerPrompt(text) {
   return true;
 }
 
+function ocTriggerFileIntakeFromWelcome(ev) {
+  if (ev) {
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopPropagation();
+  }
+  var attachBtn = document.getElementById('btnFileIntake');
+  if (attachBtn) {
+    attachBtn.click();
+    return;
+  }
+  if (typeof ocFileIntakeIsMobileComposer === 'function' && ocFileIntakeIsMobileComposer()) {
+    ocOpenFileIntakeActionSheet();
+    return;
+  }
+  ocPickFileIntakeSource('file');
+}
+
+function ocHandleWelcomeQuickAction(card, ev) {
+  if (!card || card.disabled) return;
+  var welcomeAction = card.getAttribute('data-coco-welcome-action') || '';
+  var cocoAction = card.getAttribute('data-coco-action') || '';
+
+  if (welcomeAction === 'analyze-image' || cocoAction === 'open-file-intake') {
+    ocTriggerFileIntakeFromWelcome(ev);
+    return;
+  }
+  if (cocoAction === 'open-affine-second-brain') {
+    if (ev) {
+      if (ev.cancelable) ev.preventDefault();
+      ev.stopPropagation();
+    }
+    ocOpenAffineSecondBrain(card);
+    return;
+  }
+  if (welcomeAction === 'organize-notes') {
+    ocRefillComposerPrompt('Organise mes notes de cours : ');
+    return;
+  }
+  if (welcomeAction === 'study-revise') {
+    ocRefillComposerPrompt('Fais-moi une fiche de révision sur : ');
+    return;
+  }
+  var prompt = card.getAttribute('data-coco-prompt');
+  if (prompt) ocRefillComposerPrompt(prompt);
+}
+
 function ocShowCopyConfirmation(btn, ok) {
   if (!btn) return;
   var prev = btn.textContent;
@@ -8918,11 +9034,8 @@ document.getElementById('cocoPromptChips')?.addEventListener('click', function (
 
 document.getElementById('ocWelcomeQuickActions')?.addEventListener('click', function (e) {
   var card = e.target.closest('.oc-welcome-card');
-  if (!card || card.disabled || !dom.input) return;
-  if (card.getAttribute('data-coco-action') === 'open-affine-second-brain') return;
-  var prompt = card.getAttribute('data-coco-prompt');
-  if (!prompt) return;
-  ocRefillComposerPrompt(prompt);
+  if (!card) return;
+  ocHandleWelcomeQuickAction(card, e);
 });
 
 // COCO v1.2 message actions — event delegation on #messages only
