@@ -3789,12 +3789,25 @@ html.ux-chat-clean.oc-session-connected .welcome.hero-cockpit .coco-companion-pr
   }
 }
 
-html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .messages.oc-message-list {
-  padding-top: clamp(8px, 2vh, 16px);
+html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty {
+  justify-content: flex-start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
-html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty {
-  padding-top: clamp(16px, 4vh, 36px);
+html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .messages.oc-message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  padding-top: clamp(8px, 2vh, 16px);
+  padding-bottom: 8px;
 }
 
 html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .oc-clean-hero {
@@ -3803,7 +3816,19 @@ html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .oc-clean-
 }
 
 html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
-  margin-top: 0.5rem;
+  margin-top: 0 !important;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  z-index: 2;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 640px) {
+  html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
+    margin-top: 0 !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -7470,6 +7495,38 @@ function ocTriggerFileIntakeFromWelcome(ev) {
   ocPickFileIntakeSource('file');
 }
 
+async function ocStartKnowledgeOrganizerWorkflow(userText) {
+  var text = String(userText || 'Organise mes notes de cours').trim();
+  if (!text) return;
+  addMsg('user', text);
+  ocSyncChatCleanLayout();
+  scrollDown();
+  await ocHandleKnowledgeOrganizerIntent(text);
+  ocSetCocoState('ready', 'Ready');
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
+
+async function ocStartStudyOrganizerWorkflow(userText) {
+  var text = String(userText || 'Fais-moi une fiche de révision').trim();
+  if (!text) return;
+  addMsg('user', text);
+  ocSyncChatCleanLayout();
+  scrollDown();
+  await ocHandleKnowledgeOrganizerIntent(text);
+  ocSetCocoState('ready', 'Ready');
+  ocSyncChatCleanLayout();
+  scrollDown();
+}
+
+function ocStartKnowledgeOrganizer(userText) {
+  return ocStartKnowledgeOrganizerWorkflow(userText);
+}
+
+function ocStartStudyMode(userText) {
+  return ocStartStudyOrganizerWorkflow(userText);
+}
+
 function ocHandleWelcomeQuickAction(card, ev) {
   if (!card || card.disabled) return;
   var welcomeAction = card.getAttribute('data-coco-welcome-action') || '';
@@ -7488,15 +7545,21 @@ function ocHandleWelcomeQuickAction(card, ev) {
     return;
   }
   if (welcomeAction === 'organize-notes') {
-    ocRefillComposerPrompt('Organise mes notes de cours : ');
+    if (ev) {
+      if (ev.cancelable) ev.preventDefault();
+      ev.stopPropagation();
+    }
+    ocStartKnowledgeOrganizer('Organise mes notes de cours');
     return;
   }
   if (welcomeAction === 'study-revise') {
-    ocRefillComposerPrompt('Fais-moi une fiche de révision sur : ');
+    if (ev) {
+      if (ev.cancelable) ev.preventDefault();
+      ev.stopPropagation();
+    }
+    ocStartStudyMode('Fais-moi une fiche de révision');
     return;
   }
-  var prompt = card.getAttribute('data-coco-prompt');
-  if (prompt) ocRefillComposerPrompt(prompt);
 }
 
 function ocShowCopyConfirmation(btn, ok) {

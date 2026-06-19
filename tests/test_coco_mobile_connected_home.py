@@ -128,20 +128,51 @@ def test_welcome_affine_launches_workflow_not_prompt():
     assert "Analyse cette image" not in handler_fn
 
 
-def test_welcome_notes_and_study_prefill_structured_prompts():
+def test_welcome_notes_and_study_launch_organizer_workflows():
     html = _html()
     handler_fn = html.split("function ocHandleWelcomeQuickAction(card, ev)")[1].split("function ocShowCopyConfirmation")[0]
-    assert "Organise mes notes de cours : " in handler_fn
-    assert "Fais-moi une fiche de révision sur : " in handler_fn
-    assert "send(" not in handler_fn
-    assert "ocSubmit" not in handler_fn
+    assert "ocStartKnowledgeOrganizer('Organise mes notes de cours')" in handler_fn
+    assert "ocStartStudyMode('Fais-moi une fiche de révision')" in handler_fn
+    assert "ocRefillComposerPrompt" not in handler_fn
+
+    ko_fn = html.split("function ocStartKnowledgeOrganizer(userText)")[1].split("function ocStartStudyMode")[0]
+    assert "ocStartKnowledgeOrganizerWorkflow(userText)" in ko_fn
+    study_fn = html.split("function ocStartStudyMode(userText)")[1].split("function ocHandleWelcomeQuickAction")[0]
+    assert "ocStartStudyOrganizerWorkflow(userText)" in study_fn
+
+    workflow = html.split("async function ocStartKnowledgeOrganizerWorkflow(userText)")[1].split(
+        "async function ocStartStudyOrganizerWorkflow"
+    )[0]
+    assert "ocHandleKnowledgeOrganizerIntent(text)" in workflow
+    assert "addMsg('user', text)" in workflow
+    assert "ocRefillComposerPrompt" not in workflow
 
 
-def test_welcome_cards_no_parasite_prompt_for_image():
+def test_welcome_home_composer_docked_at_bottom():
+    html = _html()
+    block = html.split("html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty {")[1].split("}")[0]
+    assert "justify-content: flex-start" in block
+    assert "flex: 1" in block
+
+    messages = html.split(
+        "html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .messages.oc-message-list"
+    )[1].split("}")[0]
+    assert "overflow-y: auto" in messages
+    assert "flex: 1 1 auto" in messages
+
+    composer = html.split(
+        "html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered"
+    )[1].split("}")[0]
+    assert "margin-top: 0 !important" in composer
+    assert "flex-shrink: 0" in composer
+
+
+def test_welcome_cards_no_parasite_prompt_in_composer():
     html = _html()
     cards = html.split('id="ocWelcomeQuickActions"')[1].split("</div>")[0]
-    assert 'data-coco-prompt="Analyse cette image' not in cards
-    assert 'data-coco-prompt="Aide-moi à réviser' not in cards
+    assert 'data-coco-prompt=' not in cards
+    handler_fn = html.split("function ocHandleWelcomeQuickAction(card, ev)")[1].split("function ocShowCopyConfirmation")[0]
+    assert "ocRefillComposerPrompt" not in handler_fn
     listener = html.split("document.getElementById('ocWelcomeQuickActions')?.addEventListener('click'")[1].split("// COCO v1.2 message actions")[0]
     assert "ocHandleWelcomeQuickAction(card, e)" in listener
 
