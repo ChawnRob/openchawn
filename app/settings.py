@@ -174,6 +174,11 @@ class Settings:
     perplexity_model: str
     perplexity_base_url: str
 
+    web_search_enabled: bool
+    web_search_provider: str
+    web_search_max_results: int
+    tavily_api_key: str
+
     # Legacy / compat
     openrouter_api_key: str
     openrouter_base_url: str
@@ -327,6 +332,10 @@ def _build_settings() -> Settings:
         perplexity_base_url=_str("PERPLEXITY_BASE_URL", default="https://api.perplexity.ai").rstrip(
             "/"
         ),
+        web_search_enabled=_bool("WEB_SEARCH_ENABLED", default=False),
+        web_search_provider=_str("WEB_SEARCH_PROVIDER", default="perplexity").strip().lower(),
+        web_search_max_results=_int("WEB_SEARCH_MAX_RESULTS", 5),
+        tavily_api_key=_str("TAVILY_API_KEY", default=""),
         openrouter_api_key=_str(*OPENROUTER_KEY_ENV_ALIASES, default=""),
         openrouter_base_url=_str(
             "OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1"

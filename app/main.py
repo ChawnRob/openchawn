@@ -61,6 +61,7 @@ from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, globa
 from app.api.chat import router as chat_router
 from app.api.files_intake import router as files_intake_router
 from app.api.obsidian import router as obsidian_router
+from app.api.tools import router as tools_router
 
 
 logging.basicConfig(
@@ -100,6 +101,7 @@ init_db()
 app.include_router(chat_router)
 app.include_router(files_intake_router)
 app.include_router(obsidian_router)
+app.include_router(tools_router)
 
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")

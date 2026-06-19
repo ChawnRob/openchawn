@@ -38,6 +38,13 @@ from app.files_intake.session_image_context import (
     message_references_recent_image,
     session_key_from_user,
 )
+from app.tools.web_search import (
+    WEB_SEARCH_RUNTIME_INSTRUCTION,
+    format_web_search_results_block,
+    is_web_search_runtime_enabled,
+    web_search_sync,
+)
+from app.tools.web_search_intent import detect_web_search_intent, extract_web_search_query
 from app.llm import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
@@ -237,12 +244,28 @@ def assemble_chat_generation_inputs(
     if extra_parts:
         final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
 
+    web_search_used = False
+    web_search_result_count = 0
+    if detect_web_search_intent(req.message) and is_web_search_runtime_enabled():
+        web_search_used = True
+        query = extract_web_search_query(req.message)
+        try:
+            hits = web_search_sync(query)
+        except Exception:
+            logger.warning("web_search runtime failed", exc_info=True)
+            hits = []
+        web_search_result_count = len(hits)
+        block = format_web_search_results_block(hits)
+        final_prompt = f"{block}\n\n{final_prompt}"
+
     layered_user_message = f"{lang_instruction}\n\n{final_prompt}"
 
     base_system = build_openchawn_base_system_prompt()
     runtime_rules = build_runtime_rules_prompt()
     if runtime_rules:
         base_system = f"{base_system}\n\nRuntimeRules:\n{runtime_rules}"
+    if web_search_used:
+        base_system = f"{base_system}\n\n{WEB_SEARCH_RUNTIME_INSTRUCTION}"
 
     system_prompt = f"{profile_prompt}\n\n{base_system}" if profile_prompt else base_system
 
@@ -288,6 +311,8 @@ def assemble_chat_generation_inputs(
         "system_core_contains_forced_french": bool(prompt_contains_forced_french(base_system)),
         "provider_prompt_contains_forced_french": provider_prompt_contains_forced_french,
         "image_context_injected": image_context_injected,
+        "web_search_used": web_search_used,
+        "web_search_result_count": web_search_result_count,
     }
 
 
