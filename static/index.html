@@ -929,6 +929,64 @@ html.ux-chat-clean .oc-chat-shell {
   min-height: 0;
 }
 
+/* Mobile chat_clean: viewport-anchored bottom dock (guest + authenticated) */
+html.ux-chat-clean.oc-mobile-composer-dock .oc-chat-shell {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start !important;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 0;
+}
+
+html.ux-chat-clean.oc-mobile-composer-dock .oc-chat-shell .messages.oc-message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  padding-bottom: var(--oc-composer-dock-h, 0px);
+}
+
+html.ux-chat-clean.oc-mobile-composer-dock .oc-composer-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+html.ux-chat-clean.oc-mobile-composer-dock .oc-composer-dock .input-area.oc-composer-centered {
+  pointer-events: auto;
+  width: var(--oc-content-w, 100%);
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 0 !important;
+  position: relative;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, transparent 0%, var(--oc-composer-sticky-mid) 18%, var(--oc-composer-sticky-end) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border-cyan);
+}
+
+html.ux-chat-clean.oc-mobile-composer-dock .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered,
+html.ux-chat-clean.oc-mobile-composer-dock .oc-chat-shell.oc-chat-active .input-area.oc-composer-centered {
+  margin-top: 0 !important;
+}
+
 /* État vide : hero + composer centrés verticalement */
 html.ux-chat-clean .oc-chat-shell.oc-chat-empty {
   justify-content: center;
@@ -1386,7 +1444,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
-    margin-top: auto;
+    margin-top: 0 !important;
     padding-bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 10px));
   }
 
@@ -1601,7 +1659,7 @@ html.ux-legacy .oc-technical-slot-legacy-host:empty {
   }
 
   html.ux-chat-clean .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
-    margin-top: auto;
+    margin-top: 0 !important;
     padding-bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) + 6px));
   }
 
@@ -3789,46 +3847,9 @@ html.ux-chat-clean.oc-session-connected .welcome.hero-cockpit .coco-companion-pr
   }
 }
 
-html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty {
-  justify-content: flex-start;
-  align-items: stretch;
-  flex: 1;
-  min-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .messages.oc-message-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  width: 100%;
-  max-width: 100%;
-  padding-top: clamp(8px, 2vh, 16px);
-  padding-bottom: 8px;
-}
-
 html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .oc-clean-hero {
   padding: 0.35rem 12px 0;
   gap: 0.65rem;
-}
-
-html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
-  margin-top: 0 !important;
-  flex-shrink: 0;
-  width: 100%;
-  max-width: 100%;
-  position: relative;
-  z-index: 2;
-  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
-}
-
-@media (max-width: 640px) {
-  html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered {
-    margin-top: 0 !important;
-  }
 }
 
 @media (max-width: 640px) {
@@ -4105,6 +4126,7 @@ html.ux-legacy .coco-companion-presence {
     </div>
   </div>
 
+  <div class="oc-composer-dock" id="ocComposerDock" aria-label="Zone de saisie">
   <div class="input-area oc-composer-centered" id="inputArea">
     <!-- COCO_COMPOSER_UI: toolbar-row-v27 -->
     <!-- COCO voice layer placeholder -->
@@ -4280,6 +4302,7 @@ html.ux-legacy .coco-companion-presence {
         <button type="button" class="oc-file-intake-sheet-item oc-file-intake-sheet-item--cancel" role="menuitem" id="ocFileIntakePickCancel">Annuler</button>
       </div>
     </div>
+  </div>
   </div>
   </div>
 
@@ -4661,6 +4684,28 @@ function ocSyncChatCleanLayout() {
   dom.chatShell.classList.toggle('oc-chat-active', !empty);
   dom.inputArea.classList.toggle('oc-composer-sticky', !empty);
   ocSyncWelcomeHome();
+  ocSyncMobileComposerDock();
+}
+
+function ocSyncMobileComposerDock() {
+  const root = document.documentElement;
+  const dockWrap = document.getElementById('ocComposerDock');
+  const mobile = typeof ocChatCleanMobileComposer === 'function' && ocChatCleanMobileComposer();
+  if (OC_UX_LEGACY || !mobile || !dockWrap || !dom.inputArea) {
+    root.classList.remove('oc-mobile-composer-dock');
+    root.style.removeProperty('--oc-composer-dock-h');
+    if (dockWrap) dockWrap.style.bottom = '';
+    return;
+  }
+  root.classList.add('oc-mobile-composer-dock');
+  const h = dockWrap.offsetHeight || dom.inputArea.offsetHeight || 0;
+  root.style.setProperty('--oc-composer-dock-h', Math.ceil(h) + 'px');
+  let overlap = 0;
+  const vv = window.visualViewport;
+  if (vv && dom.input && document.activeElement === dom.input) {
+    overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  }
+  dockWrap.style.bottom = overlap > 0 ? overlap + 'px' : '0px';
 }
 
 (function ocUxInitChatShell() {
@@ -4674,8 +4719,30 @@ function ocSyncChatCleanLayout() {
 })();
 
 window.addEventListener('resize', function () {
-  if (!OC_UX_LEGACY) ocSyncWelcomeHome();
+  if (!OC_UX_LEGACY) {
+    ocSyncWelcomeHome();
+    ocSyncMobileComposerDock();
+  }
 }, { passive: true });
+
+(function ocMobileComposerDockInit() {
+  if (OC_UX_LEGACY) return;
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function () {
+      ocSyncMobileComposerDock();
+    }, { passive: true });
+    window.visualViewport.addEventListener('scroll', function () {
+      ocSyncMobileComposerDock();
+    }, { passive: true });
+  }
+  dom.input?.addEventListener('focus', function () {
+    requestAnimationFrame(ocSyncMobileComposerDock);
+  });
+  dom.input?.addEventListener('blur', function () {
+    requestAnimationFrame(ocSyncMobileComposerDock);
+  });
+  requestAnimationFrame(ocSyncMobileComposerDock);
+})();
 
 function ocUxPlaceTechnicalBundle() {
   const bundle = document.getElementById('ocTechnicalBundle');

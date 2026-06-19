@@ -150,21 +150,41 @@ def test_welcome_notes_and_study_launch_organizer_workflows():
 
 def test_welcome_home_composer_docked_at_bottom():
     html = _html()
-    block = html.split("html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty {")[1].split("}")[0]
-    assert "justify-content: flex-start" in block
-    assert "flex: 1" in block
+    assert 'id="ocComposerDock"' in html
+    assert 'oc-mobile-composer-dock' in html
+    assert 'function ocSyncMobileComposerDock' in html
+    dock_css = html.split('html.ux-chat-clean.oc-mobile-composer-dock .oc-composer-dock')[1].split('}')[0]
+    assert 'position: fixed' in dock_css
+    assert 'bottom: 0' in dock_css
+    assert 'z-index' in dock_css
 
-    messages = html.split(
-        "html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .messages.oc-message-list"
-    )[1].split("}")[0]
-    assert "overflow-y: auto" in messages
-    assert "flex: 1 1 auto" in messages
+    shell = html.split('id="ocChatShell"')[1].split('id="ocSettingsBackdrop"')[0]
+    welcome_pos = shell.find('id="welcome"')
+    dock_pos = shell.find('id="ocComposerDock"')
+    input_pos = shell.find('id="inputArea"')
+    assert welcome_pos > -1 and dock_pos > welcome_pos
+    welcome_section = shell[welcome_pos:dock_pos]
+    assert 'id="inputArea"' not in welcome_section
+    assert 'id="ocComposerDock"' not in welcome_section.split('id="ocWelcomeQuickActions"')[0]
 
-    composer = html.split(
-        "html.ux-chat-clean.oc-welcome-home-shell .oc-chat-shell.oc-chat-empty .input-area.oc-composer-centered"
-    )[1].split("}")[0]
-    assert "margin-top: 0 !important" in composer
-    assert "flex-shrink: 0" in composer
+
+def test_composer_dock_separate_from_welcome_cards():
+    html = _html()
+    quick = html.split('id="ocWelcomeQuickActions"')[1].split('id="ocComposerDock"')[0]
+    assert 'id="inputArea"' not in quick
+    assert 'oc-composer-mobile-toolbar' not in quick
+
+
+def test_guest_and_authenticated_share_composer_dock_shell():
+    html = _html()
+    assert html.count('id="ocComposerDock"') == 1
+    assert html.count('id="ocChatShell"') == 1
+    sync = html.split('function ocSyncChatCleanLayout()')[1].split('function ocSyncMobileComposerDock')[0]
+    assert 'ocSyncMobileComposerDock()' in sync
+    enter_chat = html.split('function enterChat()')[1].split('function enterGuestChat')[0]
+    enter_guest = html.split('function enterGuestChat()')[1].split("document.getElementById('ocGuestAuthBtn')")[0]
+    assert 'ocSyncChatCleanLayout()' in enter_chat
+    assert 'ocSyncChatCleanLayout()' in enter_guest
 
 
 def test_welcome_cards_no_parasite_prompt_in_composer():
