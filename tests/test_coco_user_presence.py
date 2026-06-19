@@ -30,6 +30,7 @@ def test_coco_ready_label_guest_vs_authenticated():
     assert "state === 'ready'" in set_fn
     assert "ocGetCocoReadyStateLabel()" in set_fn
     assert "ocGetCocoCompanionStateLabel(state, label)" in set_fn
+    assert "ocApplyCocoStateEl(headerEl" in set_fn
 
 
 def test_enter_chat_and_guest_chat_refresh_coco_ready_label():
