@@ -153,15 +153,30 @@ def test_welcome_home_composer_docked_at_bottom():
     assert 'id="ocComposerDock"' in html
     assert 'oc-mobile-composer-dock' in html
     assert 'function ocSyncMobileComposerDock' in html
-    dock_css = html.split('html.ux-chat-clean.oc-mobile-composer-dock .oc-composer-dock')[1].split('}')[0]
-    assert 'position: fixed' in dock_css
-    assert 'bottom: 0' in dock_css
-    assert 'z-index' in dock_css
+
+    app_css = html.split('html.ux-chat-clean .app {')[1].split('}')[0]
+    assert 'height: 100dvh' in app_css
+    assert 'min-height: 100svh' in app_css
+
+    dock_css = html.split('html.ux-chat-clean.oc-mobile-composer-dock .oc-composer-dock {')[1].split('}')[0]
+    assert 'flex-shrink: 0' in dock_css
+    assert 'padding-bottom: env(safe-area-inset-bottom' in dock_css
+    assert 'position: fixed' not in dock_css
+
+    messages_css = html.split(
+        'html.ux-chat-clean.oc-mobile-composer-dock .oc-chat-shell .messages.oc-message-list {'
+    )[1].split('}')[0]
+    assert 'flex: 1' in messages_css
+    assert 'overflow-y: auto' in messages_css
+    assert 'oc-composer-dock-h' not in messages_css
+
+    assert 'max-height: 700px)' in html
+    assert 'min-height: 850px)' in html
+    assert 'oc-vv-keyboard-open' in html
 
     shell = html.split('id="ocChatShell"')[1].split('id="ocSettingsBackdrop"')[0]
     welcome_pos = shell.find('id="welcome"')
     dock_pos = shell.find('id="ocComposerDock"')
-    input_pos = shell.find('id="inputArea"')
     assert welcome_pos > -1 and dock_pos > welcome_pos
     welcome_section = shell[welcome_pos:dock_pos]
     assert 'id="inputArea"' not in welcome_section
@@ -173,6 +188,18 @@ def test_composer_dock_separate_from_welcome_cards():
     quick = html.split('id="ocWelcomeQuickActions"')[1].split('id="ocComposerDock"')[0]
     assert 'id="inputArea"' not in quick
     assert 'oc-composer-mobile-toolbar' not in quick
+
+
+def test_mobile_viewport_flex_architecture():
+    html = _html()
+    header_block = html.split('html.ux-chat-clean .header {')[1].split('}')[0]
+    assert 'flex-shrink: 0' in header_block
+
+    sync_fn = html.split('function ocSyncMobileComposerDock()')[1].split('function ocUxInitChatShell')[0]
+    assert 'oc-vv-keyboard-open' in sync_fn
+    assert 'visualViewport' in sync_fn
+    assert 'oc-composer-dock-h' not in sync_fn
+    assert "dockWrap.style.bottom" not in sync_fn
 
 
 def test_guest_and_authenticated_share_composer_dock_shell():
