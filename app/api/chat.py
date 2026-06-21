@@ -39,7 +39,7 @@ from app.files_intake.session_image_context import (
     session_key_from_user,
 )
 from app.tools.web_search import (
-    WEB_SEARCH_RUNTIME_INSTRUCTION,
+    build_web_search_system_addon,
     format_web_search_results_block,
     is_web_search_runtime_enabled,
     web_search_sync,
@@ -265,7 +265,7 @@ def assemble_chat_generation_inputs(
     if runtime_rules:
         base_system = f"{base_system}\n\nRuntimeRules:\n{runtime_rules}"
     if web_search_used:
-        base_system = f"{base_system}\n\n{WEB_SEARCH_RUNTIME_INSTRUCTION}"
+        base_system = f"{base_system}\n\n{build_web_search_system_addon(has_results=web_search_result_count > 0)}"
 
     system_prompt = f"{profile_prompt}\n\n{base_system}" if profile_prompt else base_system
 

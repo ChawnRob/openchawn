@@ -12,7 +12,6 @@ from app.main import app
 from app.settings import reload_settings
 from app.tools.web_search import WebSearchResult
 
-
 def _guest_user() -> dict:
     return {"is_guest": True, "guest_session_id": "guest-test-web-search", "ip": "127.0.0.1"}
 
@@ -52,7 +51,9 @@ def test_web_search_enabled_injects_results(monkeypatch: pytest.MonkeyPatch):
     mock_search.assert_called_once()
     assert "WEB_SEARCH_RESULTS:" in bundle["user_message"]
     assert "https://fluxorca.com" in bundle["user_message"]
-    assert "Web search results are provided below" in bundle["system_prompt"]
+    assert "source_index: 1" in bundle["user_message"]
+    assert "## Faits observés" in bundle["system_prompt"]
+    assert "## Sources utilisées" in bundle["system_prompt"]
     assert bundle["web_search_used"] is True
     assert bundle["web_search_result_count"] == 1
 
@@ -70,6 +71,7 @@ def test_web_search_provider_failure_chat_still_works(monkeypatch: pytest.Monkey
     assert bundle["web_search_used"] is True
     assert "WEB_SEARCH_RESULTS" in bundle["user_message"]
     assert "no usable results" in bundle["user_message"].lower()
+    assert "did not return enough elements" in bundle["system_prompt"].lower()
 
     with patch("app.api.chat.web_search_sync", return_value=[]):
         with patch("app.api.chat.generate_response") as mock_llm:
