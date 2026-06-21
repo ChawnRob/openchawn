@@ -23,6 +23,7 @@ class WebSearchResult:
     title: str
     url: str
     snippet: str
+    source_index: int = 0
 
 
 def _provider_name(settings: Settings | None = None) -> str:
@@ -192,6 +193,18 @@ def _search_tavily(query: str, *, limit: int, settings: Settings) -> list[WebSea
     return out
 
 
+def _assign_source_indices(results: list[WebSearchResult]) -> list[WebSearchResult]:
+    return [
+        WebSearchResult(
+            title=r.title,
+            url=r.url,
+            snippet=r.snippet,
+            source_index=i,
+        )
+        for i, r in enumerate(results, start=1)
+    ]
+
+
 def web_search_sync(query: str, limit: int = 5, settings: Settings | None = None) -> list[WebSearchResult]:
     """Synchronous web search for the chat pipeline."""
     q = (query or "").strip()
@@ -203,8 +216,8 @@ def web_search_sync(query: str, limit: int = 5, settings: Settings | None = None
     lim = _clamp_limit(limit, s)
     provider = _provider_name(s)
     if provider == "tavily":
-        return _search_tavily(q, limit=lim, settings=s)
-    return _search_perplexity(q, limit=lim, settings=s)
+        return _assign_source_indices(_search_tavily(q, limit=lim, settings=s))
+    return _assign_source_indices(_search_perplexity(q, limit=lim, settings=s))
 
 
 async def web_search(query: str, limit: int = 5) -> list[WebSearchResult]:
@@ -217,15 +230,57 @@ def format_web_search_results_block(results: list[WebSearchResult]) -> str:
         return "WEB_SEARCH_RESULTS:\n(no usable results — search tool returned empty)"
     lines = ["WEB_SEARCH_RESULTS:"]
     for i, hit in enumerate(results, start=1):
-        lines.append(f"{i}. Title: {hit.title}")
-        lines.append(f"   URL: {hit.url}")
-        lines.append(f"   Snippet: {hit.snippet or '(no snippet)'}")
+        idx = hit.source_index or i
+        lines.append(f"[{idx}] source_index: {idx}")
+        lines.append(f"    title: {hit.title}")
+        lines.append(f"    url: {hit.url}")
+        lines.append(f"    snippet: {hit.snippet or '(no snippet)'}")
     return "\n".join(lines)
 
 
 WEB_SEARCH_RUNTIME_INSTRUCTION = (
-    "Web search results are provided below by OpenChawn runtime. Use them to answer. "
-    "Cite sources by title or URL. If results are empty, say the search tool returned no usable result. "
+    "Web search results are provided below by OpenChawn runtime (Tavily/Perplexity snippets only). "
     "You can perform a web search via OpenChawn when the tool is available — you cannot browse "
     "arbitrary sites freely, download files, or crawl entire websites."
 )
+
+WEB_SEARCH_GROUNDING_INSTRUCTION = (
+    "WEB_SEARCH_GROUNDING_RULES (mandatory when WEB_SEARCH_RESULTS is non-empty):\n"
+    "- Facts must come explicitly from the provided source snippets only — quote or paraphrase "
+    "what is in snippet text for the matching source_index.\n"
+    "- Competitors, risks, opportunities, pricing models (freemium, marketplace), integrations "
+    "(Zapier, n8n, Airflow, etc.), and recommendations MUST be labeled as inferences in "
+    "## Inférences if they are not explicitly stated in a snippet.\n"
+    "- Never present an inference or hypothesis as a confirmed fact.\n"
+    "- If information is not found in the snippets, write exactly: "
+    "Non trouvé dans les sources fournies. (or English equivalent when answering in English).\n"
+    "- Do NOT use phrasing like the official site says or according to the website unless "
+    "the snippet text literally contains that information — you only have search snippets, not full pages.\n"
+    "- Always end with a ## Sources utilisées section listing every source used.\n"
+    "- Use this exact markdown structure for web-based analyses:\n\n"
+    "## Faits observés\n"
+    "- ... (each bullet must map to a source_index)\n\n"
+    "## Inférences\n"
+    "- ... (reasoning not directly in snippets)\n\n"
+    "## Hypothèses non confirmées\n"
+    "- ... (speculation clearly marked)\n\n"
+    "## Analyse / Recommandations\n"
+    "- ...\n\n"
+    "## Sources utilisées\n"
+    "1. Title — URL\n"
+)
+
+WEB_SEARCH_EMPTY_RESULTS_INSTRUCTION = (
+    "WEB_SEARCH_GROUNDING_RULES (search attempted, no usable snippets):\n"
+    "- Tell the user the search tool did not return enough elements to ground an analysis.\n"
+    "- Do not invent facts about the website or topic.\n"
+    "- Do not list competitors, features, or business model details from general knowledge.\n"
+    "- Suggest retrying with a more specific query if helpful."
+)
+
+
+def build_web_search_system_addon(*, has_results: bool) -> str:
+    """Conditional system instructions when web search ran in this turn."""
+    if has_results:
+        return f"{WEB_SEARCH_RUNTIME_INSTRUCTION}\n\n{WEB_SEARCH_GROUNDING_INSTRUCTION}"
+    return f"{WEB_SEARCH_RUNTIME_INSTRUCTION}\n\n{WEB_SEARCH_EMPTY_RESULTS_INSTRUCTION}"
