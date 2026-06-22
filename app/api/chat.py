@@ -39,12 +39,17 @@ from app.files_intake.session_image_context import (
     session_key_from_user,
 )
 from app.tools.web_search import (
+    build_web_capability_system_addon,
     build_web_search_system_addon,
     format_web_search_results_block,
     is_web_search_runtime_enabled,
     web_search_sync,
 )
-from app.tools.web_search_intent import detect_web_search_intent, extract_web_search_query
+from app.tools.web_search_intent import (
+    detect_web_search_intent,
+    extract_web_search_query,
+    is_protected_web_request,
+)
 from app.llm import generate_response
 from app.memory import memory_consolidation_scheduler as memory_consolidation
 from app.memory.fractal_memory import build_layered_memory_context, write_exchange
@@ -244,9 +249,14 @@ def assemble_chat_generation_inputs(
     if extra_parts:
         final_prompt = "\n".join(extra_parts) + "\n\n" + final_prompt
 
+    protected_web_request = is_protected_web_request(req.message)
     web_search_used = False
     web_search_result_count = 0
-    if detect_web_search_intent(req.message) and is_web_search_runtime_enabled():
+    if (
+        not protected_web_request
+        and detect_web_search_intent(req.message)
+        and is_web_search_runtime_enabled()
+    ):
         web_search_used = True
         query = extract_web_search_query(req.message)
         try:
@@ -266,6 +276,8 @@ def assemble_chat_generation_inputs(
         base_system = f"{base_system}\n\nRuntimeRules:\n{runtime_rules}"
     if web_search_used:
         base_system = f"{base_system}\n\n{build_web_search_system_addon(has_results=web_search_result_count > 0)}"
+    elif is_web_search_runtime_enabled():
+        base_system = f"{base_system}\n\n{build_web_capability_system_addon(protected_request=protected_web_request)}"
 
     system_prompt = f"{profile_prompt}\n\n{base_system}" if profile_prompt else base_system
 
@@ -313,6 +325,7 @@ def assemble_chat_generation_inputs(
         "image_context_injected": image_context_injected,
         "web_search_used": web_search_used,
         "web_search_result_count": web_search_result_count,
+        "protected_web_request": protected_web_request,
     }
 
 

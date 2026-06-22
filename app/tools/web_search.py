@@ -284,3 +284,34 @@ def build_web_search_system_addon(*, has_results: bool) -> str:
     if has_results:
         return f"{WEB_SEARCH_RUNTIME_INSTRUCTION}\n\n{WEB_SEARCH_GROUNDING_INSTRUCTION}"
     return f"{WEB_SEARCH_RUNTIME_INSTRUCTION}\n\n{WEB_SEARCH_EMPTY_RESULTS_INSTRUCTION}"
+
+
+WEB_CAPABILITY_TRUTHFULNESS_INSTRUCTION = (
+    "WEB_CAPABILITY_TRUTHFULNESS (web search is runtime-enabled but WEB_SEARCH_RESULTS is NOT in this turn):\n"
+    "- OpenChawn can run public web search (Tavily/Perplexity snippets) when the user request matches the "
+    "web-search intent router.\n"
+    "- NEVER claim you lack a web search tool, browsing tool, or navigation capability in this deployment.\n"
+    "- If the user expected live web data but this turn did not inject WEB_SEARCH_RESULTS, explain that public "
+    "search runs only when the request triggers the tool — do not deny that the tool exists.\n"
+    "- Use wording equivalent to (adapt to OUTPUT LANGUAGE): "
+    "\"Je peux rechercher des informations publiques via OpenChawn quand la demande déclenche l'outil web, "
+    "mais je ne peux pas accéder aux comptes privés, contenus derrière connexion ou messages personnels.\"\n"
+)
+
+WEB_PROTECTED_REQUEST_INSTRUCTION = (
+    "WEB_PROTECTED_REQUEST (private / authenticated access — web search must NOT run):\n"
+    "- Refuse politely. Do not log in, read private messages, open the user's personal accounts, or scrape "
+    "private profiles.\n"
+    "- NEVER claim you lack a web search tool in this deployment — public search is available for open "
+    "information when the request triggers the tool.\n"
+    "- Use wording equivalent to (adapt to OUTPUT LANGUAGE): "
+    "\"Je peux rechercher des informations publiques via OpenChawn quand la demande déclenche l'outil web, "
+    "mais je ne peux pas accéder aux comptes privés, contenus derrière connexion ou messages personnels.\"\n"
+)
+
+
+def build_web_capability_system_addon(*, protected_request: bool = False) -> str:
+    """System instructions when web search is enabled but did not run this turn."""
+    if protected_request:
+        return WEB_PROTECTED_REQUEST_INSTRUCTION
+    return WEB_CAPABILITY_TRUTHFULNESS_INSTRUCTION
