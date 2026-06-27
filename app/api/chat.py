@@ -10,6 +10,10 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator
 from app.auth.deps import get_current_user_or_guest
 from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
+from app.core.conversation_continuity import (
+    ContinuityResolution,
+    resolve_conversation_continuity,
+)
 from app.core.coco_identity import COCO_PUBLIC_IDENTITY_EN
 from app.core.initial_rules import build_runtime_rules_prompt
 from app.core.knowledge_organizer import build_knowledge_organizer_context
@@ -170,6 +174,26 @@ def assemble_chat_generation_inputs(
     else:
         user_key = f"user-{user.get('id', '')}"
 
+    continuity_session_key = session_key_from_user(user)
+    lang_for_continuity = lt.get("final_language") or lt.get("detected_language") or "en"
+    if lang_for_continuity not in ("fr", "en"):
+        lang_for_continuity = detect_user_language(req.message) or "en"
+
+    context_key = continuity_session_key
+    img_ctx_preview = get_last_image_context(context_key)
+    image_label = ""
+    if img_ctx_preview:
+        image_label = (img_ctx_preview.filename or img_ctx_preview.media_id or "uploaded image").strip()
+
+    continuity: ContinuityResolution = resolve_conversation_continuity(
+        continuity_session_key,
+        req.message,
+        language=lang_for_continuity,
+        image_label=image_label if message_references_recent_image(req.message) or (req.media_id or "").strip() else "",
+    )
+    memory_query = continuity.memory_query or req.message
+    user_request_text = continuity.effective_message or req.message
+
     profile_id = resolve_profile_id(req, user)
     profile = get_profile(profile_id)
     profile_prompt = str(profile.get("system_prompt") or "").strip()
@@ -187,7 +211,7 @@ def assemble_chat_generation_inputs(
     # docs/OPENCHAWN_MEMORY_MAP_V11_7.md if this routing changes.
     memory_used = False
     memory_context, memories = build_layered_memory_context(
-        req.message,
+        memory_query,
         user_key=user_key,
         project_name_hint=proj_hint,
         is_guest=bool(user.get("is_guest")),
@@ -196,13 +220,18 @@ def assemble_chat_generation_inputs(
     if memory_context:
         memory_used = True
 
-    base_request = req.message
+    continuity_block = continuity.context_block or ""
+    base_request = user_request_text
+    prompt_sections: list[str] = []
+    if continuity_block:
+        prompt_sections.append(continuity_block)
+    if memory_context:
+        prompt_sections.append(memory_context)
     image_context_block = ""
     image_context_injected = False
-    context_key = session_key_from_user(user)
     user_message_references_image = message_references_recent_image(req.message)
     media_id = (req.media_id or "").strip()
-    img_ctx = get_last_image_context(context_key)
+    img_ctx = img_ctx_preview
     last_image_context_found = img_ctx is not None
 
     should_inject = False
@@ -228,14 +257,10 @@ def assemble_chat_generation_inputs(
         image_context_injected,
     )
 
-    if memory_context and image_context_block:
-        final_prompt = (
-            f"{memory_context}\n\n{image_context_block}\n\n── USER REQUEST ──\n{base_request}"
-        )
-    elif memory_context:
-        final_prompt = f"{memory_context}\n\n── USER REQUEST ──\n{base_request}"
-    elif image_context_block:
-        final_prompt = f"{image_context_block}\n\n── USER REQUEST ──\n{base_request}"
+    if image_context_block:
+        prompt_sections.append(image_context_block)
+    if prompt_sections:
+        final_prompt = "\n\n".join(prompt_sections) + f"\n\n── USER REQUEST ──\n{base_request}"
     else:
         final_prompt = base_request
 
@@ -326,6 +351,13 @@ def assemble_chat_generation_inputs(
         "web_search_used": web_search_used,
         "web_search_result_count": web_search_result_count,
         "protected_web_request": protected_web_request,
+        "continuity_confidence": continuity.confidence,
+        "continuity_has_reference": continuity.has_reference,
+        "continuity_resolved_entity": (
+            continuity.resolved_entity.label() if continuity.resolved_entity else None
+        ),
+        "continuity_clarification": continuity.clarification,
+        "continuity_active_topic": continuity.active_topic,
     }
 
 
@@ -372,6 +404,45 @@ def handle_chat_request(
             )
 
     trace = derive_response_language_trace(message_for_language_policy(req.message))
+
+    continuity_session_key = session_key_from_user(user)
+    lang_for_continuity = trace.get("final_language") or trace.get("detected_language") or "en"
+    if lang_for_continuity not in ("fr", "en"):
+        lang_for_continuity = detect_user_language(req.message) or "en"
+    img_ctx_early = get_last_image_context(continuity_session_key)
+    image_label_early = ""
+    if img_ctx_early:
+        image_label_early = (img_ctx_early.filename or img_ctx_early.media_id or "uploaded image").strip()
+    continuity_preview = resolve_conversation_continuity(
+        continuity_session_key,
+        req.message,
+        language=lang_for_continuity,
+        image_label=image_label_early
+        if message_references_recent_image(req.message) or (req.media_id or "").strip()
+        else "",
+        register_entities=False,
+    )
+    if continuity_preview.confidence == "low" and continuity_preview.clarification:
+        logger.info(
+            "continuity_clarification | session=%s | confidence=%s",
+            context_key_for_log(continuity_session_key),
+            continuity_preview.confidence,
+        )
+        return {
+            "output": continuity_preview.clarification,
+            "memory_used": False,
+            "consolidation_recommended": False,
+            "lang": trace.get("final_language") or trace.get("detected_language"),
+            "profile_used": resolve_profile_id(req, user),
+            "route_signature": (
+                ROUTE_SIGNATURE_POST_CHAT if http_mount_path == "/chat" else ROUTE_SIGNATURE_POST_API_CHAT
+            ),
+            "user_role": user_role_out,
+            "owner_authenticated": owner_authenticated,
+            "continuity_clarification": True,
+            "continuity_confidence": continuity_preview.confidence,
+        }
+
     bundle = assemble_chat_generation_inputs(
         req, user=user, persist_memory_side_effects=True, language_trace=trace
     )
