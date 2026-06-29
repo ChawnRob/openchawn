@@ -12,7 +12,8 @@ from app.auth.guest import check_guest_quota
 from app.config import MAX_MESSAGE_LENGTH
 from app.core.conversation_continuity import (
     ContinuityResolution,
-    resolve_conversation_continuity,
+    commit_conversation_continuity_turn,
+    preview_conversation_continuity,
 )
 from app.core.coco_identity import COCO_PUBLIC_IDENTITY_EN
 from app.core.initial_rules import build_runtime_rules_prompt
@@ -152,12 +153,24 @@ def build_openchawn_base_system_prompt() -> str:
     )
 
 
+def _continuity_image_label(user: dict, message: str, media_id: str) -> str:
+    context_key = session_key_from_user(user)
+    img_ctx = get_last_image_context(context_key)
+    if not img_ctx:
+        return ""
+    label = (img_ctx.filename or img_ctx.media_id or "uploaded image").strip()
+    if message_references_recent_image(message) or (media_id or "").strip():
+        return label
+    return ""
+
+
 def assemble_chat_generation_inputs(
     req: ChatRequest,
     *,
     user: dict,
     persist_memory_side_effects: bool = True,
     language_trace: dict[str, str] | None = None,
+    continuity: ContinuityResolution | None = None,
 ) -> dict[str, Any]:
     """
     Assemble prompts pour un tour de chat.
@@ -180,17 +193,15 @@ def assemble_chat_generation_inputs(
         lang_for_continuity = detect_user_language(req.message) or "en"
 
     context_key = continuity_session_key
-    img_ctx_preview = get_last_image_context(context_key)
-    image_label = ""
-    if img_ctx_preview:
-        image_label = (img_ctx_preview.filename or img_ctx_preview.media_id or "uploaded image").strip()
+    image_label = _continuity_image_label(user, req.message, (req.media_id or "").strip())
 
-    continuity: ContinuityResolution = resolve_conversation_continuity(
-        continuity_session_key,
-        req.message,
-        language=lang_for_continuity,
-        image_label=image_label if message_references_recent_image(req.message) or (req.media_id or "").strip() else "",
-    )
+    if continuity is None:
+        continuity = preview_conversation_continuity(
+            continuity_session_key,
+            req.message,
+            language=lang_for_continuity,
+            image_label=image_label,
+        )
     memory_query = continuity.memory_query or req.message
     user_request_text = continuity.effective_message or req.message
 
@@ -231,6 +242,7 @@ def assemble_chat_generation_inputs(
     image_context_injected = False
     user_message_references_image = message_references_recent_image(req.message)
     media_id = (req.media_id or "").strip()
+    img_ctx_preview = get_last_image_context(context_key)
     img_ctx = img_ctx_preview
     last_image_context_found = img_ctx is not None
 
@@ -409,27 +421,21 @@ def handle_chat_request(
     lang_for_continuity = trace.get("final_language") or trace.get("detected_language") or "en"
     if lang_for_continuity not in ("fr", "en"):
         lang_for_continuity = detect_user_language(req.message) or "en"
-    img_ctx_early = get_last_image_context(continuity_session_key)
-    image_label_early = ""
-    if img_ctx_early:
-        image_label_early = (img_ctx_early.filename or img_ctx_early.media_id or "uploaded image").strip()
-    continuity_preview = resolve_conversation_continuity(
+    image_label = _continuity_image_label(user, req.message, (req.media_id or "").strip())
+    continuity = preview_conversation_continuity(
         continuity_session_key,
         req.message,
         language=lang_for_continuity,
-        image_label=image_label_early
-        if message_references_recent_image(req.message) or (req.media_id or "").strip()
-        else "",
-        register_entities=False,
+        image_label=image_label,
     )
-    if continuity_preview.confidence == "low" and continuity_preview.clarification:
+    if continuity.confidence == "low" and continuity.clarification:
         logger.info(
             "continuity_clarification | session=%s | confidence=%s",
             context_key_for_log(continuity_session_key),
-            continuity_preview.confidence,
+            continuity.confidence,
         )
         return {
-            "output": continuity_preview.clarification,
+            "output": continuity.clarification,
             "memory_used": False,
             "consolidation_recommended": False,
             "lang": trace.get("final_language") or trace.get("detected_language"),
@@ -440,11 +446,15 @@ def handle_chat_request(
             "user_role": user_role_out,
             "owner_authenticated": owner_authenticated,
             "continuity_clarification": True,
-            "continuity_confidence": continuity_preview.confidence,
+            "continuity_confidence": continuity.confidence,
         }
 
     bundle = assemble_chat_generation_inputs(
-        req, user=user, persist_memory_side_effects=True, language_trace=trace
+        req,
+        user=user,
+        persist_memory_side_effects=True,
+        language_trace=trace,
+        continuity=continuity,
     )
     provider_hint = (req.provider or "").strip().lower()
 
@@ -548,6 +558,13 @@ def handle_chat_request(
         logger.info("chat memory writeback status=saved entries=%s", len(write_result.entry_ids))
     else:
         logger.info("chat memory writeback status=skipped reason=%s", write_result.reason or "unknown")
+
+    commit_conversation_continuity_turn(
+        continuity_session_key,
+        req.message,
+        image_label=image_label,
+        resolution=continuity,
+    )
 
     try:
         consolidation_plan = memory_consolidation.build_consolidation_plan()

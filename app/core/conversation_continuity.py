@@ -7,12 +7,21 @@ demonstrative references before the LLM is called. No hardcoded domain entities.
 
 from __future__ import annotations
 
+import math
+import os
 import re
 import threading
 import time
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Literal
+
+from app.core.conversation_continuity_store import (
+    clear_conversation_state_memory_cache,
+    clear_conversation_state_store,
+    load_conversation_state,
+    persist_conversation_state,
+)
 
 EntityCategory = Literal[
     "person",
@@ -34,8 +43,18 @@ EntityCategory = Literal[
 
 Confidence = Literal["none", "low", "medium", "high"]
 
-MAX_RECENT_ENTITIES = 12
-STATE_TTL_SECONDS = 20 * 60
+MAX_RECENT_ENTITIES = 32
+DEFAULT_STATE_TTL_SECONDS = 20 * 60
+
+
+def _state_ttl_seconds() -> int:
+    raw = (os.getenv("CONVERSATION_CONTINUITY_TTL_SECONDS") or "").strip()
+    if raw.isdigit():
+        return max(60, int(raw))
+    return DEFAULT_STATE_TTL_SECONDS
+
+
+STATE_TTL_SECONDS = DEFAULT_STATE_TTL_SECONDS
 
 _ENTITY_CATEGORIES: frozenset[str] = frozenset(
     {
@@ -107,7 +126,7 @@ _VERB_COMMANDS = frozenset(
         "summarize", "summarise", "analyze", "analyse", "compare", "describe", "explain", "list",
         "show", "tell", "give", "find", "search", "check", "review", "open", "sync", "create",
         "write", "read", "help", "what", "where", "when", "who", "how", "why", "please",
-        "résume", "résumer", "analyse", "analyser", "décris", "decris", "explique", "liste",
+        "options", "option",
         "montre", "donne", "trouve", "cherche", "vérifie", "verifie", "revois",
     }
 )
@@ -121,6 +140,13 @@ _REPO_RE = re.compile(r"\b([A-Za-z0-9][-A-Za-z0-9_]*/[A-Za-z0-9][-A-Za-z0-9_.]*)
 _PAIR_AND_RE = re.compile(
     r"\b([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,3})\s+and\s+"
     r"([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,3})\b"
+)
+
+_COMMA_AND_LIST_RE = re.compile(
+    r"([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,3})"
+    r"(?:\s*,\s*[A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,3}){1,5}"
+    r"\s+and\s+"
+    r"([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,3})"
 )
 
 _FILE_EXT_RE = re.compile(
@@ -188,14 +214,57 @@ _CATEGORY_CUE_RES: tuple[tuple[EntityCategory, re.Pattern[str]], ...] = (
 
 _REFERENCE_PATTERNS: tuple[tuple[str, re.Pattern[str], dict[str, Any]], ...] = (
     (
+        "ordinal_first",
+        re.compile(r"\b(the first|le premier|la premi[eè]re|1(?:st|er|re))\b", re.IGNORECASE),
+        {"ordinal": 1},
+    ),
+    (
         "ordinal_second",
         re.compile(r"\b(the second|le second|la seconde|le deuxi[eè]me|la deuxi[eè]me|2(?:nd|e))\b", re.IGNORECASE),
         {"ordinal": 2},
     ),
     (
-        "ordinal_first",
-        re.compile(r"\b(the first|le premier|la premi[eè]re|1(?:st|er|re))\b", re.IGNORECASE),
-        {"ordinal": 1},
+        "ordinal_third",
+        re.compile(r"\b(the third|le troisi[eè]me|la troisi[eè]me|3(?:rd|e))\b", re.IGNORECASE),
+        {"ordinal": 3},
+    ),
+    (
+        "group_other",
+        re.compile(r"\b(the other|l['']?autre)\b", re.IGNORECASE),
+        {"group": "other"},
+    ),
+    (
+        "group_both",
+        re.compile(r"\b(both|les deux|the two)\b", re.IGNORECASE),
+        {"group": "both"},
+    ),
+    (
+        "demonstrative_that_one",
+        re.compile(r"\b(celui-l[aà]|celle-l[aà]|that one|this one)\b", re.IGNORECASE),
+        {"group": "recent"},
+    ),
+    (
+        "comparison_which",
+        re.compile(
+            r"\b(which one|which is|lequel|laquelle|lesquels|lesquelles)\b.*\b(cheaper|moins cher|better|meilleur|faster|plus rapide)\b|"
+            r"\b(lequel|laquelle)\s+est\b",
+            re.IGNORECASE,
+        ),
+        {"group": "compare"},
+    ),
+    (
+        "possessive_attr",
+        re.compile(
+            r"\b(son|sa|ses|its|their|leur|leurs)\s+"
+            r"(ia|ai|product|produit|platform|plateforme|service|technology|technologie|model|mod[eè]le)\b",
+            re.IGNORECASE,
+        ),
+        {"group": "possessive"},
+    ),
+    (
+        "demonstrative_this_one",
+        re.compile(r"\b(celui-ci|celle-ci|this one|that one)\b", re.IGNORECASE),
+        {"group": "recent"},
     ),
     (
         "former",
@@ -296,22 +365,82 @@ class TrackedEntity:
     is_user_self: bool = False
     gender: str = ""
     source: str = "message"
+    mention_count: int = 1
+    last_seen_at: float = 0.0
+    score: float = 0.0
 
     def label(self) -> str:
         return f"{self.text} ({self.category})"
 
+    def entity_key(self) -> str:
+        return f"{_normalize(self.text)}::{self.category}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "text": self.text,
+            "category": self.category,
+            "turn_index": self.turn_index,
+            "mention_order": self.mention_order,
+            "is_user_self": self.is_user_self,
+            "gender": self.gender,
+            "source": self.source,
+            "mention_count": self.mention_count,
+            "last_seen_at": self.last_seen_at,
+            "score": self.score,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TrackedEntity:
+        return cls(
+            text=str(data.get("text") or ""),
+            category=data.get("category") or "topic",  # type: ignore[arg-type]
+            turn_index=int(data.get("turn_index") or 0),
+            mention_order=int(data.get("mention_order") or 0),
+            is_user_self=bool(data.get("is_user_self")),
+            gender=str(data.get("gender") or ""),
+            source=str(data.get("source") or "message"),
+            mention_count=int(data.get("mention_count") or 1),
+            last_seen_at=float(data.get("last_seen_at") or 0.0),
+            score=float(data.get("score") or 0.0),
+        )
+
 
 @dataclass
 class ConversationState:
-    session_key: str
+    conversation_id: str
     entities: list[TrackedEntity] = field(default_factory=list)
     active_topic: str = ""
     active_category: EntityCategory = "topic"
     turn_count: int = 0
+    comparison_group: list[str] = field(default_factory=list)
     updated_at: float = field(default_factory=time.time)
 
     def touch(self) -> None:
         self.updated_at = time.time()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "conversation_id": self.conversation_id,
+            "entities": [e.to_dict() for e in self.entities],
+            "active_topic": self.active_topic,
+            "active_category": self.active_category,
+            "turn_count": self.turn_count,
+            "comparison_group": list(self.comparison_group),
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ConversationState:
+        ents = [TrackedEntity.from_dict(item) for item in (data.get("entities") or []) if isinstance(item, dict)]
+        return cls(
+            conversation_id=str(data.get("conversation_id") or ""),
+            entities=ents,
+            active_topic=str(data.get("active_topic") or ""),
+            active_category=data.get("active_category") or "topic",  # type: ignore[arg-type]
+            turn_count=int(data.get("turn_count") or 0),
+            comparison_group=[str(x) for x in (data.get("comparison_group") or [])],
+            updated_at=float(data.get("updated_at") or time.time()),
+        )
 
 
 @dataclass(frozen=True)
@@ -319,51 +448,93 @@ class ContinuityResolution:
     confidence: Confidence
     has_reference: bool
     resolved_entity: TrackedEntity | None = None
+    resolved_entities: tuple[TrackedEntity, ...] = ()
     candidates: tuple[TrackedEntity, ...] = ()
     clarification: str = ""
     context_block: str = ""
     effective_message: str = ""
     memory_query: str = ""
     active_topic: str = ""
+    comparison_mode: bool = False
 
     def to_debug_dict(self) -> dict[str, Any]:
         return {
             "confidence": self.confidence,
             "has_reference": self.has_reference,
             "resolved_entity": self.resolved_entity.label() if self.resolved_entity else None,
+            "resolved_entities": [e.label() for e in self.resolved_entities],
             "candidate_count": len(self.candidates),
             "clarification": bool(self.clarification),
             "active_topic": self.active_topic or None,
+            "comparison_mode": self.comparison_mode,
         }
 
 
 _lock = threading.Lock()
-_states: dict[str, ConversationState] = {}
 
 
 def clear_conversation_states() -> None:
-    with _lock:
-        _states.clear()
+    clear_conversation_state_memory_cache()
+    clear_conversation_state_store()
 
 
-def _purge_expired(now: float | None = None) -> None:
+def _is_expired(state: ConversationState, now: float | None = None) -> bool:
     ts = now if now is not None else time.time()
-    expired = [k for k, st in _states.items() if ts - st.updated_at > STATE_TTL_SECONDS]
-    for k in expired:
-        _states.pop(k, None)
+    return ts - float(state.updated_at or 0) > _state_ttl_seconds()
 
 
-def _get_state(session_key: str) -> ConversationState:
-    _purge_expired()
-    key = (session_key or "").strip()
-    if not key:
-        key = "__anonymous__"
-    with _lock:
-        st = _states.get(key)
-        if st is None:
-            st = ConversationState(session_key=key)
-            _states[key] = st
-        return st
+def _empty_state(conversation_id: str) -> ConversationState:
+    return ConversationState(conversation_id=conversation_id)
+
+
+def _load_state(conversation_id: str) -> ConversationState:
+    key = (conversation_id or "").strip() or "__anonymous__"
+    raw = load_conversation_state(key)
+    if not raw:
+        return _empty_state(key)
+    state = ConversationState.from_dict({**raw, "conversation_id": key})
+    if _is_expired(state):
+        return _empty_state(key)
+    return state
+
+
+def _save_state(state: ConversationState) -> None:
+    state.touch()
+    _apply_entity_decay(state)
+    persist_conversation_state(state.conversation_id, state.to_dict())
+
+
+def _compute_entity_score(ent: TrackedEntity, *, now: float, current_turn: int) -> float:
+    age_turns = max(0, current_turn - ent.turn_index)
+    recency = max(0.05, 1.0 - age_turns * 0.12)
+    frequency = min(1.0, 0.15 + ent.mention_count * 0.12)
+    half_life = max(60.0, _state_ttl_seconds() / 2.0)
+    elapsed = max(0.0, now - float(ent.last_seen_at or state_fallback_now()))
+    time_decay = math.exp(-elapsed / half_life)
+    return recency * 0.45 + frequency * 0.35 + time_decay * 0.20
+
+
+def state_fallback_now() -> float:
+    return time.time()
+
+
+def _apply_entity_decay(state: ConversationState) -> None:
+    now = time.time()
+    turn = state.turn_count
+    for ent in state.entities:
+        ent.score = _compute_entity_score(ent, now=now, current_turn=turn)
+    state.entities.sort(key=lambda e: (e.score, e.turn_index, e.mention_order), reverse=True)
+    state.entities = state.entities[:MAX_RECENT_ENTITIES]
+
+
+def _ranked_entities(entities: list[TrackedEntity], *, current_turn: int) -> list[TrackedEntity]:
+    now = time.time()
+    ranked = []
+    for ent in entities:
+        ent.score = _compute_entity_score(ent, now=now, current_turn=current_turn)
+        ranked.append(ent)
+    ranked.sort(key=lambda e: (e.score, e.turn_index, e.mention_order), reverse=True)
+    return ranked
 
 
 def _window_text(message: str, start: int, end: int, *, radius: int = 48) -> str:
@@ -444,9 +615,34 @@ def extract_entities(
     for m in _FILE_EXT_RE.finditer(raw):
         _add(re.sub(r"\s+", " ", m.group(1).strip()), m.start(), m.end())
 
-    for m in _PAIR_AND_RE.finditer(raw):
-        _add(m.group(1), m.start(1), m.end(1))
-        _add(m.group(2), m.start(2), m.end(2))
+    list_match = _COMMA_AND_LIST_RE.search(raw)
+    if list_match:
+        chunk = list_match.group(0)
+        parts = [p.strip() for p in re.split(r"\s*,\s*|\s+and\s+", chunk) if p.strip()]
+        for part in parts:
+            if len(part) < 2 or _is_stopword(part) or _normalize(part) in _VERB_COMMANDS:
+                continue
+            key = _normalize(part)
+            if key in seen:
+                continue
+            seen.add(key)
+            order += 1
+            pos = raw.find(part, list_match.start())
+            cat = _infer_category(part, _window_text(raw, pos, pos + len(part)))
+            found.append(
+                TrackedEntity(
+                    text=part,
+                    category=cat,
+                    turn_index=turn_index,
+                    mention_order=order,
+                    is_user_self=False,
+                    source="message",
+                )
+            )
+    else:
+        for m in _PAIR_AND_RE.finditer(raw):
+            _add(m.group(1), m.start(1), m.end(1))
+            _add(m.group(2), m.start(2), m.end(2))
 
     for m in _QUOTED_RE.finditer(raw):
         _add(m.group(1), m.start(), m.end())
@@ -474,7 +670,9 @@ def extract_entities(
             continue
         if token in {e.text for e in found}:
             continue
-        if any(token in e.text for e in found):
+        if any(token in e.text or e.text in token for e in found):
+            continue
+        if any(_normalize(token) == _normalize(e.text) for e in found):
             continue
         _add(token, m.start(), m.end())
 
@@ -496,19 +694,29 @@ def extract_entities(
 def _merge_entities(state: ConversationState, new_entities: list[TrackedEntity]) -> None:
     if not new_entities:
         return
-    combined = list(state.entities) + list(new_entities)
-    dedup: dict[str, TrackedEntity] = {}
-    for ent in combined:
-        key = f"{_normalize(ent.text)}::{ent.category}"
-        prev = dedup.get(key)
-        if prev is None or ent.turn_index >= prev.turn_index:
-            dedup[key] = ent
-    ordered = sorted(dedup.values(), key=lambda e: (e.turn_index, e.mention_order))
-    state.entities = ordered[-MAX_RECENT_ENTITIES:]
+    now = time.time()
+    index = {e.entity_key(): e for e in state.entities}
+    for ent in new_entities:
+        ent.last_seen_at = now
+        key = ent.entity_key()
+        prev = index.get(key)
+        if prev is not None:
+            prev.mention_count += 1
+            prev.turn_index = max(prev.turn_index, ent.turn_index)
+            prev.mention_order = max(prev.mention_order, ent.mention_order)
+            prev.last_seen_at = now
+        else:
+            ent.mention_count = 1
+            index[key] = ent
+    state.entities = list(index.values())
+    _apply_entity_decay(state)
     if new_entities:
-        latest = new_entities[-1]
+        latest = max(new_entities, key=lambda e: (e.turn_index, e.mention_order))
         state.active_topic = latest.text
         state.active_category = latest.category
+    if len(new_entities) >= 2:
+        ordered = sorted(new_entities, key=lambda e: e.mention_order)
+        state.comparison_group = [e.entity_key() for e in ordered[:6]]
 
 
 def _detect_references(message: str) -> list[tuple[str, re.Pattern[str], dict[str, Any]]]:
@@ -565,18 +773,40 @@ def _build_clarification(candidates: list[TrackedEntity], *, language: str = "en
     )
 
 
+def _entities_from_comparison_group(state: ConversationState) -> list[TrackedEntity]:
+    if not state.comparison_group:
+        return []
+    index = {e.entity_key(): e for e in state.entities}
+    out: list[TrackedEntity] = []
+    for key in state.comparison_group:
+        ent = index.get(key)
+        if ent and not ent.is_user_self:
+            out.append(ent)
+    out.sort(key=lambda e: e.mention_order)
+    return out
+
+
 def _build_context_block(
     *,
     confidence: Confidence,
     resolved: TrackedEntity | None,
+    resolved_entities: list[TrackedEntity],
     candidates: list[TrackedEntity],
     active_topic: str,
     active_category: str,
+    comparison_mode: bool = False,
 ) -> str:
     lines = ["── CONVERSATION CONTINUITY (short-term session state; prefer over long-term memory) ──"]
     if active_topic:
         lines.append(f"active_topic: {active_topic} ({active_category})")
-    if resolved and confidence == "high":
+    if comparison_mode and resolved_entities:
+        opts = ", ".join(e.label() for e in resolved_entities[:6])
+        lines.append(f"comparison_group: {opts}")
+        lines.append(
+            "Instruction: The user is comparing entities from the current conversation. "
+            "Answer using only these referents; do not switch to unrelated long-term memory."
+        )
+    elif resolved and confidence == "high":
         lines.append(f"resolved_referent: {resolved.label()}")
         lines.append(
             "Instruction: The user's latest message refers to the resolved referent above. "
@@ -592,29 +822,22 @@ def _build_context_block(
             "If still unclear, ask a brief clarification."
         )
     else:
-        recent = ", ".join(e.label() for e in candidates[-4:]) if candidates else "(none)"
+        recent = ", ".join(e.label() for e in candidates[:4]) if candidates else "(none)"
         lines.append(f"recent_entities: {recent}")
     return "\n".join(lines)
 
 
-def resolve_conversation_continuity(
-    session_key: str,
+def _resolve_from_state(
+    state: ConversationState,
     message: str,
     *,
     language: str = "en",
     image_label: str = "",
-    register_entities: bool = True,
 ) -> ContinuityResolution:
-    """
-    Resolve what the user is referring to in the current turn.
-
-    Updates short-term session state when ``register_entities`` is True.
-  """
+    """Immutable resolution against a loaded state snapshot (no persistence)."""
     raw = (message or "").strip()
-    state = _get_state(session_key)
-    state.touch()
     turn_index = state.turn_count + 1
-    prior_entities = list(state.entities)
+    prior_entities = _ranked_entities(list(state.entities), current_turn=state.turn_count)
 
     references = _detect_references(raw)
     has_reference = bool(references)
@@ -624,12 +847,6 @@ def resolve_conversation_continuity(
         has_reference = True
 
     if not has_reference:
-        new_entities = extract_entities(
-            raw, turn_index=turn_index, mention_offset=len(state.entities), image_label=image_label
-        )
-        if register_entities and new_entities:
-            _merge_entities(state, new_entities)
-        state.turn_count = turn_index
         return ContinuityResolution(
             confidence="none",
             has_reference=False,
@@ -639,42 +856,69 @@ def resolve_conversation_continuity(
             context_block=_build_context_block(
                 confidence="none",
                 resolved=None,
-                candidates=state.entities,
+                resolved_entities=[],
+                candidates=prior_entities,
                 active_topic=state.active_topic,
                 active_category=state.active_category,
             )
-            if state.entities
+            if prior_entities
             else "",
         )
 
     candidate_pool: list[TrackedEntity] = []
     ref_meta: dict[str, Any] = {}
+    comparison_mode = False
+    resolved_entities: list[TrackedEntity] = []
+    group_pool = _entities_from_comparison_group(state) or prior_entities
 
     for _name, _pattern, meta in references:
         ref_meta.update(meta)
         cats = meta.get("categories")
+        group = meta.get("group")
+
+        if group == "both":
+            comparison_mode = True
+            resolved_entities = group_pool[:2]
+            candidate_pool.extend(resolved_entities)
+            continue
+        if group == "compare":
+            comparison_mode = True
+            resolved_entities = group_pool[:4]
+            candidate_pool.extend(resolved_entities)
+            continue
+        if group == "other" and len(group_pool) >= 2:
+            candidate_pool.append(group_pool[-2])
+            continue
+        if group == "recent" and group_pool:
+            candidate_pool.append(group_pool[0])
+            continue
+        if group == "possessive":
+            active = next((e for e in prior_entities if e.text == state.active_topic), None)
+            if active:
+                candidate_pool.append(active)
+            elif prior_entities:
+                candidate_pool.append(prior_entities[0])
+            continue
+
         pool = _filter_candidates(prior_entities, categories=cats, exclude_user_self=True)
         if meta.get("ordinal") is not None:
-            pool_for_ord = _filter_candidates(
+            ord_pool = group_pool if group_pool else _filter_candidates(
                 prior_entities,
                 categories=("company", "organization", "person", "place", "product", "project"),
                 exclude_user_self=True,
-            ) or _filter_candidates(prior_entities, exclude_user_self=True)
-            picked = _pick_ordinal(pool_for_ord, int(meta["ordinal"]))
+            ) or prior_entities
+            picked = _pick_ordinal(ord_pool, int(meta["ordinal"]))
             candidate_pool.extend(picked)
         elif pool:
-            candidate_pool.append(pool[-1])
+            candidate_pool.append(pool[0])
 
     if not candidate_pool and prior_entities:
-        candidate_pool = _filter_candidates(prior_entities, exclude_user_self=True)
-        if candidate_pool:
-            candidate_pool = [candidate_pool[-1]]
+        candidate_pool = [prior_entities[0]]
 
-    # Deduplicate while preserving order
     dedup_candidates: list[TrackedEntity] = []
     seen: set[str] = set()
     for ent in candidate_pool:
-        key = f"{_normalize(ent.text)}::{ent.category}"
+        key = ent.entity_key()
         if key not in seen:
             seen.add(key)
             dedup_candidates.append(ent)
@@ -683,26 +927,26 @@ def resolve_conversation_continuity(
     confidence: Confidence = "low"
     clarification = ""
 
-    if len(dedup_candidates) == 1:
+    if comparison_mode and len(resolved_entities) >= 2:
+        confidence = "medium"
+        memory_query = " ".join(e.text for e in resolved_entities[:4])
+    elif len(dedup_candidates) == 1:
         resolved = dedup_candidates[0]
         confidence = "high"
-        state.active_topic = resolved.text
-        state.active_category = resolved.category
+        memory_query = resolved.text
     elif len(dedup_candidates) >= 2:
-        recent = dedup_candidates[-1]
-        resolved = recent
+        resolved = dedup_candidates[0]
         confidence = "medium"
-        state.active_topic = recent.text
-        state.active_category = recent.category
+        memory_query = resolved.text
         if ref_meta.get("ordinal") is not None and len(dedup_candidates) >= 2:
-            # Ordinal with ambiguous pool → clarify
             confidence = "low"
-            clarification = _build_clarification(dedup_candidates[-2:], language=language)
+            clarification = _build_clarification(dedup_candidates[:2], language=language)
             resolved = None
+            memory_query = raw
     else:
-        confidence = "low"
-        if state.entities:
-            clarification = _build_clarification(state.entities[-3:], language=language)
+        memory_query = raw
+        if prior_entities:
+            clarification = _build_clarification(prior_entities[:3], language=language)
         else:
             clarification = (
                 "Je ne dispose pas encore d'un sujet actif dans cette conversation. De quoi parlez-vous ?"
@@ -713,42 +957,98 @@ def resolve_conversation_continuity(
     effective_message = raw
     if resolved and confidence == "high":
         effective_message = f"{raw}\n\n[Continuity: referring to {resolved.label()}]"
+    elif comparison_mode and resolved_entities:
+        labels = ", ".join(e.label() for e in resolved_entities[:4])
+        effective_message = f"{raw}\n\n[Continuity: comparing {labels}]"
 
-    context_block = _build_context_block(
-        confidence=confidence,
-        resolved=resolved,
-        candidates=dedup_candidates or state.entities,
-        active_topic=state.active_topic,
-        active_category=state.active_category,
-    )
-
-    if register_entities:
-        state.turn_count = turn_index
-        new_entities = extract_entities(
-            raw, turn_index=turn_index, mention_offset=len(state.entities), image_label=image_label
-        )
-        if new_entities:
-            _merge_entities(state, new_entities)
+    active_topic = state.active_topic
+    active_category = state.active_category
+    if resolved:
+        active_topic = resolved.text
+        active_category = resolved.category
 
     return ContinuityResolution(
         confidence=confidence,
         has_reference=has_reference,
         resolved_entity=resolved,
-        candidates=tuple(dedup_candidates),
+        resolved_entities=tuple(resolved_entities),
+        candidates=tuple(dedup_candidates or prior_entities[:4]),
         clarification=clarification,
-        context_block=context_block,
+        context_block=_build_context_block(
+            confidence=confidence,
+            resolved=resolved,
+            resolved_entities=resolved_entities,
+            candidates=list(dedup_candidates or prior_entities[:4]),
+            active_topic=active_topic,
+            active_category=active_category,
+            comparison_mode=comparison_mode,
+        ),
         effective_message=effective_message,
-        memory_query=resolved.text if resolved and confidence in ("high", "medium") else raw,
-        active_topic=state.active_topic,
+        memory_query=memory_query,
+        active_topic=active_topic,
+        comparison_mode=comparison_mode,
     )
 
 
-def record_turn_entities(session_key: str, message: str, *, image_label: str = "") -> None:
-    """Register entities from a message without resolving references (post-turn bookkeeping)."""
-    state = _get_state(session_key)
-    state.touch()
-    turn_index = state.turn_count + 1
-    ents = extract_entities(message, turn_index=turn_index, mention_offset=len(state.entities), image_label=image_label)
-    if ents:
-        _merge_entities(state, ents)
-    state.turn_count = turn_index
+def preview_conversation_continuity(
+    conversation_id: str,
+    message: str,
+    *,
+    language: str = "en",
+    image_label: str = "",
+) -> ContinuityResolution:
+    """Read-only resolution; does not mutate stored state."""
+    state = _load_state(conversation_id)
+    return _resolve_from_state(state, message, language=language, image_label=image_label)
+
+
+def commit_conversation_continuity_turn(
+    conversation_id: str,
+    message: str,
+    *,
+    image_label: str = "",
+    resolution: ContinuityResolution | None = None,
+) -> None:
+    """Persist entity/topic updates after a final routing decision."""
+    with _lock:
+        state = _load_state(conversation_id)
+        turn_index = state.turn_count + 1
+        new_entities = extract_entities(
+            message,
+            turn_index=turn_index,
+            mention_offset=len(state.entities),
+            image_label=image_label,
+        )
+        if new_entities:
+            _merge_entities(state, new_entities)
+        if resolution and resolution.resolved_entity and resolution.confidence in ("high", "medium"):
+            state.active_topic = resolution.resolved_entity.text
+            state.active_category = resolution.resolved_entity.category
+        elif resolution and resolution.resolved_entities:
+            state.comparison_group = [e.entity_key() for e in resolution.resolved_entities]
+        state.turn_count = turn_index
+        _save_state(state)
+
+
+def resolve_conversation_continuity(
+    conversation_id: str,
+    message: str,
+    *,
+    language: str = "en",
+    image_label: str = "",
+    register_entities: bool = True,
+) -> ContinuityResolution:
+    """Preview + optional commit (tests and legacy callers)."""
+    resolution = preview_conversation_continuity(
+        conversation_id, message, language=language, image_label=image_label
+    )
+    if register_entities:
+        commit_conversation_continuity_turn(
+            conversation_id, message, image_label=image_label, resolution=resolution
+        )
+    return resolution
+
+
+def record_turn_entities(conversation_id: str, message: str, *, image_label: str = "") -> None:
+    """Register entities from a message without resolving references."""
+    commit_conversation_continuity_turn(conversation_id, message, image_label=image_label)

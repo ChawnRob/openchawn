@@ -175,5 +175,5 @@ def test_french_demonstrative_company_reference():
 def test_state_ttl_and_max_entities_constants():
     from app.core import conversation_continuity as cc
 
-    assert cc.MAX_RECENT_ENTITIES == 12
-    assert cc.STATE_TTL_SECONDS == 20 * 60
+    assert cc.MAX_RECENT_ENTITIES == 32
+    assert cc.DEFAULT_STATE_TTL_SECONDS == 20 * 60
