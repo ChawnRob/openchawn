@@ -21,6 +21,7 @@ logger = logging.getLogger("openchawn.conversation_continuity.store")
 _ram_fallback: dict[str, dict[str, Any]] = {}
 _sqlite_ready = False
 _postgres_ready = False
+_last_backend = "unknown"
 
 
 def _now_iso() -> str:
@@ -32,6 +33,39 @@ def _is_dev_or_test() -> bool:
         return True
     env = (os.getenv("OPENCHAWN_ENV") or "").strip().lower()
     return env in ("", "development", "dev", "test", "local")
+
+
+def _is_production_env() -> bool:
+    for var in ("OPENCHAWN_ENV", "APP_ENV", "RAILWAY_ENVIRONMENT"):
+        val = (os.getenv(var) or "").strip().lower()
+        if val in ("production", "prod"):
+            return True
+    return False
+
+
+def _is_railway_deploy() -> bool:
+    return bool((os.getenv("RAILWAY_ENVIRONMENT") or "").strip())
+
+
+def _explicit_dev_fallback_allowed() -> bool:
+    raw = (os.getenv("CONVERSATION_CONTINUITY_ALLOW_DEV_FALLBACK") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _allow_ram_sqlite_fallback() -> bool:
+    if _explicit_dev_fallback_allowed():
+        return True
+    if _is_production_env() or _is_railway_deploy():
+        return False
+    return _is_dev_or_test()
+
+
+def _runtime_environment_label() -> str:
+    for var in ("OPENCHAWN_ENV", "APP_ENV", "RAILWAY_ENVIRONMENT"):
+        val = (os.getenv(var) or "").strip()
+        if val:
+            return val
+    return "unknown"
 
 
 def _resolve_db_url() -> str:
@@ -98,8 +132,10 @@ def _ensure_postgres_schema() -> None:
 
 def persist_conversation_state(conversation_id: str, payload: dict[str, Any]) -> str:
     """Write state; returns backend label (postgres|sqlite|ram|none)."""
+    global _last_backend
     key = (conversation_id or "").strip()
     if not key:
+        _last_backend = "none"
         return "none"
     payload = dict(payload)
     if "updated_at" not in payload:
@@ -125,6 +161,7 @@ def persist_conversation_state(conversation_id: str, payload: dict[str, Any]) ->
                     )
                 conn.commit()
             _ram_fallback[key] = dict(payload)
+            _last_backend = "postgres"
             return "postgres"
         except Exception as exc:
             logger.warning(
@@ -133,7 +170,7 @@ def persist_conversation_state(conversation_id: str, payload: dict[str, Any]) ->
                 exc.__class__.__name__,
             )
 
-    if _is_dev_or_test():
+    if _allow_ram_sqlite_fallback():
         try:
             _ensure_sqlite_schema()
             from app.auth.database import _get_connection
@@ -152,6 +189,7 @@ def persist_conversation_state(conversation_id: str, payload: dict[str, Any]) ->
                 )
                 conn.commit()
                 _ram_fallback[key] = dict(payload)
+                _last_backend = "sqlite"
                 return "sqlite"
             finally:
                 conn.close()
@@ -161,10 +199,24 @@ def persist_conversation_state(conversation_id: str, payload: dict[str, Any]) ->
                 key[:32],
                 exc.__class__.__name__,
             )
+        logger.warning(
+            "continuity using in-process RAM fallback | id=%s | env=%s",
+            key[:32],
+            _runtime_environment_label(),
+        )
         _ram_fallback[key] = dict(payload)
+        _last_backend = "ram"
         return "ram"
 
-    logger.warning("continuity state not persisted (production without postgres) | id=%s", key[:32])
+    if _is_production_env() or _is_railway_deploy():
+        logger.error(
+            "continuity state not persisted: production/Railway requires Postgres "
+            "(set DATABASE_URL or CONVERSATION_CONTINUITY_ALLOW_DEV_FALLBACK=true for explicit opt-in) | id=%s",
+            key[:32],
+        )
+    else:
+        logger.warning("continuity state not persisted (no durable backend) | id=%s", key[:32])
+    _last_backend = "unknown"
     return "none"
 
 
@@ -202,7 +254,7 @@ def load_conversation_state(conversation_id: str) -> dict[str, Any] | None:
                 exc.__class__.__name__,
             )
 
-    if _is_dev_or_test():
+    if _allow_ram_sqlite_fallback():
         try:
             _ensure_sqlite_schema()
             from app.auth.database import _get_connection
@@ -246,7 +298,7 @@ def clear_conversation_state_store() -> None:
         except Exception:
             pass
 
-    if _is_dev_or_test():
+    if _allow_ram_sqlite_fallback():
         try:
             _ensure_sqlite_schema()
             from app.auth.database import _get_connection
@@ -266,3 +318,58 @@ def clear_conversation_state_store() -> None:
 
 def clear_conversation_state_memory_cache() -> None:
     _ram_fallback.clear()
+
+
+def _resolve_active_backend() -> str:
+    db_url = _resolve_db_url()
+    if db_url and _is_postgres_url(db_url):
+        return "postgres"
+    if _last_backend in ("postgres", "sqlite", "ram"):
+        return _last_backend
+    if _allow_ram_sqlite_fallback():
+        return "sqlite" if _sqlite_ready else "ram"
+    return "unknown"
+
+
+def _safe_active_conversation_count() -> int | None:
+    db_url = _resolve_db_url()
+    if db_url and _is_postgres_url(db_url):
+        try:
+            _ensure_postgres_schema()
+            with _postgres_connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) AS c FROM conversation_continuity_state")
+                    row = cur.fetchone()
+            if row and row.get("c") is not None:
+                return int(row["c"])
+        except Exception:
+            return None
+    if _allow_ram_sqlite_fallback():
+        try:
+            _ensure_sqlite_schema()
+            from app.auth.database import _get_connection
+
+            conn = _get_connection()
+            try:
+                row = conn.execute("SELECT COUNT(*) AS c FROM conversation_continuity_state").fetchone()
+            finally:
+                conn.close()
+            if row:
+                return int(row["c"])
+        except Exception:
+            return len(_ram_fallback) if _ram_fallback else 0
+        return len(_ram_fallback)
+    return None
+
+
+def get_continuity_runtime_status() -> dict[str, Any]:
+    """Operational continuity status — no user content or entity names."""
+    from app.core.conversation_continuity import _state_ttl_seconds
+
+    return {
+        "enabled": True,
+        "backend": _resolve_active_backend(),
+        "ttl_seconds": _state_ttl_seconds(),
+        "environment": _runtime_environment_label(),
+        "active_conversation_count": _safe_active_conversation_count(),
+    }

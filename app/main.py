@@ -306,6 +306,14 @@ def memory_runtime_status(verify: bool = False):
     return get_memory_runtime_status(verify_read_write=bool(verify))
 
 
+@app.get("/api/continuity/status")
+def continuity_status():
+    """Safe conversation continuity runtime status (no user content)."""
+    from app.core.conversation_continuity_store import get_continuity_runtime_status
+
+    return get_continuity_runtime_status()
+
+
 @app.get("/api/second-brain/status")
 def second_brain_status():
     """Safe Second Brain runtime status (AFFiNE, user-owned, no secrets)."""
