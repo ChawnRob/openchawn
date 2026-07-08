@@ -345,6 +345,11 @@ _IMAGE_REFERENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_GENDERED_PERSON_PRONOUN_RE = re.compile(
+    r"\b(he|him|his|she|her|hers|il|elle)\b",
+    re.IGNORECASE,
+)
+
 
 def _normalize(text: str) -> str:
     t = unicodedata.normalize("NFD", (text or "").lower())
@@ -456,6 +461,7 @@ class ContinuityResolution:
     memory_query: str = ""
     active_topic: str = ""
     comparison_mode: bool = False
+    continuity_reason: str = ""
 
     def to_debug_dict(self) -> dict[str, Any]:
         return {
@@ -467,6 +473,7 @@ class ContinuityResolution:
             "clarification": bool(self.clarification),
             "active_topic": self.active_topic or None,
             "comparison_mode": self.comparison_mode,
+            "continuity_reason": self.continuity_reason or None,
         }
 
 
@@ -759,6 +766,74 @@ def _pick_ordinal(candidates: list[TrackedEntity], ordinal: int) -> list[Tracked
     return []
 
 
+def _has_isolated_gendered_person_pronoun(message: str) -> bool:
+    return bool(_GENDERED_PERSON_PRONOUN_RE.search(message or ""))
+
+
+def _active_person_entities(entities: list[TrackedEntity]) -> list[TrackedEntity]:
+    return [e for e in entities if e.category == "person" and not e.is_user_self]
+
+
+def _message_explicitly_names_entity(message: str, entities: list[TrackedEntity]) -> bool:
+    norm_msg = _normalize(message)
+    if not norm_msg:
+        return False
+    msg_tokens = set(norm_msg.split())
+    for ent in entities:
+        norm_ent = _normalize(ent.text)
+        if len(norm_ent) >= 3 and norm_ent in norm_msg:
+            return True
+        for part in norm_ent.split():
+            if len(part) >= 3 and part not in _STOPWORDS and part in msg_tokens:
+                return True
+    return False
+
+
+def _references_include_gendered_person_pronoun(
+    references: list[tuple[str, re.Pattern[str], dict[str, Any]]],
+) -> bool:
+    return any(name in ("pronoun_masc", "pronoun_fem") for name, _, _ in references)
+
+
+def _detect_person_pronoun_ambiguity(
+    message: str,
+    prior_entities: list[TrackedEntity],
+    references: list[tuple[str, re.Pattern[str], dict[str, Any]]],
+    *,
+    comparison_mode: bool,
+    ref_meta: dict[str, Any],
+) -> tuple[bool, list[TrackedEntity]]:
+    if comparison_mode:
+        return False, []
+    if ref_meta.get("ordinal") is not None:
+        return False, []
+    group = ref_meta.get("group")
+    if group in ("both", "compare", "other", "possessive"):
+        return False, []
+    if not _references_include_gendered_person_pronoun(references):
+        return False, []
+    if not _has_isolated_gendered_person_pronoun(message):
+        return False, []
+    persons = _active_person_entities(prior_entities)
+    if len(persons) < 2:
+        return False, []
+    if _message_explicitly_names_entity(message, prior_entities):
+        return False, []
+    return True, persons
+
+
+def continuity_debug_metadata(resolution: ContinuityResolution) -> dict[str, Any]:
+    """Non-sensitive continuity fields for debug=true responses."""
+    resolved = resolution.resolved_entity
+    return {
+        "continuity_confidence": resolution.confidence,
+        "continuity_clarification": bool(resolution.clarification),
+        "continuity_candidates": [e.category for e in resolution.candidates[:6]],
+        "resolved_referent": resolved.category if resolved else None,
+        "continuity_reason": resolution.continuity_reason or None,
+    }
+
+
 def _build_clarification(candidates: list[TrackedEntity], *, language: str = "en") -> str:
     labels = [c.label() for c in candidates[:4]]
     joined = "; ".join(labels)
@@ -967,6 +1042,27 @@ def _resolve_from_state(
         active_topic = resolved.text
         active_category = resolved.category
 
+    continuity_reason = ""
+    ambiguous, person_candidates = _detect_person_pronoun_ambiguity(
+        raw,
+        prior_entities,
+        references,
+        comparison_mode=comparison_mode,
+        ref_meta=ref_meta,
+    )
+    if ambiguous:
+        confidence = "low"
+        resolved = None
+        resolved_entities = []
+        comparison_mode = False
+        clarification = _build_clarification(person_candidates[:4], language=language)
+        memory_query = raw
+        effective_message = raw
+        active_topic = state.active_topic
+        active_category = state.active_category
+        continuity_reason = "person_pronoun_ambiguity"
+        dedup_candidates = person_candidates
+
     return ContinuityResolution(
         confidence=confidence,
         has_reference=has_reference,
@@ -987,6 +1083,7 @@ def _resolve_from_state(
         memory_query=memory_query,
         active_topic=active_topic,
         comparison_mode=comparison_mode,
+        continuity_reason=continuity_reason,
     )
 
 

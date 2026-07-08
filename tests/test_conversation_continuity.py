@@ -54,10 +54,10 @@ def test_two_people_then_he_sells():
     )
     res = resolve_conversation_continuity(session, "What does he sell?", language="en")
     assert res.has_reference is True
-    assert res.confidence in ("medium", "high")
-    assert res.resolved_entity is not None
-    assert res.resolved_entity.category == "person"
-    assert "Beacon" in res.resolved_entity.text or "Atlas" in res.resolved_entity.text
+    assert res.confidence == "low"
+    assert res.clarification
+    assert res.continuity_reason == "person_pronoun_ambiguity"
+    assert res.resolved_entity is None
 
 
 def test_two_companies_then_second_based():

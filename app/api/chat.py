@@ -13,6 +13,7 @@ from app.config import MAX_MESSAGE_LENGTH
 from app.core.conversation_continuity import (
     ContinuityResolution,
     commit_conversation_continuity_turn,
+    continuity_debug_metadata,
     preview_conversation_continuity,
 )
 from app.core.coco_identity import COCO_PUBLIC_IDENTITY_EN
@@ -430,11 +431,12 @@ def handle_chat_request(
     )
     if continuity.confidence == "low" and continuity.clarification:
         logger.info(
-            "continuity_clarification | session=%s | confidence=%s",
+            "continuity_clarification | session=%s | confidence=%s | reason=%s",
             context_key_for_log(continuity_session_key),
             continuity.confidence,
+            continuity.continuity_reason or "ambiguous_reference",
         )
-        return {
+        result: dict[str, Any] = {
             "output": continuity.clarification,
             "memory_used": False,
             "consolidation_recommended": False,
@@ -448,6 +450,9 @@ def handle_chat_request(
             "continuity_clarification": True,
             "continuity_confidence": continuity.confidence,
         }
+        if debug:
+            result.update(continuity_debug_metadata(continuity))
+        return result
 
     bundle = assemble_chat_generation_inputs(
         req,
@@ -619,6 +624,7 @@ def handle_chat_request(
             dbg["guest_limit"] = int(quota.get("limit") or 0)
             dbg["guest_remaining"] = int(quota.get("remaining") or 0)
             dbg["reset_window"] = "utc_calendar_day"
+        dbg.update(continuity_debug_metadata(continuity))
         result.update(dbg)
     return result
 
