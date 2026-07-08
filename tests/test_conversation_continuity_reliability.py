@@ -69,6 +69,44 @@ def test_two_companies_it_does_not_over_trigger():
     assert res.continuity_reason != "person_pronoun_ambiguity"
 
 
+def test_two_companies_elle_does_not_over_trigger():
+    session = "guest:two-companies-elle"
+    resolve_conversation_continuity(
+        session,
+        "L'entreprise Lumen Grid opère en Europe.",
+        language="fr",
+    )
+    resolve_conversation_continuity(
+        session,
+        "L'entreprise Arcadia Systems a publié une feuille de route IA.",
+        language="fr",
+    )
+    res = preview_conversation_continuity(session, "Quelle est son IA ?", language="fr")
+    assert res.confidence in ("medium", "high")
+    assert res.resolved_entity is not None
+    assert res.continuity_reason != "person_pronoun_ambiguity"
+
+
+def test_explicit_person_name_disambiguates():
+    session = "guest:explicit-elon"
+    resolve_conversation_continuity(session, "Jensen Huang dirige Nvidia.", language="fr")
+    resolve_conversation_continuity(session, "Elon Musk dirige Tesla.", language="fr")
+    res = preview_conversation_continuity(session, "Que commercialise Elon Musk ?", language="fr")
+    assert res.continuity_reason != "person_pronoun_ambiguity"
+    assert not (res.confidence == "low" and res.continuity_reason == "person_pronoun_ambiguity")
+
+    req = ChatRequest(message="Que commercialise Elon Musk ?")
+    with patch("app.api.chat.check_guest_quota", return_value={"allowed": True, "remaining": 10, "limit": 20}):
+        with patch("app.api.chat.generate_response", return_value={"output": "Tesla commercialise des véhicules.", "success": True}) as mock_llm:
+            with patch("app.api.chat.write_exchange") as mock_write:
+                mock_write.return_value.saved = False
+                mock_write.return_value.reason = "test"
+                mock_write.return_value.entry_ids = []
+                out = handle_chat_request(req, _guest_user("explicit-elon"), debug=False, http_mount_path="/chat")
+    mock_llm.assert_called_once()
+    assert out.get("continuity_clarification") is not True
+
+
 def test_ab_comparison_still_resolves():
     session = "guest:ab-reliability"
     resolve_conversation_continuity(
@@ -106,6 +144,24 @@ def test_blank_user_scope_still_clarifies():
             out = handle_chat_request(req, _guest_user("blank-scope"), debug=False, http_mount_path="/chat")
     mock_llm.assert_not_called()
     assert out.get("continuity_clarification") is True
+
+
+def test_debug_true_on_clarification_short_circuit():
+    session = "guest:debug-clarify"
+    resolve_conversation_continuity(session, "Jensen Huang dirige Nvidia.", language="fr")
+    resolve_conversation_continuity(session, "Elon Musk dirige Tesla.", language="fr")
+    req = ChatRequest(message="Que commercialise-t-il ?")
+    with patch("app.api.chat.check_guest_quota", return_value={"allowed": True, "remaining": 10, "limit": 20}):
+        with patch("app.api.chat.generate_response") as mock_llm:
+            out = handle_chat_request(
+                req, _guest_user("debug-clarify"), debug=True, http_mount_path="/chat"
+            )
+    mock_llm.assert_not_called()
+    assert out.get("continuity_clarification") is True
+    assert out["continuity_confidence"] == "low"
+    assert out["continuity_reason"] == "person_pronoun_ambiguity"
+    assert "continuity_candidates" in out
+    assert "resolved_referent" in out
 
 
 def test_debug_true_returns_continuity_metadata():
