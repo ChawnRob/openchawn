@@ -314,6 +314,30 @@ def continuity_status():
     return get_continuity_runtime_status()
 
 
+@app.get("/api/cost/status")
+def cost_status():
+    """Safe cost intelligence runtime status (no user content)."""
+    from app.core.cost_intelligence import get_cost_runtime_status
+
+    return get_cost_runtime_status()
+
+
+@app.get("/api/cost/summary")
+def cost_summary(period: str = "today"):
+    """Aggregated cost metrics for a period (today|7d|30d)."""
+    from app.core.cost_intelligence import get_cost_summary
+
+    return get_cost_summary(period=period)
+
+
+@app.get("/api/cost/debug")
+def cost_debug():
+    """Operational cost debug snapshot (no prompts or responses)."""
+    from app.core.cost_intelligence import get_cost_debug_snapshot
+
+    return get_cost_debug_snapshot()
+
+
 @app.get("/api/second-brain/status")
 def second_brain_status():
     """Safe Second Brain runtime status (AFFiNE, user-owned, no secrets)."""

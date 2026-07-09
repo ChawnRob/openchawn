@@ -16,6 +16,7 @@ from app.core.conversation_continuity import (
     continuity_debug_metadata,
     preview_conversation_continuity,
 )
+from app.core.cost_intelligence import ChatCostTracker, record_chat_cost_safe
 from app.core.coco_identity import COCO_PUBLIC_IDENTITY_EN
 from app.core.initial_rules import build_runtime_rules_prompt
 from app.core.knowledge_organizer import build_knowledge_organizer_context
@@ -48,6 +49,7 @@ from app.tools.web_search import (
     build_web_capability_system_addon,
     build_web_search_system_addon,
     format_web_search_results_block,
+    get_web_search_status,
     is_web_search_runtime_enabled,
     web_search_sync,
 )
@@ -402,6 +404,12 @@ def handle_chat_request(
 
     violation_retry = False
     quota: dict[str, Any] = {}
+    cost_tracker = ChatCostTracker.start(
+        user,
+        message=req.message,
+        media_id=(req.media_id or "").strip(),
+        image_active=bool((req.media_id or "").strip()),
+    )
 
     # ── Phase 1: quota / auth ──
     if is_guest:
@@ -452,6 +460,9 @@ def handle_chat_request(
         }
         if debug:
             result.update(continuity_debug_metadata(continuity))
+        cost_event = record_chat_cost_safe(cost_tracker)
+        if debug and cost_event:
+            result.update(cost_event.to_debug_dict())
         return result
 
     bundle = assemble_chat_generation_inputs(
@@ -461,6 +472,19 @@ def handle_chat_request(
         language_trace=trace,
         continuity=continuity,
     )
+    if cost_tracker and bundle.get("web_search_used"):
+        ws_status = get_web_search_status()
+        cost_tracker.record_web_search(
+            count=int(bundle.get("web_search_result_count") or 1),
+            provider=str(ws_status.get("provider") or "perplexity"),
+        )
+    if cost_tracker:
+        cost_tracker.add_payload_size(
+            len(str(bundle.get("sanitized_system_prompt") or ""))
+            + len(str(bundle.get("sanitized_user_message") or ""))
+        )
+        if bundle.get("image_context_injected"):
+            cost_tracker.vision_used = True
     provider_hint = (req.provider or "").strip().lower()
 
     ff_detected_bundle = bool(bundle.get("forced_french_runtime_detected"))
@@ -515,6 +539,14 @@ def handle_chat_request(
         provider_status = llm_result.get("status_code", None)
         ff_removed_gateway = ff_removed_gateway or bool(llm_result.get("forced_french_runtime_removed", False))
         pre_ff = pre_ff or bool(llm_result.get("prompt_contains_forced_french_before_sanitize", False))
+
+    if cost_tracker:
+        cost_tracker.record_llm(
+            provider=str(provider_used or None),
+            model=model_used or None,
+            input_text=f"{sp_in}\n{um_in}",
+            output_text=response_text or "",
+        )
 
     if detect_user_language(req.message) == "en" and response_text:
         response_language_violation_detected = violation_on_first_generation or bool(
@@ -625,7 +657,12 @@ def handle_chat_request(
             dbg["guest_remaining"] = int(quota.get("remaining") or 0)
             dbg["reset_window"] = "utc_calendar_day"
         dbg.update(continuity_debug_metadata(continuity))
+        cost_event = record_chat_cost_safe(cost_tracker)
+        if cost_event:
+            dbg.update(cost_event.to_debug_dict())
         result.update(dbg)
+    else:
+        record_chat_cost_safe(cost_tracker)
     return result
 
 
